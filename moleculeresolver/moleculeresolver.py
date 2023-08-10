@@ -174,7 +174,7 @@ class MoleculeResolver:
         ctx.options |= 0x4
         self._session_CompTox.mount('https://', CustomHttpAdapter(ctx, pool_connections=pool_connections, pool_maxsize=pool_maxsize, max_retries=2))
 
-    def _resilient_request(self, url: str, kwargs: Optional[dict[str, Any]] = None, request_type: str = 'get', accepted_status_codes: list[int]=[200], rejected_status_codes: list[int] = [404], max_retries: int = 10, sleep_time: Union[int, float] = 2, allow_redirects: bool = False, json=None) -> Optional[requests.Response]:
+    def _resilient_request(self, url: str, kwargs: Optional[dict[str, Any]] = None, request_type: str = 'get', accepted_status_codes: list[int]=[200], rejected_status_codes: list[int] = [404], max_retries: int = 10, sleep_time: Union[int, float] = 2, allow_redirects: bool = False, json:Any=None, return_response:bool=False) -> Optional[requests.Response]:
 
         if not kwargs:
             kwargs = {}
@@ -209,6 +209,8 @@ class MoleculeResolver:
                     response = session.post(url, **kwargs, json=json, allow_redirects=allow_redirects)
 
                 if response.status_code in accepted_status_codes:
+                    if return_response:
+                        return response
                     response_text = response.content.decode('utf8', errors='ignore')
                     response_text = response_text.replace('\u200b', '')
                     # find encoding errors
@@ -1539,7 +1541,10 @@ class MoleculeResolver:
         html_ = MoleculeResolver.normalize_html(html_)
         # HTMLparser was thought of here, but IMHO it is way to complicated
         # to match the correct opening and closing tags with the python std library
-        # I did not want to depend on beautifulsoup, so this is my solution
+        # I did not want to depend on beautifulsoup at the beginning, but it is
+        # a dependency that I am willing to add in the future.
+        # The following code is a simple and quick solution that works for the
+        # time being.
         if split_tag:
             html_parts = html_.split(split_tag)[1:]
         else:
@@ -2707,7 +2712,9 @@ class MoleculeResolver:
 
                     if ITN is not None:
                         (SMILES, synonyms, CAS, ITN) = found_info_by_ITN[ITN]
-                        results[molecule_index] = Molecule(MoleculeResolver.standardize_SMILES(SMILES, standardize),  MoleculeResolver.filter_and_sort_synonyms(synonyms), CAS, ITN, mode, 'srs', identifier=identifier)
+                        SMILES = MoleculeResolver.standardize_SMILES(SMILES, standardize)
+                        if SMILES:
+                            results[molecule_index] = Molecule(SMILES,  MoleculeResolver.filter_and_sort_synonyms(synonyms), CAS, ITN, mode, 'srs', identifier=identifier)
                     
                     self.molecule_cache.save('srs', mode, identifier, results[molecule_index])
 
