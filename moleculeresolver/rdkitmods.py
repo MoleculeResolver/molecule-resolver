@@ -42,7 +42,6 @@ class disabling_rdkit_logger(ContextDecorator):
 
     def __enter__(self):
         self._apply_log_status(self.desired_status)
-        yield
 
     def __exit__(self, *args, **kwargs):
         self._apply_log_status(self.previous_status)

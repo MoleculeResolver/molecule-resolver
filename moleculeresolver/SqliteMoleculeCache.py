@@ -118,13 +118,13 @@ class SqliteMoleculeCache:
             # It could be circumvented by constructing the insert statement manually, running with execute
             # and then matching the returned ids to the inserted data. Idk what is faster though.
             molecule_ids = []
-            for p, m, i, c in zip(service, identifier_mode, identifier, molecules, strict=True):
+            for s, m, i, molecule in zip(service, identifier_mode, identifier, molecules, strict=True):
                 
-                if c is None:
-                    this_data = (p, m, i, None, None)
+                if molecule is None:
+                    this_data = (s, m, i, None, None)
                 else:
                     
-                    if molecule.service != p or molecule.mode != m or molecule.identifier != i:
+                    if molecule.service != s or molecule.mode != m or molecule.identifier != i:
                         raise ValueError('The molecule properties do not match the input values to the save function.')
 
                     this_data = (
@@ -219,7 +219,7 @@ class SqliteMoleculeCache:
                     SMILES,
                     additional_information,
                     GROUP_CONCAT(synonym_index || '|' || synonym, '||'),
-                    GROUP_CONCAT( cas_number_index || '|' || cas_number, '||')
+                    GROUP_CONCAT(cas_number_index || '|' || cas_number, '||')
                 FROM molecules
                     LEFT JOIN synonyms ON molecules.id = synonyms.molecule_id
                     LEFT JOIN cas_numbers ON molecules.id = cas_numbers.molecule_id
@@ -242,7 +242,7 @@ class SqliteMoleculeCache:
                 this_transaction_unique_temp_table_name = f'tmp_{uuid.uuid4().hex}'
 
                 this_thread_connection.execute(f'''
-                    CREATE TABLE {this_transaction_unique_temp_table_name} (
+                    CREATE TEMPORARY TABLE {this_transaction_unique_temp_table_name} (
                         search_index INTEGER NOT NULL,
                         service TEXT NOT NULL,
                         identifier_mode TEXT NOT NULL,
