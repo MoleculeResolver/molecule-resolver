@@ -514,14 +514,16 @@ class MoleculeResolver:
     @staticmethod
     def filter_and_sort_synonyms(synonyms : list[str], number_of_synonyms_to_take: int = 5, strict: bool = False) -> list[str]:
         # heuristics used here are mainly to remove synonyms from pubchem
-        synonyms = [synonym for synonym in synonyms if synonym is not None]
+        synonyms = [synonym.strip() for synonym in synonyms if synonym is not None]
         if len(synonyms) == 0:
             return []
 
-        synonyms = sorted(synonyms, key=lambda synonym: synonym.count(';'))
+        temp = []
+        for synonym in synonyms:
+            temp.extend(synonym.split('|'))
 
         synonyms_taken = []
-        for synonym in synonyms:
+        for synonym in temp:
 
             if synonym is None:
                 continue
@@ -631,7 +633,7 @@ class MoleculeResolver:
                 [r'cis(-\d+-[a-z]{3,}ene)\b', r'(Z)\1'],
                 [r'cis(-\d+-[a-z]{3,}ene)\b', r'Z\1'],
                 [r'(.*)(\((?:Z|E)\)-)(.*)', r'\2\1\3'],
-                [r'«(\w*)»', r'\1']
+                [r'«|»', r'']
             ]
 
         new_name = name
@@ -1671,9 +1673,9 @@ class MoleculeResolver:
                     if asset['name'].count('opsin-cli'):
                         download_url = asset['browser_download_url']
                         with closing(urllib.request.urlopen(download_url)) as r:
-                                with open(os.path.join(tempfolder, 'opsin.jar'), 'wb') as f:
-                                    for chunk in r:
-                                        f.write(chunk)
+                            with open(os.path.join(tempfolder, 'opsin.jar'), 'wb') as f:
+                                for chunk in r:
+                                    f.write(chunk)
 
             unique_id = str(uuid.uuid4()) # needed for multiple runs in parallel
             input_file = os.path.join(tempfolder, f'input_{unique_id}.txt')
@@ -1701,7 +1703,7 @@ class MoleculeResolver:
             if len(identifiers_to_search) == 0:
                 return results
             
-            if self._OPSIN_tempfolder is None:
+            if self._OPSIN_tempfolder is None or not os.path.exists(self._OPSIN_tempfolder.name):
                 with tempfile.TemporaryDirectory() as tempfolder:
                     SMILES = download_OPSIN_offline_and_convert_names(identifiers_to_search, tempfolder)
             else:
@@ -1930,6 +1932,9 @@ class MoleculeResolver:
                             temp_substance = json.loads(substance_response_text)
 
                             temp_SMILES = temp_substance['smiles']
+                            temp_SMILES = MoleculeResolver.standardize_SMILES(temp_SMILES, standardize)
+                            if not temp_SMILES:
+                                return
                             temp_synonyms = []
                             temp_CAS = []
 
@@ -2014,6 +2019,8 @@ class MoleculeResolver:
                         accepted_SMILES = []
                         for InChI in found_InChIs:
                             this_SMILES = MoleculeResolver.InChI_to_SMILES(InChI, standardize)
+                            if not this_SMILES:
+                                continue
                             if not required_structure_type or 'mixture' not in required_structure_type:
                                 if '.' in this_SMILES:
                                     continue
@@ -2854,7 +2861,10 @@ class MoleculeResolver:
                         if systematicName:
                             synonyms.append(systematicName.strip())
 
-                        CAS = molecule['currentCasNumber'].strip()
+                        CAS = []
+                        if 'currentCasNumber' in molecule:
+                            if molecule['currentCasNumber']:
+                                CAS = molecule['currentCasNumber'].strip()
 
                         if 'synonyms' in molecule:
                             synonyms.extend([synonym['synonymName'] for synonym in molecule['synonyms']])
@@ -2956,12 +2966,14 @@ class MoleculeResolver:
                 SMILES = self._get_info_from_CIR(identifier, 'smiles', resolvers_by_mode[mode], 1)
                 if not SMILES:
                     return None
+                else:
+                    SMILES = MoleculeResolver.standardize_SMILES(SMILES[0], standardize)
 
-                SMILES = MoleculeResolver.standardize_SMILES(SMILES[0], standardize)
-                CIR_names = self._get_info_from_CIR(identifier, 'names', resolvers_by_mode[mode])
-                synonyms = MoleculeResolver.filter_and_sort_synonyms(CIR_names if CIR_names else [])
-                CAS = MoleculeResolver.filter_and_sort_CAS(CIR_names if CIR_names else [])
-                molecules.append(Molecule(SMILES, synonyms, CAS, mode=mode, service='cir'))
+                if SMILES:
+                    CIR_names = self._get_info_from_CIR(identifier, 'names', resolvers_by_mode[mode])
+                    synonyms = MoleculeResolver.filter_and_sort_synonyms(CIR_names if CIR_names else [])
+                    CAS = MoleculeResolver.filter_and_sort_CAS(CIR_names if CIR_names else [])
+                    molecules.append(Molecule(SMILES, synonyms, CAS, mode=mode, service='cir'))
 
         MoleculeResolver.filter_and_combine_molecules(molecules, required_formula, required_charge, required_structure_type, standardize)
 
@@ -3056,7 +3068,7 @@ class MoleculeResolver:
 
         return MoleculeResolver.filter_and_combine_molecules(molecules, required_formula, required_charge, required_structure_type, standardize)
 
-    def find_salt_molecules(self, identifiers: list[str], modes: list[str] = ['name'], required_formula: Optional[str] = None, required_charge: Optional[int] = None, required_structure_type: Optional[str] = None, services_to_use: Optional[list[str]] = None, search_iupac_name: bool = False, interactive: bool = False, minimum_number_of_cross_checks: Optional[int] = None, ignore_exceptions: bool = False) -> tuple[list, list[int]]:
+    def find_salt_molecules(self, identifiers: list[str], modes: list[str] = ['name'], required_formula: Optional[str] = None, required_charge: Optional[int] = None, required_structure_type: Optional[str] = None, services_to_use: Optional[list[str]] = None, search_iupac_name: bool = False, interactive: bool = False, minimum_number_of_cross_checks: Optional[int] = 1, ignore_exceptions: bool = False) -> tuple[list, list[int]]:
         
         flattened_identifiers, flattened_modes, synonyms, CAS, given_SMILES = MoleculeResolver._check_and_flatten_identifiers_and_modes(identifiers, modes)
         CAS = list(CAS)
@@ -3501,7 +3513,7 @@ class MoleculeResolver:
 
         return Molecule(SMILES, synonyms, list(CAS), start_geometry_comment, mode_used, 'interactive', 1)
 
-    def find_single_molecule_cross_checked(self, identifiers: list[str], modes: list[str] = ['name'], required_formula: Optional[str] = None, required_charge: Optional[int] = None, required_structure_type: Optional[str] = None, services_to_use: Optional[list[str]] = None,  standardize: bool = True, search_iupac_name: bool = False, minimum_number_of_cross_checks: Optional[int] = None, try_to_choose_best_structure: bool = True, ignore_exceptions: bool = False) -> Optional[Molecule] | list[Optional[Molecule]]:
+    def find_single_molecule_cross_checked(self, identifiers: list[str], modes: list[str] = ['name'], required_formula: Optional[str] = None, required_charge: Optional[int] = None, required_structure_type: Optional[str] = None, services_to_use: Optional[list[str]] = None,  standardize: bool = True, search_iupac_name: bool = False, minimum_number_of_cross_checks: Optional[int] = 1, try_to_choose_best_structure: bool = True, ignore_exceptions: bool = False) -> Optional[Molecule] | list[Optional[Molecule]]:
 
         if services_to_use is None:
             services_to_use = MoleculeResolver._available_services
@@ -3582,7 +3594,7 @@ class MoleculeResolver:
         else:
             return [MoleculeResolver.combine_molecules(grouped_molecules[SMILES]) for SMILES in SMILES_with_highest_number_of_crosschecks]
 
-    def find_multiple_molecules_parallelized(self, identifiers: list[str], modes: list[str], required_formulas: Optional[list[str]]=None, required_charges: Optional[list[int]] = None, required_structure_types: Optional[list[str]] = None, services_to_use: Optional[list[str]] = None, standardize: bool = True, search_iupac_name: bool = False, minimum_number_of_cross_checks: Optional[int] = None, try_to_choose_best_structure: bool = True, progressbar: bool = True, max_workers: int = 5, ignore_exceptions: bool = True) -> list[Optional[Molecule] ]:
+    def find_multiple_molecules_parallelized(self, identifiers: list[str], modes: list[str], required_formulas: Optional[list[str]]=None, required_charges: Optional[list[int]] = None, required_structure_types: Optional[list[str]] = None, services_to_use: Optional[list[str]] = None, standardize: bool = True, search_iupac_name: bool = False, minimum_number_of_cross_checks: Optional[int] = 1, try_to_choose_best_structure: bool = True, progressbar: bool = True, max_workers: int = 5, ignore_exceptions: bool = True) -> list[Optional[Molecule] ]:
         
         # reinitialize session
         self._session = None
@@ -3644,7 +3656,7 @@ class MoleculeResolver:
         
         print(message_getting_from_services)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            if minimum_number_of_cross_checks is None:
+            if not minimum_number_of_cross_checks:
                 results = _find(executor.map(self.find_single_molecule, *zip(*args)))
             else:
                 results = _find(executor.map(self.find_single_molecule_cross_checked, *zip(*args)))
