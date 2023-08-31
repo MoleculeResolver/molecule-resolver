@@ -23,6 +23,7 @@ import uuid
 import warnings
 import ssl
 
+import openpyxl
 from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts import yes_no_dialog
 import regex
@@ -553,7 +554,7 @@ class MoleculeResolver:
                 if ratio_uppercase_letters < 0.5:
                     match = regex.match(MoleculeResolver.CAS_regex_with_groups, synonym) # filter CAS numbers
                     # filter names with 3 consecutive numbers or containing some keywords
-                    match2 = regex.search(r'\d{3}|\bin\b|\bgrade\b|\bsolution\b|\bstandard\b|\bstabilized\b|\bdimer\b|\bfor\b|\btablet\b|\bcode\b|\bNo\.\b|\banhydrous\b', synonym, regex.IGNORECASE) 
+                    match2 = regex.search(r'\d{3}|\bin\b|\bgrade\b|\bsolution\b|\bstandard\b|\bstabilized\b|\bdimer\b|\bfor\b|\btablet\b|\btotal\b|\bcode\b|\bNo\.\b|\banhydrous\b', synonym, regex.IGNORECASE) 
                     if not match and not match2:
                         synonym = synonym.replace('<em>', '').replace('</em>', '') #replace(';', ', ')
 
@@ -1951,6 +1952,9 @@ class MoleculeResolver:
                                 if temp_substance['wikipediaName'] is not None:
                                     temp_synonyms.append(temp_substance['wikipediaName'])
 
+                            if mode == 'name':
+                                temp_synonyms.append(identifier)
+
                             temp_synonyms = MoleculeResolver.filter_and_sort_synonyms(temp_synonyms)
                             molecules.append(Molecule(temp_SMILES, temp_synonyms, temp_CAS, temp_dtxsid, mode, service='comptox'))
 
@@ -2078,8 +2082,8 @@ class MoleculeResolver:
             comptox_modes = {'name': 'chemical_name', 'cas': 'CASRN', 'inchikey': 'INCHIKEY'}
 
             postdata = {
-                'downloadItems': ['CASRN', 'IUPAC_NAME', 'SMILES'],
-                'downloadType' : 'CSV',
+                'downloadItems': ['SYNONYM_IDENTIFIER','QC_LEVEL','CASRN', 'IUPAC_NAME', 'SMILES'],
+                'downloadType' : 'EXCEL',
                 'identifierTypes' : [comptox_modes[mode]],
                 'inputType': 'IDENTIFIER',
                 'massError' : 0,
@@ -2110,75 +2114,134 @@ class MoleculeResolver:
             post_request_text = self._resilient_request(f'{COMPTOX_URL}/?{MoleculeResolver.get_CompTox_request_unique_id()}', json=postdata, request_type='post', accepted_status_codes=[202])# allow_redirects=True)
             
             download_url =  poll_request(post_request_text.strip())
-            request_text = self._resilient_request(download_url)
 
-            temp_results = {}
-            def parse_CompTox_result(row):
-                
-                SMILES = None
-                CAS = []
-                synonyms = []
-                input_identifier = row['INPUT'].strip()
-                found_by = row['FOUND_BY'].lower().strip()
-                if found_by.count('found 0 results') == 0:
-                    if row['IUPAC_NAME'] is not None and row['IUPAC_NAME'] != 'N/A':
-                        synonyms.append(row['IUPAC_NAME'])
-                    synonyms = MoleculeResolver.filter_and_sort_synonyms(synonyms)
-
-                    CAS = row['CASRN']
-                    if not MoleculeResolver.is_valid_CAS(CAS):
-                        CAS = []
-                    else:
-                        CAS = [CAS]
-
-                    if 'N/A' in row['SMILES']:
-                        return row['INPUT'].strip(), None, [], [], None
-
-                    SMILES = MoleculeResolver.standardize_SMILES(row['SMILES'], standardize)
-
-                    # the rating is needed because for some substances it 
-                    # returns more than one row. It is used to get the best result later.
-                    if 'expert' in found_by:
-                        rating = 10
-                    elif 'approved' in found_by:
-                        rating = 8
-                    elif 'valid source' in found_by:
-                        rating = 6
-                    elif 'systematic name' in found_by:
-                        rating = 4
-                    else:
-                        rating = 2
-
-                    if CAS:
-                        rating += 1
-
-                    if input_identifier not in temp_results:
-                        temp_results[input_identifier] = []
+            # QC_Level : https://jcheminf.biomedcentral.com/articles/10.1186/s13321-017-0247-6/tables/1
+            # 1 Expert curated: highest confidence in accuracy and consistency of unique chemical identifiers
+            # 2 Expert curated: unique chemical identifiers confirmed using multiple public sources
+            # 3 Programmatically curated from high quality EPA source(s) and unique chemical identifiers have no conflicts in ChemIDPlus and PubChem
+            # 4 Programmatically curated from ChemIDPlus. Unique chemical identifiers have no conflicts in PubChem
+            # 5 Programmatically curated from ACToR or PubChem. Unique chemical identifiers have low confidence and have a single public source
                     
-                    if SMILES:
-                        temp_results[input_identifier].append((rating, SMILES, synonyms, CAS, row['DTXSID']))
+            request_response = self._resilient_request(download_url, return_response=True)
+            with (tempfile.TemporaryDirectory() as temp_dir,
+                  warnings.catch_warnings()):
+                warnings.simplefilter("ignore")
 
-                else:
-                    temp_results[input_identifier] = None
+                temp_path = os.path.join(temp_dir, 'moleculeresolver_comptox_postdata.xlsx')
+                with open(temp_path, 'wb') as f:
+                    f.write(request_response.content)
 
-            if request_text is not None:
+                wb = openpyxl.load_workbook(temp_path)
+                
+                synonym_sheet = wb.worksheets[2]
+                synonyms_by_identifier = {}
+                for i_row, row in enumerate(synonym_sheet.iter_rows()):
+                    if i_row == 0:
+                        continue
+                
+                    row_values = [cell.value for cell in row]
+                    synonyms = []
+                    identifier = row_values[0].strip()
+                    if row_values[1]:
+                        synonyms = [v.strip() for v in row_values[1].split('|')]
 
-                data = io.StringIO(request_text)
-                reader = csv.DictReader(data)
-                for row in reader:
-                    if row['FOUND_BY'] is None:
+                    synonyms_by_identifier[identifier] = synonyms
+
+                temp_results_by_identifier = {}
+                def parse_CompTox_result(row):
+                    
+                    identifier = row[0].strip()
+                    found_by = row[1].lower().strip()
+
+                    SMILES = None
+                    CAS = []
+                    synonyms = []
+                    if identifier in synonyms_by_identifier:
+                        synonyms = synonyms_by_identifier[identifier]
+
+                    if found_by.count('found 0 results') == 0:
+                        SMILES = row[7].strip()
+                        if not SMILES:
+                            return
+                        dtxsid = row[2].strip()
+                        preferred_name = row[3].strip() 
+                        qc_level = row[4]
+                        CAS = str(row[5]).strip()
+                        iupac_name = row[6].strip()
+
+                        if iupac_name  and iupac_name != 'N/A':
+                            if iupac_name not in synonyms:
+                                synonyms.insert(0, iupac_name)
+
+                        if preferred_name  and preferred_name != 'N/A':
+                            if preferred_name not in synonyms:
+                                synonyms.insert(0, preferred_name)
+
+                        synonyms = MoleculeResolver.filter_and_sort_synonyms(synonyms)
+
+                        if not MoleculeResolver.is_valid_CAS(CAS):
+                            CAS = []
+                        else:
+                            CAS = [CAS]
+
+                        if 'N/A' in SMILES or not MoleculeResolver.is_valid_SMILES(SMILES):
+                            return
+                        
+                        SMILES = MoleculeResolver.standardize_SMILES(SMILES, standardize)
+
+                        # the rating is needed because for some substances it 
+                        # returns more than one row. It is used to get the best result later.
+                        if 'expert' in found_by:
+                            own_rating = 10
+                        elif 'approved' in found_by:
+                            own_rating = 8
+                        elif 'valid source' in found_by:
+                            own_rating = 6
+                        elif 'systematic name' in found_by:
+                            own_rating = 4
+                        else:
+                            own_rating = 2
+
+                        if CAS:
+                            own_rating += 1
+
+                        if identifier not in temp_results_by_identifier:
+                            temp_results_by_identifier[identifier] = []
+                        
+                        if SMILES:
+                            temp_results_by_identifier[identifier].append((qc_level, own_rating, SMILES, synonyms, CAS, dtxsid + '|QC_LEVEL:' + str(qc_level)))
+
+                    else:
+                        temp_results_by_identifier[identifier] = None
+
+                results_sheet = wb.worksheets[1]
+                for i_row, row in enumerate(results_sheet.iter_rows()):
+                    if i_row == 0:
                         continue
 
-                    parse_CompTox_result(row)
-
+                    row_values = [cell.value for cell in row]
+                    parse_CompTox_result(row_values)
+                        
                 for molecule_index, identifier in zip(indices_of_identifiers_to_search, identifiers_to_search):
-                    if identifier in temp_results:
-                        if temp_results[identifier]:
-                            if len(temp_results[identifier]) > 1:
-                                temp_results[identifier] = sorted(temp_results[identifier], key=lambda element: (element[0], element[1]), reverse=True)
-                                temp_results[identifier] = list(filter(lambda x: x[0] == temp_results[identifier][0][0], temp_results[identifier]))
+                    if identifier in temp_results_by_identifier:
+                        temp_result = temp_results_by_identifier[identifier]
+                        if temp_result:
+                            if len(temp_result) > 1:
+                                best_results = temp_result
+                                try:
+                                    best_qc_level = min(temp_result, key=lambda x: x[0])[0]
+                                    best_results = list(filter(lambda x: x[0] == best_qc_level, temp_result))
+                                except Exception:
+                                    pass
+
+                                if len(best_results) > 1:
+                                    best_own_rating = max(best_results, key=lambda x: x[1])[1]
+                                    best_results = list(filter(lambda x: x[1] == best_own_rating, best_results))
+                                    
+                                temp_results_by_identifier[identifier] = best_results
                             results[molecule_index] = []
-                            for _, SMILES, synonyms, CAS, additional_information in temp_results[identifier]:
+
+                            for _, _, SMILES, synonyms, CAS, additional_information in temp_results_by_identifier[identifier]:
                                 results[molecule_index].append(Molecule(SMILES, synonyms, CAS, additional_information, mode, 'comptox', identifier=identifier))
 
             return results
@@ -2677,28 +2740,154 @@ class MoleculeResolver:
 
         return MoleculeResolver.filter_and_combine_molecules(molecules, required_formula, required_charge, required_structure_type, standardize)
 
-    def _choose_best_srs_ITN(self, found_info_by_ITN, ITNs, identifier):
-        il = identifier.lower()
-        ITN = None
-        # if same SMILES
-        unique_SMILES = set([self.standardize_SMILES(found_info_by_ITN[ITN_][0], True) for ITN_ in ITNs])
-        if len(unique_SMILES) == 1:
-            ITN = str(min([int(ITN_) for ITN_ in ITNs]))
-        else:
-            number_of_synonyms_found_in_ITN_info = []
-            for ITN_ in ITNs:
-                number_of_synonyms_found_in_ITN_info.extend(found_info_by_ITN[ITN_][4].count(il) * [ITN_])
+    def _match_SRS_results_to_identifiers(self, identifiers: list[str], mode: str, standardize: bool, results: list[dict]):
 
-            most_common = collections.Counter(number_of_synonyms_found_in_ITN_info).most_common(2)
-            if most_common[0][1] > most_common[1][1]:
-                ITN = most_common[0][0]
-            else:
-                pass
+        infos_by_ITN = {}
+        ITNs_by_primary_name = {}
+        ITNs_by_synonym = {}
+        ITNs_by_all_names = {}
+        ITNs_by_CAS = {}
+        for result in results:
 
-        return ITN
+            primary_names = []
+            epaName = result['epaName']
+            if epaName:
+                primary_names.append(epaName.strip())
+            iupacName = result['iupacName']
+            if iupacName:
+                primary_names.append(iupacName.strip())
+            systematicName = result['systematicName']
+            if systematicName:
+                primary_names.append(systematicName.strip())
+
+            CAS = []
+            if 'currentCasNumber' in result:
+                if result['currentCasNumber']:
+                    CAS = result['currentCasNumber'].strip()
+
+            synonyms = []
+            if 'synonyms' in result:
+                synonyms.extend([synonym['synonymName'].strip() for synonym in result['synonyms']])
+
+            CAS = []
+            if 'currentCasNumber' in result:
+                CAS = [result['currentCasNumber']]
+
+            ITN = result['internalTrackingNumber']
+            SMILES = result['smilesNotation']
+            SMILES = self.standardize_SMILES(SMILES, standardize)
+            
+            if SMILES is None:
+                if isinstance(result['inchiNotation'], str):
+                    inchi = result['inchiNotation']
+                    if not inchi.lower().startswith('inchi='):
+                        inchi = 'InChI=' + inchi
+                    SMILES = MoleculeResolver.InChI_to_SMILES(inchi, standardize)
+
+            if not SMILES:
+                continue
+
+            if ITN in infos_by_ITN:
+                raise RuntimeError('ITN already exists in infos_by_ITN, ITNs are expected to be returned only once.')
+
+            all_synonyms_lower = []
+            for name in primary_names:
+                nl = name.lower()
+                all_synonyms_lower.append(nl)
+                if nl not in ITNs_by_primary_name:
+                    ITNs_by_primary_name[nl] = []
+
+                if ITN not in ITNs_by_primary_name[nl]:
+                    ITNs_by_primary_name[nl].append(ITN)
+                
+                if nl not in ITNs_by_all_names:
+                    ITNs_by_all_names[nl] = []
+
+                if ITN not in ITNs_by_all_names[nl]:
+                    ITNs_by_all_names[nl].append(ITN)
+
+            for name in synonyms:
+                nl = name.lower()
+                all_synonyms_lower.append(nl)
+                if nl not in ITNs_by_synonym:
+                    ITNs_by_synonym[nl] = []
+
+                if ITN not in ITNs_by_synonym[nl]:
+                    ITNs_by_synonym[nl].append(ITN)
+                
+                if nl not in ITNs_by_all_names:
+                    ITNs_by_all_names[nl] = []
+
+                if ITN not in ITNs_by_all_names[nl]:
+                    ITNs_by_all_names[nl].append(ITN)
+
+            for CAS_ in CAS:
+                if CAS_ not in ITNs_by_CAS:
+                    ITNs_by_CAS[CAS_] = []
+
+                if ITN not in ITNs_by_CAS[CAS_]:
+                    ITNs_by_CAS[CAS_].append(ITN)
+
+            infos_by_ITN[ITN] = (SMILES, primary_names, synonyms, CAS, ITN, all_synonyms_lower)
+
+
+        SRS_results_by_identifier = {}
+        uniquely_matched_ITNs = {}
+        
+        last_SRS_results_by_identifier_length = -1
+        while len(SRS_results_by_identifier) != last_SRS_results_by_identifier_length:
+            last_SRS_results_by_identifier_length = len(SRS_results_by_identifier)
+            for identifier in identifiers:
+                il = identifier.lower()
+                if identifier not in SRS_results_by_identifier:
+                    ITNs_for_this_identifier = []
+                    if mode == 'cas':
+                        if identifier in ITNs_by_CAS:
+                            ITNs_for_this_identifier = ITNs_by_CAS[identifier]
+
+                    elif mode == 'name':
+                        if il in ITNs_by_primary_name:
+                            ITNs_for_this_identifier = ITNs_by_primary_name[il]
+                        elif il in ITNs_by_synonym:
+                            ITNs_for_this_identifier = ITNs_by_synonym[il]
+
+                    best_ITNs = None
+
+                    if ITNs_for_this_identifier:
+                        if len(ITNs_for_this_identifier) == 1:
+                            best_ITNs = ITNs_for_this_identifier
+                        else:
+                            temptative_ITNs = set(ITNs_for_this_identifier) - set(uniquely_matched_ITNs.values())
+                            if len(temptative_ITNs) == 1:
+                                best_ITNs = list(temptative_ITNs)
+                            else:
+                                unique_SMILES = set([self.standardize_SMILES(infos_by_ITN[ITN][0], True) for ITN in temptative_ITNs])
+                                if len(unique_SMILES) == 1:
+                                    # if same structure, use the one with the smallest ITN
+                                    best_ITNs = [str(min([int(ITN) for ITN in temptative_ITNs]))]
+                                else:
+                                    if len(temptative_ITNs) > 1:
+                                        number_of_synonyms_found_in_ITN_info = []
+                                        for ITN in temptative_ITNs:
+                                            number_of_synonyms_found_in_ITN_info.extend(infos_by_ITN[ITN][5].count(il) * [ITN])
+
+                                        most_common = collections.Counter(number_of_synonyms_found_in_ITN_info).most_common(2)
+                                        if most_common[0][1] > most_common[1][1]:
+                                            best_ITNs = [most_common[0][0]]
+
+                    if best_ITNs:
+                        if len(best_ITNs) == 1:
+                            uniquely_matched_ITNs[identifier] = best_ITNs[0]
+
+                        SRS_results_by_identifier[identifier] = [infos_by_ITN[ITN] for ITN in best_ITNs]
+
+
+
+        return SRS_results_by_identifier
 
     def get_molecules_from_SRS_batchmode(self, identifiers: list[str], mode: str, standardize: bool = True) -> list[Optional[Molecule]]:
-        #  https://www.postman.com/api-evangelist/workspace/environmental-protection-agency-epa/collection/35240-6b84cc71-ce77-48b8-babd-323eb8d670bd
+        # https://www.postman.com/api-evangelist/workspace/environmental-protection-agency-epa/collection/35240-6b84cc71-ce77-48b8-babd-323eb8d670bd
+        # new api https://cdxappstest.epacdx.net/oms-substance-registry-services/swagger-ui/
          
         MoleculeResolver._check_parameters(identifiers=identifiers, modes=mode, services='srs', context='get_molecules_batch')
         if not all([type(identifier) is str for identifier in identifiers]):
@@ -2709,6 +2898,7 @@ class MoleculeResolver:
             if len(identifiers_to_search) == 0:
                 return results
 
+            SRS_URL = 'https://cdxappstest.epacdx.net/oms-substance-registry-services/rest-api/substances'
             chunks_identifiers = []
             chunks_identifer_indices = []
             this_chunk_identifiers = []
@@ -2716,7 +2906,7 @@ class MoleculeResolver:
             for identifier_index, identifier in zip(indices_of_identifiers_to_search, identifiers_to_search):
                 this_chunk_identifiers.append(identifier)
                 this_chunk_identifier_indices.append(identifier_index)
-                if len(f'https://cdxnodengn.epa.gov/cdx-srs-rest/substances/{mode}?{mode}List={urllib.parse.quote("|".join(this_chunk_identifiers))}&qualifier=exact') >= 4000:
+                if len(f'{SRS_URL}/{mode}?{mode}List={urllib.parse.quote("|".join(this_chunk_identifiers))}&qualifier=exact') >= 2000:
                     chunks_identifiers.append(this_chunk_identifiers)
                     chunks_identifer_indices.append(this_chunk_identifier_indices)
                     this_chunk_identifiers = []
@@ -2727,110 +2917,20 @@ class MoleculeResolver:
                 chunks_identifer_indices.append(this_chunk_identifier_indices)
 
             for chunk_identifier_indices, chunk_identifiers in zip(chunks_identifer_indices, chunks_identifiers, strict=True):
-                search_response_text = self._resilient_request(f'https://cdxnodengn.epa.gov/cdx-srs-rest/substances/{mode}?{mode}List={urllib.parse.quote("|".join(chunk_identifiers))}&qualifier=exact',
+                search_response_text = self._resilient_request(f'{SRS_URL}/{mode}?{mode}List={urllib.parse.quote("|".join(chunk_identifiers))}&qualifier=exact',
                                                     rejected_status_codes=[404, 500], kwargs={'timeout':60})
 
                 if search_response_text is not None:
+                    infos_by_identifier = self._match_SRS_results_to_identifiers(chunk_identifiers, mode, standardize, json.loads(search_response_text))
 
-                    molecules = json.loads(search_response_text)
+                    for molecule_index, identifier in zip(chunk_identifier_indices, chunk_identifiers, strict=True):
+                        if identifier in infos_by_identifier:
+                            this_molecules = []
+                            for SMILES, primary_names, synonyms, CAS, ITN, _ in infos_by_identifier[identifier]:
+                                temp_synonyms = MoleculeResolver.filter_and_sort_synonyms(primary_names + synonyms)
+                                this_molecules.append(Molecule(SMILES, temp_synonyms, CAS, ITN, mode, 'srs', identifier=identifier))
 
-                    found_ITNs_by_identifier = {}
-                    found_ITNs_by_synonym = {}
-                    found_info_by_ITN = {}
-                    for molecule in molecules:
-
-                        SMILES = molecule['smilesNotation']
-                        if SMILES is None:
-                            if isinstance(molecule['inchiNotation'], str):
-                                SMILES = MoleculeResolver.InChI_to_SMILES(molecule['inchiNotation'], standardize)
-
-                        SMILES = self.standardize_SMILES(SMILES, standardize)
-                        
-                        if SMILES is None:
-                            continue
-
-                        synonyms = []
-                        all_lower_synonyms = []
-                        ITN = molecule['internalTrackingNumber'].strip()
-                        epaName = molecule['epaName']
-                        if epaName:
-                            synonyms.append(epaName.strip())
-                        iupacName = molecule['iupacName']
-                        if iupacName:
-                            synonyms.append(iupacName.strip())
-                        systematicName = molecule['systematicName']
-                        if systematicName:
-                            synonyms.append(systematicName.strip())
-
-                        CAS = []
-                        if 'currentCasNumber' in molecule:
-                            if molecule['currentCasNumber']:
-                                CAS = molecule['currentCasNumber'].strip()
-
-                        if ITN in found_info_by_ITN:
-                            raise RuntimeError('Internal tracking number is not unique.')
-
-                        if mode == 'cas':
-                            if CAS not in found_ITNs_by_identifier:
-                                found_ITNs_by_identifier[CAS] = []
-
-                            if ITN not in found_ITNs_by_identifier[CAS]:
-                                found_ITNs_by_identifier[CAS].append(ITN)
-
-                        if mode == 'name':
-                            for synonym in synonyms:
-                                sl = synonym.lower()
-                                all_lower_synonyms.append(sl)
-                                if sl not in found_ITNs_by_identifier:
-                                    found_ITNs_by_identifier[sl] = []
-                                
-                                if ITN not in found_ITNs_by_identifier[sl]:
-                                    found_ITNs_by_identifier[sl].append(ITN)
-
-                            for synonym in [s['synonymName'] for s in molecule['synonyms']]:
-                                sl = synonym.lower()
-                                all_lower_synonyms.append(sl)
-                                if sl not in found_ITNs_by_synonym:
-                                    found_ITNs_by_synonym[sl] = []
-                                
-                                if ITN not in found_ITNs_by_synonym[sl]:
-                                    found_ITNs_by_synonym[sl].append(ITN)
-
-                        found_info_by_ITN[ITN] = (SMILES, synonyms, [CAS] if CAS else [], ITN, all_lower_synonyms)
-
-                    
-                    uniquely_matched_ITNs_by_identifier = set([ITN[0] for ITN in found_ITNs_by_identifier.values() if len(ITN) == 1])
-                    uniquely_matched_ITNs_by_synonym = set([ITN[0] for ITN in found_ITNs_by_synonym.values() if len(ITN) == 1])
-                    for molecule_index, identifier in zip(chunk_identifier_indices, chunk_identifiers):
-                        ITN = None
-                        il = identifier.lower()
-                        found_ITNs_by = None
-                        # first search by main identifier
-                        if il in found_ITNs_by_identifier:
-                            found_ITNs_by = found_ITNs_by_identifier
-                            uniquely_matched_ITNs_by = uniquely_matched_ITNs_by_identifier
-                        # then search by synonym
-                        elif il in found_ITNs_by_synonym:
-                            found_ITNs_by = found_ITNs_by_synonym
-                            uniquely_matched_ITNs_by = uniquely_matched_ITNs_by_synonym
-
-                        if found_ITNs_by:
-                            ITNs = found_ITNs_by[il]
-                            if len(ITNs) == 1:# if is uniquely found
-                                ITN = ITNs[0]
-                            else:
-                                temptative_unique_ITN = set(ITNs) - uniquely_matched_ITNs_by
-                                if len(temptative_unique_ITN) == 1:
-                                    ITN = temptative_unique_ITN.pop()
-
-                                # get best possible match
-                                else:
-                                    ITN = self._choose_best_srs_ITN(found_info_by_ITN, ITNs, identifier)
-
-                        if ITN is not None:
-                            (SMILES, synonyms, CAS, ITN, _) = found_info_by_ITN[ITN]
-                            if SMILES:
-                                results[molecule_index] = [Molecule(SMILES,  MoleculeResolver.filter_and_sort_synonyms(synonyms), CAS, ITN, mode, 'srs', identifier=identifier)]
+                            results[molecule_index] = this_molecules
 
             return results
 
@@ -2839,68 +2939,19 @@ class MoleculeResolver:
 
         with self.query_molecule_cache('srs', mode, identifier) as (entry_available, molecules):
             if not entry_available:
-                search_response_text = self._resilient_request(f'https://cdxnodengn.epa.gov/cdx-srs-rest/substance/{mode}/{urllib.parse.quote(identifier)}', rejected_status_codes=[404, 500], kwargs={'timeout':10})
+                SRS_URL = 'https://cdxappstest.epacdx.net/oms-substance-registry-services/rest-api/substance'
+                search_response_text = self._resilient_request(f'{SRS_URL}/{mode}/{urllib.parse.quote(identifier)}', rejected_status_codes=[404, 500], kwargs={'timeout':10})
 
                 if search_response_text is not None:
 
-                    molecules_ = json.loads(search_response_text)
-                    filtered_molecules = [molecule for molecule in molecules_ if MoleculeResolver.check_formula(molecule['molecularFormula'], required_formula)]
-                    
-                    found_info_by_ITN = {}
-                    ITNs = []
-                    for molecule in filtered_molecules:
+                    results = json.loads(search_response_text)
+                    infos_by_identifier = self._match_SRS_results_to_identifiers([identifier], mode, standardize, results)
 
-                        synonyms = []
-                        epaName = molecule['epaName']
-                        if epaName:
-                            synonyms.append(epaName.strip())
-                        iupacName = molecule['iupacName']
-                        if iupacName:
-                            synonyms.append(iupacName.strip())
-                        systematicName = molecule['systematicName']
-                        if systematicName:
-                            synonyms.append(systematicName.strip())
-
-                        CAS = []
-                        if 'currentCasNumber' in molecule:
-                            if molecule['currentCasNumber']:
-                                CAS = molecule['currentCasNumber'].strip()
-
-                        if 'synonyms' in molecule:
-                            synonyms.extend([synonym['synonymName'] for synonym in molecule['synonyms']])
-
-                        all_lower_synonyms = [synonym.lower() for synonym in synonyms]
-                        synonyms = MoleculeResolver.filter_and_sort_synonyms(synonyms)
-
-                        CAS = []
-                        if 'currentCasNumber' in molecule:
-                            CAS = [molecule['currentCasNumber']]
-
-                        ITN = molecule['internalTrackingNumber']
-                        SMILES = molecule['smilesNotation']
-                        if SMILES is None:
-                            if isinstance(molecule['inchiNotation'], str):
-                                SMILES = MoleculeResolver.InChI_to_SMILES(molecule['inchiNotation'], standardize)
-
-                        SMILES = self.standardize_SMILES(SMILES, standardize)
-                        
-                        if SMILES is None:
-                            continue
-
-                        found_info_by_ITN[ITN] = (SMILES, synonyms, CAS, ITN, all_lower_synonyms)
-                        ITNs.append(ITN)
-
-
-                    if ITNs:
-                        best_ITN = self._choose_best_srs_ITN(found_info_by_ITN, ITNs, identifier)
-                        if best_ITN:
-                            ITNs = [best_ITN]
-
-                    for ITN in ITNs:
-                        SMILES, synonyms, CAS, ITN, all_lower_synonyms = found_info_by_ITN[ITN]
+                    if identifier in infos_by_identifier:
+                        SMILES, primary_names, synonyms, CAS, ITN = infos_by_identifier[identifier]
+                        synonyms = MoleculeResolver.filter_and_sort_synonyms(primary_names + standardize)
                         if MoleculeResolver.check_SMILES(SMILES, required_formula, required_charge, required_structure_type):
-                            SMILES = MoleculeResolver.standardize_SMILES(SMILES, standardize)
-                            molecules.append(Molecule(SMILES, synonyms, CAS, ITN, mode, 'srs'))
+                            molecules.append(Molecule(SMILES, synonyms, CAS, ITN, mode, 'srs',identifier=identifier))
 
         return MoleculeResolver.filter_and_combine_molecules(molecules, required_formula, required_charge, required_structure_type, standardize)
 
@@ -2975,7 +3026,7 @@ class MoleculeResolver:
                     CAS = MoleculeResolver.filter_and_sort_CAS(CIR_names if CIR_names else [])
                     molecules.append(Molecule(SMILES, synonyms, CAS, mode=mode, service='cir'))
 
-        MoleculeResolver.filter_and_combine_molecules(molecules, required_formula, required_charge, required_structure_type, standardize)
+        return MoleculeResolver.filter_and_combine_molecules(molecules, required_formula, required_charge, required_structure_type, standardize)
 
     def get_molecule_from_NIST(self, identifier: str, mode: str, required_formula: Optional[str] = None, required_charge: Optional[int] = None, required_structure_type: Optional[str] = None, standardize: bool = True) -> Optional[Molecule]:
         if required_formula is None:
@@ -3546,7 +3597,7 @@ class MoleculeResolver:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
 
         if try_to_choose_best_structure:
-            SMILES_preferred = SMILES_with_highest_number_of_crosschecks[0]
+            SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
             if len(SMILES_with_highest_number_of_crosschecks) > 1:
                 # trust opsin algorithm: if not sure and opsin available
                 SMILES_preferred_by_opsin = None
@@ -3588,9 +3639,22 @@ class MoleculeResolver:
                 if SMILES_preferred_by_opsin:
                     SMILES_preferred = SMILES_preferred_by_opsin
                 else:
-                    warnings.warn(f'\n\n2 molecules were found equally as often. First one was taken: \n{grouped_molecules}\n')
-        
-            return MoleculeResolver.combine_molecules(grouped_molecules[SMILES_preferred])
+                    # usually when chebi does not agree with others chebi is wrong
+                    # this is used to our advantage here
+                    SMILES_not_from_chebi = []
+                    for temptative_SMILES, temptative_molecules in grouped_molecules.items():
+                        molecules_from_chebi = [t_mol for t_mol in temptative_molecules if 'chebi' in t_mol.service]
+                        if len(molecules_from_chebi) == 0:
+                            SMILES_not_from_chebi.extend([temptative_SMILES] * len(temptative_molecules))
+                        
+                    c = collections.Counter(SMILES_not_from_chebi).most_common()
+                    if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
+                        SMILES_preferred = c[0][0]
+                    else:
+                        warnings.warn(f'\n\n{len(grouped_molecules)} molecules were found equally as often. First one was taken: \n{grouped_molecules}\n')
+            molec = MoleculeResolver.combine_molecules(grouped_molecules[SMILES_preferred])
+            molec.found_molecules.append(grouped_molecules)
+            return molec
         else:
             return [MoleculeResolver.combine_molecules(grouped_molecules[SMILES]) for SMILES in SMILES_with_highest_number_of_crosschecks]
 

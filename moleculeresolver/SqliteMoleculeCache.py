@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 import sqlite3
 from typing import Optional, Sequence
 import threading
@@ -29,11 +30,12 @@ class SqliteMoleculeCache:
         # close the connection from the main thread
         this_thread_id = threading.get_ident()
         if this_thread_id  == self._main_thread_id:
-            main_thread_connection = self._connections[self._main_thread_id]
-            main_thread_connection.execute('PRAGMA analysis_limit=8192')
-            main_thread_connection.execute('PRAGMA optimize')
-            main_thread_connection.close()
-            self._connections.clear()
+            if self._main_thread_id in self._connections:
+                main_thread_connection = self._connections[self._main_thread_id]
+                main_thread_connection.execute('PRAGMA analysis_limit=8192')
+                main_thread_connection.execute('PRAGMA optimize')
+                main_thread_connection.close()
+                self._connections.clear()
 
     def get_connection(self):
         thread_id = threading.get_ident()
@@ -42,6 +44,7 @@ class SqliteMoleculeCache:
             self._connections[thread_id].execute("PRAGMA foreign_keys = 1")
             self._connections[thread_id].execute('PRAGMA journal_mode=WAL')
             self._connections[thread_id].execute('PRAGMA synchronous=NORMAL')
+            self._connections[thread_id].execute('PRAGMA temp_store=MEMORY')
 
         return self._connections[thread_id]
 
@@ -64,7 +67,7 @@ class SqliteMoleculeCache:
                     id INTEGER PRIMARY KEY,
                     molecule_id INTEGER NOT NULL,
                     synonym_index INTEGER NOT NULL,
-                    synonym TEXT NOT NULL,
+                    synonym TEXT NOT NULL COLLATE NOCASE,
                     CONSTRAINT fk_molecules_synonyms
                         FOREIGN KEY (molecule_id)
                         REFERENCES molecules(id)
@@ -88,10 +91,10 @@ class SqliteMoleculeCache:
                 ON molecules(service, identifier_mode, identifier)
             ''')
             this_thread_connection.execute('''
-                CREATE INDEX IF NOT EXISTS idx_service_synonyms ON synonyms (synonym)
+                CREATE INDEX IF NOT EXISTS idx_covering_synonyms ON synonyms (molecule_id, synonym COLLATE NOCASE, synonym_index)
             ''')
             this_thread_connection.execute('''
-                CREATE INDEX IF NOT EXISTS idx_service_cas_number ON cas_numbers (cas_number)
+                CREATE INDEX IF NOT EXISTS idx_covering_cas_number ON cas_numbers (molecule_id, cas_number, cas_number_index)
             ''')
 
     def save(self, service: str | Sequence[str], identifier_mode: str | Sequence[str], identifier: str | Sequence[str], molecules: Molecule | Sequence[Molecule]) -> None:
@@ -264,22 +267,33 @@ class SqliteMoleculeCache:
                             GROUP_CONCAT(synonym_index || '|' || synonym, '||'),
                             GROUP_CONCAT(cas_number_index || '|' || cas_number, '||')
                     '''
+
+                # this distinction makes queries run much faster
+                all_one_service = len(set(service)) == 1
+                molecule_join_on_service = 't.service'
+                if all_one_service:
+                    molecule_join_on_service = f"'{service[0]}'"
+
+                molecule_join_on_identifier_mode = 't.identifier_mode'
+                all_one_identifier_mode = len(set(identifier_mode)) == 1
+                if all_one_identifier_mode:
+                    molecule_join_on_identifier_mode = f"'{identifier_mode[0]}'"
+
                 cursor = this_thread_connection.execute(f'''
                     SELECT search_index,
-                        molecules.id{optional_columns}
-                    FROM molecules
-                        LEFT JOIN synonyms ON molecules.id = synonyms.molecule_id
-                        LEFT JOIN cas_numbers ON molecules.id = cas_numbers.molecule_id
-                        RIGHT JOIN {this_transaction_unique_temp_table_name} AS temp_table ON 
-                            molecules.service = temp_table.service AND
-                            (
-                                (temp_table.identifier_mode = 'cas' and cas_numbers.cas_number  = temp_table.identifier) OR
-                                (temp_table.identifier_mode = 'name' and (synonyms.synonym = temp_table.identifier COLLATE NOCASE or molecules.identifier = temp_table.identifier COLLATE NOCASE)) OR
-                                (temp_table.identifier_mode != 'cas' and temp_table.identifier_mode != 'name' and molecules.identifier = temp_table.identifier)
-                            )
-                    GROUP BY search_index, molecules.id
-                    ORDER BY search_index
+                        m.id{optional_columns}
+                        FROM {this_transaction_unique_temp_table_name} AS t
+                        INNER JOIN molecules AS m
+                            ON m.identifier_mode = {molecule_join_on_identifier_mode}
+                            AND m.service = {molecule_join_on_service}
+                        LEFT JOIN synonyms AS s
+                            ON m.id = s.molecule_id
+                        LEFT JOIN cas_numbers AS c
+                            ON m.id = c.molecule_id
+                    WHERE m.identifier = t.identifier COLLATE NOCASE
+                    GROUP BY search_index, m.id
                 ''')
+                # TODO search also the synonyms and cas_numbers tables
                 results = [None] * len(service)
                 rows = cursor.fetchall()
                 if only_check_for_existance:
@@ -318,8 +332,24 @@ class SqliteMoleculeCache:
                     this_thread_connection.execute('''
                         DELETE FROM molecules
                         WHERE datetime_added < ?
-                    ''', (self.expiration_datetime,)) 
+                    ''', (self.expiration_datetime,))
 
+    def recreate_all_tables(self) -> None:
+        if len(self._connections) > 1:
+            raise RuntimeError('Cannot delete cache files in a multi-threaded environment.')
+        else:
+            if len(self._connections) == 1:
+                this_thread_connection = self.get_connection()
+                this_thread_connection.close()
+                self._connections.clear()
+
+            files = [self.db_path, f'{self.db_path}-shm', f'{self.db_path}-wal']
+            for file in files:
+                if os.path.exists(file):
+                    os.remove(file)
+
+        self._create_tables()
+            
     def count(self, service: str = None):
         this_thread_connection = self.get_connection()
         with this_thread_connection:

@@ -11,3 +11,4 @@ class Molecule:
     service: str = ''
     number_of_crosschecks: int = 1
     identifier: str = ''
+    found_molecules: list = field(default_factory=list)
