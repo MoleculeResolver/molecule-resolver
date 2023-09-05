@@ -209,9 +209,9 @@ class SqliteMoleculeCache:
                 values = (service, identifier_mode, identifier)
 
                 if identifier_mode == 'name':
-                    identifier_clause = '(identifier = ? COLLATE NOCASE OR synonyms.synonym = ? COLLATE NOCASE)'
+                    identifier_clause = 'identifier = ? COLLATE NOCASE'
                     identifier_mode_clause = ''
-                    values = (service, identifier, identifier)
+                    values = (service, identifier)
                 if identifier_mode == 'cas':
                     identifier_clause = 'cas_numbers.cas_number = ?'
                     identifier_mode_clause = ''

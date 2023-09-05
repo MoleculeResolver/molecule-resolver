@@ -584,7 +584,12 @@ class MoleculeResolver:
         return final_synonyms_taken
    
     @staticmethod
-    def expand_name_heuristically(name: str, prefixes_to_delete: Optional[Sequence[str]] = None, suffixes_to_use_as_prefix: Optional[Sequence[str]] = None, suffixes_to_delete: Optional[Sequence[str]] = None, parts_to_delete: Optional[Sequence[str]] = None, maps_to_replace: Optional[dict[str, str]] = None) -> str:
+    def expand_name_heuristically(name: str,
+                                  prefixes_to_delete: Optional[Sequence[str]] = None,
+                                  suffixes_to_use_as_prefix: Optional[Sequence[str]] = None,
+                                  suffixes_to_delete: Optional[Sequence[str]] = None,
+                                  parts_to_delete: Optional[Sequence[str]] = None,
+                                  maps_to_replace: Optional[dict[str, str]] = None) -> str:
         name = name.strip()
         original_name = name
         names = [original_name]
@@ -615,10 +620,10 @@ class MoleculeResolver:
                 names.append(''.join(name_parts))
 
         if prefixes_to_delete is None:
-            prefixes_to_delete = ['±', '\+\,-', '\+/-', '\+-', '\.\+\,-\.', '\.\+/-\.', '\.\+-\.', 'DL', 'RS', '\(<\+\->\)\-']
+            prefixes_to_delete = ['±', '\+\,-', '\+/-', '\+-', '\.\+\,-\.', '\.\+/-\.', '\.\+-\.', '(dl)', 'DL', 'RS', '\(<\+\->\)\-', '\(2H\d+\)', '\[2H\d+\]']
 
         if suffixes_to_delete is None:
-            suffixes_to_delete = ['mixed isomers', 'isomers', 'tautomers', 'dl and meso', '±', '\+\,-', '\+/-', '\+-', '\.\+\,-\.', '\.\+/-\.', '\.\+-\.', 'cis and trans']
+            suffixes_to_delete = ['mixed isomers', 'isomers', 'tautomers', 'dl and meso', '±', '\+\,-', '\+/-', '\+-', '\.\+\,-\.', '\.\+/-\.', '\.\+-\.', 'cis and trans', '-d2']
 
         if suffixes_to_use_as_prefix is None:
             suffixes_to_use_as_prefix = ['R', 'S']
@@ -634,7 +639,8 @@ class MoleculeResolver:
                 [r'cis(-\d+-[a-z]{3,}ene)\b', r'(Z)\1'],
                 [r'cis(-\d+-[a-z]{3,}ene)\b', r'Z\1'],
                 [r'(.*)(\((?:Z|E)\)-)(.*)', r'\2\1\3'],
-                [r'«|»', r'']
+                [r'«|»', r''],
+                [r'- -', '-']
             ]
 
         new_name = name
@@ -1048,6 +1054,18 @@ class MoleculeResolver:
             return None
 
         mol = Chem.MolFromInchi(inchi)
+        if mol is None:
+            mol = Chem.MolFromInchi(inchi, sanitize= False)
+
+        if mol is None:
+            return None
+
+        try:
+            mol.UpdatePropertyCache()
+        except Exception as error:
+            mol.UpdatePropertyCache(strict=False)
+
+        Chem.GetSymmSSSR(mol)
 
         if mol is None:
             return None
@@ -1079,8 +1097,6 @@ class MoleculeResolver:
             try:
                 mol.UpdatePropertyCache()
             except Exception as error:
-                
-                print('UpdatePropertyCache ERROR', error)
                 mol.UpdatePropertyCache(strict=False)
 
             Chem.GetSymmSSSR(mol)
@@ -1253,6 +1269,39 @@ class MoleculeResolver:
         else: 
             return False
 
+
+    @staticmethod
+    @cache
+    def are_InChIs_equal(InChI1: str, InChI2: str, standardize: bool = True, isomeric: bool = True, keep_fixed_Hs: bool = False) -> bool:
+
+        if not InChI1 or not InChI2:
+            return False
+
+        if InChI1 == InChI2:
+            return True
+        
+        mol1 = MoleculeResolver.get_from_InChI(InChI1)
+        mol2 = MoleculeResolver.get_from_InChI(InChI2)
+        if standardize:
+            mol1 = MoleculeResolver.standardize_molecule(mol1)
+            mol2 = MoleculeResolver.standardize_molecule(mol2)
+
+        if not isomeric:
+            mol1 = MoleculeResolver.get_from_SMILES(Chem.MolToSmiles(mol1, isomericSmiles=False))
+            mol2 = MoleculeResolver.get_from_SMILES(Chem.MolToSmiles(mol2, isomericSmiles=False))
+
+        options = '/FixedH' if keep_fixed_Hs else ''
+        return Chem.MolToInchi(mol1, options = options) == Chem.MolToInchi(mol2, options = options)
+
+    @staticmethod
+    @cache
+    def are_SMILES_equal(smiles1: str, smiles2: str, standardize: bool = True, isomeric: bool = True) -> bool:
+        if standardize:
+            smiles1 = MoleculeResolver.standardize_SMILES(smiles1)
+            smiles2 = MoleculeResolver.standardize_SMILES(smiles2)
+
+        return MoleculeResolver.are_equal(MoleculeResolver.get_from_SMILES(smiles1), MoleculeResolver.get_from_SMILES(smiles2), False, isomeric)
+
     @staticmethod
     def are_equal(mol1: Chem.rdchem.Mol, mol2: Chem.rdchem.Mol, standardize: bool = True, isomeric: bool = True, check_for_resonance_structures: Optional[bool] = None, method: int = 1) -> bool:
 
@@ -1372,7 +1421,9 @@ class MoleculeResolver:
         return temporary  
 
     @staticmethod
-    def intersect_molecule_dictionaries(molecules: dict[Any, Molecule], other_molecules: dict[Any, Molecule], clustered_molecules: dict = None, clustered_other_molecules: dict = None, report_same_keys: bool = True) -> Tuple[Any, Molecule, Any, Molecule]:
+    def intersect_molecule_dictionaries(molecules: dict[Any, Molecule], other_molecules: dict[Any, Molecule], mode: str = 'SMILES', 
+                                        clustered_molecules: dict = None, clustered_other_molecules: dict = None, 
+                                        report_same_keys: bool = True) -> Tuple[Any, Molecule, Any, Molecule, bool]:
         
         if not clustered_molecules:
             clustered_molecules = MoleculeResolver.group_molecule_dictionary_by_formula(molecules)
@@ -1384,9 +1435,28 @@ class MoleculeResolver:
             if mol_formula in clustered_other_molecules:
                 for key, (mol_molecule, molecule) in this_formula_molecules.items():
                     for other_key, (other_mol_molecule, other_molecule) in clustered_other_molecules[mol_formula].items():
-                        if MoleculeResolver.are_equal(mol_molecule, other_mol_molecule):
+                        are_equal = False
+                        same_isomer_information = True
+                        if mode == 'SMILES':
+                            if MoleculeResolver.are_equal(mol_molecule, other_mol_molecule):
+                                are_equal = True
+                                same_isomer_information = True
+                            elif MoleculeResolver.are_equal(mol_molecule, other_mol_molecule, isomeric=False):
+                                are_equal = True
+                                same_isomer_information = False
+                        elif mode == 'inchi':
+                            if MoleculeResolver.are_InChIs_equal(Chem.MolToInchi(mol_molecule), Chem.MolToInchi(other_mol_molecule)):
+                                are_equal = True
+                                same_isomer_information = True
+                            elif MoleculeResolver.are_InChIs_equal(Chem.MolToInchi(mol_molecule), Chem.MolToInchi(other_mol_molecule), isomeric=False):
+                                are_equal = True
+                                same_isomer_information = False
+                        else:
+                            raise ValueError('Supported modes are ["SMILES", "inchi"].')
+                        
+                        if are_equal:
                             if report_same_keys or key != other_key:
-                                yield (key, molecule, other_key, other_molecule)
+                                yield (key, molecule, other_key, other_molecule, same_isomer_information)
     
     @staticmethod
     @cache
@@ -2948,8 +3018,10 @@ class MoleculeResolver:
                     infos_by_identifier = self._match_SRS_results_to_identifiers([identifier], mode, standardize, results)
 
                     if identifier in infos_by_identifier:
-                        SMILES, primary_names, synonyms, CAS, ITN = infos_by_identifier[identifier]
-                        synonyms = MoleculeResolver.filter_and_sort_synonyms(primary_names + standardize)
+                        if len(infos_by_identifier[identifier]) != 1:
+                            raise RuntimeError('More than one molecule found for the given identifier.')
+                        SMILES, primary_names, synonyms, CAS, ITN, _ = infos_by_identifier[identifier][0]
+                        synonyms = MoleculeResolver.filter_and_sort_synonyms(primary_names + synonyms)
                         if MoleculeResolver.check_SMILES(SMILES, required_formula, required_charge, required_structure_type):
                             molecules.append(Molecule(SMILES, synonyms, CAS, ITN, mode, 'srs',identifier=identifier))
 
@@ -3599,59 +3671,66 @@ class MoleculeResolver:
         if try_to_choose_best_structure:
             SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
             if len(SMILES_with_highest_number_of_crosschecks) > 1:
-                # trust opsin algorithm: if not sure and opsin available
-                SMILES_preferred_by_opsin = None
-                for SMILES in SMILES_with_highest_number_of_crosschecks:
-                    for molecule in grouped_molecules[SMILES]:
-                        if molecule.mode == 'name' and molecule.service == 'opsin':
-                            SMILES_preferred_by_opsin = SMILES
 
-                # if opsin result not available, or searched by another mode
-                # try getting all structures from the names and see if they agree
-                # with the SMILES found
-                if not SMILES_preferred_by_opsin:
-                    SMILES_map = []
-                    names_map = []
+                # if SMILES are the same ignoring isomeric info, use the more specific one:
+                unique_non_isomeric_SMILES = set([self.standardize_SMILES(smi, standardize, isomeric_SMILES = False) for smi in SMILES_with_highest_number_of_crosschecks])
+                if len(unique_non_isomeric_SMILES) == 1:
+                    SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks, key=len)[-1]
+                else:
+                    # trust opsin algorithm: if not sure and opsin available
+                    SMILES_preferred_by_opsin = None
                     for SMILES in SMILES_with_highest_number_of_crosschecks:
                         for molecule in grouped_molecules[SMILES]:
-                            for name in molecule.synonyms:
-                                SMILES_map.append(SMILES)
-                                names_map.append(name)
-                    
-                    use_opsin_batch = False # self._OPSIN_tempfolder is not None
-                    if use_opsin_batch:
-                        opsin_results = self.get_molecule_from_OPSIN_batchmode(names_map)
-                    else:
-                        opsin_results = [self.get_molecule_from_OPSIN(name) for name in names_map]
+                            if molecule.mode == 'name' and molecule.service == 'opsin':
+                                SMILES_preferred_by_opsin = SMILES
 
-                    SMILES_preferred_by_opsin = []
-                    for original_SMILES_found, molecule_found_by_opsin_from_synonym in zip(SMILES_map, opsin_results, strict=True):
-                        if molecule_found_by_opsin_from_synonym:
-                            if original_SMILES_found == molecule_found_by_opsin_from_synonym.SMILES:
-                                SMILES_preferred_by_opsin.append(original_SMILES_found)
-
-                    SMILES_preferred_by_opsin = set(SMILES_preferred_by_opsin)
-                    if len(SMILES_preferred_by_opsin) == 1:
-                        SMILES_preferred_by_opsin = SMILES_preferred_by_opsin.pop()
-                    else:
-                        SMILES_preferred_by_opsin = None
-
-                if SMILES_preferred_by_opsin:
-                    SMILES_preferred = SMILES_preferred_by_opsin
-                else:
-                    # usually when chebi does not agree with others chebi is wrong
-                    # this is used to our advantage here
-                    SMILES_not_from_chebi = []
-                    for temptative_SMILES, temptative_molecules in grouped_molecules.items():
-                        molecules_from_chebi = [t_mol for t_mol in temptative_molecules if 'chebi' in t_mol.service]
-                        if len(molecules_from_chebi) == 0:
-                            SMILES_not_from_chebi.extend([temptative_SMILES] * len(temptative_molecules))
+                    # if opsin result not available, or searched by another mode
+                    # try getting all structures from the names and see if they agree
+                    # with the SMILES found
+                    if not SMILES_preferred_by_opsin:
+                        SMILES_map = []
+                        names_map = []
+                        for SMILES in SMILES_with_highest_number_of_crosschecks:
+                            for molecule in grouped_molecules[SMILES]:
+                                for name in molecule.synonyms:
+                                    SMILES_map.append(SMILES)
+                                    names_map.append(name)
                         
-                    c = collections.Counter(SMILES_not_from_chebi).most_common()
-                    if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
-                        SMILES_preferred = c[0][0]
+                        use_opsin_batch = False # self._OPSIN_tempfolder is not None
+                        if use_opsin_batch:
+                            opsin_results = self.get_molecule_from_OPSIN_batchmode(names_map)
+                        else:
+                            opsin_results = [self.get_molecule_from_OPSIN(name) for name in names_map]
+
+                        SMILES_preferred_by_opsin = []
+                        for original_SMILES_found, molecule_found_by_opsin_from_synonym in zip(SMILES_map, opsin_results, strict=True):
+                            if molecule_found_by_opsin_from_synonym:
+                                if original_SMILES_found == molecule_found_by_opsin_from_synonym.SMILES:
+                                    SMILES_preferred_by_opsin.append(original_SMILES_found)
+
+                        SMILES_preferred_by_opsin = set(SMILES_preferred_by_opsin)
+                        if len(SMILES_preferred_by_opsin) == 1:
+                            SMILES_preferred_by_opsin = SMILES_preferred_by_opsin.pop()
+                        else:
+                            SMILES_preferred_by_opsin = None
+
+                    if SMILES_preferred_by_opsin:
+                        SMILES_preferred = SMILES_preferred_by_opsin
                     else:
-                        warnings.warn(f'\n\n{len(grouped_molecules)} molecules were found equally as often. First one was taken: \n{grouped_molecules}\n')
+                        # usually when chebi does not agree with others chebi is wrong
+                        # this is used to our advantage here
+                        SMILES_not_from_chebi = []
+                        for temptative_SMILES, temptative_molecules in grouped_molecules.items():
+                            molecules_from_chebi = [t_mol for t_mol in temptative_molecules if 'chebi' in t_mol.service]
+                            if len(molecules_from_chebi) == 0:
+                                SMILES_not_from_chebi.extend([temptative_SMILES] * len(temptative_molecules))
+                            
+                        c = collections.Counter(SMILES_not_from_chebi).most_common()
+                        if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
+                            SMILES_preferred = c[0][0]
+                        else:
+                            temp = len(SMILES_with_highest_number_of_crosschecks)
+                            warnings.warn(f'\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n')
             molec = MoleculeResolver.combine_molecules(grouped_molecules[SMILES_preferred])
             molec.found_molecules.append(grouped_molecules)
             return molec
