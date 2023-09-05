@@ -2098,9 +2098,12 @@ class MoleculeResolver:
                             if not required_structure_type or 'mixture' not in required_structure_type:
                                 if '.' in this_SMILES:
                                     continue
-                            # filter radicals as CTS has them in some cases
-                            if Descriptors.NumRadicalElectrons(self.get_from_SMILES(this_SMILES)) == 0:
-                                accepted_SMILES.append(this_SMILES)
+                            # try filtering radicals as CTS has them in some cases
+                            try:
+                                if Descriptors.NumRadicalElectrons(self.get_from_SMILES(this_SMILES)) == 0:
+                                    accepted_SMILES.append(this_SMILES)
+                            except Exception:
+                                continue
 
                         if len(accepted_SMILES) == 1:
                             if mode == 'name':
@@ -3010,7 +3013,7 @@ class MoleculeResolver:
         with self.query_molecule_cache('srs', mode, identifier) as (entry_available, molecules):
             if not entry_available:
                 SRS_URL = 'https://cdxappstest.epacdx.net/oms-substance-registry-services/rest-api/substance'
-                search_response_text = self._resilient_request(f'{SRS_URL}/{mode}/{urllib.parse.quote(identifier)}', rejected_status_codes=[404, 500], kwargs={'timeout':10})
+                search_response_text = self._resilient_request(f'{SRS_URL}/{mode}/{urllib.parse.quote(identifier)}', rejected_status_codes=[400, 404, 500], kwargs={'timeout':10})
 
                 if search_response_text is not None:
 
