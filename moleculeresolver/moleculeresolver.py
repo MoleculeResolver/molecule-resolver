@@ -1297,8 +1297,8 @@ class MoleculeResolver:
     @cache
     def are_SMILES_equal(smiles1: str, smiles2: str, standardize: bool = True, isomeric: bool = True) -> bool:
         if standardize:
-            smiles1 = MoleculeResolver.standardize_SMILES(smiles1)
-            smiles2 = MoleculeResolver.standardize_SMILES(smiles2)
+            smiles1 = MoleculeResolver.standardize_SMILES(smiles1, True)
+            smiles2 = MoleculeResolver.standardize_SMILES(smiles2, True)
 
         return MoleculeResolver.are_equal(MoleculeResolver.get_from_SMILES(smiles1), MoleculeResolver.get_from_SMILES(smiles2), False, isomeric)
 
