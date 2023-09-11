@@ -7,9 +7,7 @@ from datetime import datetime
 from functools import cache
 import gzip
 import html
-import io
 import json
-import multiprocessing
 import os
 from PIL import ImageFont, ImageDraw
 import platform
@@ -29,19 +27,24 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts import yes_no_dialog
 import regex
 from rdkit import Chem
-from rdkit.Chem import AllChem
 from rdkit.Chem import Descriptors
 from rdkit.Chem import Draw
 from rdkit.Chem import rdMolDescriptors
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit.Chem.MolStandardize import canonicalize_tautomer_smiles
 from rdkit.Chem import RegistrationHash
+from rdkit.Chem.rdchem import ResonanceMolSupplierCallback
 from tqdm import tqdm
 import urllib3
 import xmltodict
 from moleculeresolver.rdkitmods import disabling_rdkit_logger
 from moleculeresolver.molecule import Molecule
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
+
+class EmptyResonanceMolSupplierCallback(ResonanceMolSupplierCallback):
+    '''Workaround for https://github.com/rdkit/rdkit/issues/6704'''
+    def __call__(self):
+        pass
 
 class CustomHttpAdapter(requests.adapters.HTTPAdapter):
     '''Workaround for SSL error from https://stackoverflow.com/questions/71603314/ssl-error-unsafe-legacy-renegotiation-disabled/71646353#71646353'''
@@ -1279,35 +1282,38 @@ class MoleculeResolver:
         return MoleculeResolver.are_equal(MoleculeResolver.get_from_SMILES(smiles1), MoleculeResolver.get_from_SMILES(smiles2), False, isomeric)
 
     @staticmethod
-    def _get_resonance_SMILES(SMILES, return_list):
-        mol = Chem.MolFromSmiles(SMILES)
-        resonance_mols = list(Chem.ResonanceMolSupplier(mol))
+    @cache
+    def get_resonance_SMILES(SMILES):
+        mol = MoleculeResolver.get_from_SMILES(SMILES)
+        rms = Chem.ResonanceMolSupplier(mol)
+        rms.SetProgressCallback(EmptyResonanceMolSupplierCallback())
+        resonance_mols = list(rms)
 
         # This workaround is needed in very few cornercases where the 
         # resonance mol suppler returns molecules that are None
         # e.g. tetrabromocobaltate(II) [Co+2]([Br-])([Br-])([Br-])([Br-])
-        if any([resonance_mol is None for resonance_mol in resonance_mols]):
+        if all([resonance_mol is None for resonance_mol in resonance_mols]):
             return [SMILES]
 
-        return_list.extend([Chem.MolToSmiles(mol_) for mol_ in resonance_mols])
+        return [Chem.MolToSmiles(mol_) for mol_ in resonance_mols if mol_]
 
-    @staticmethod
-    @cache
-    def get_resonance_SMILES(SMILES):
-        # unfortunately this has to be called on another process as the ResonanceMolSupplier
-        # freezes on windows in some corner cases. For more info check: https://github.com/rdkit/rdkit/issues/6704
-        manager = multiprocessing.Manager()
-        return_list = manager.list()
-        p = multiprocessing.Process(target=MoleculeResolver._get_resonance_SMILES, args = [SMILES, return_list])
-        p.start()
-        p.join(20)
+    # @staticmethod
+    # @cache
+    # def get_resonance_SMILES(SMILES):
+    #     # unfortunately this has to be called on another process as the ResonanceMolSupplier
+    #     # freezes on windows in some corner cases. For more info check: https://github.com/rdkit/rdkit/issues/6704
+    #     manager = multiprocessing.Manager()
+    #     return_list = manager.list()
+    #     p = multiprocessing.Process(target=MoleculeResolver._get_resonance_SMILES, args = [SMILES, return_list])
+    #     p.start()
+    #     p.join(20)
 
-        ran_without_problems = not p.is_alive()
-        if ran_without_problems == False:
-            p.terminate()
-            p.join()
+    #     ran_without_problems = not p.is_alive()
+    #     if ran_without_problems == False:
+    #         p.terminate()
+    #         p.join()
 
-        return list(return_list), ran_without_problems
+    #     return list(return_list), ran_without_problems
 
     @staticmethod
     def are_equal(mol1: Chem.rdchem.Mol, mol2: Chem.rdchem.Mol, standardize: bool = True, isomeric: bool = True, check_for_resonance_structures: Optional[bool] = None, method: int = 1) -> bool:
@@ -1319,20 +1325,20 @@ class MoleculeResolver:
                 mol1 = MoleculeResolver.standardize_molecule(mol1)
                 mol2 = MoleculeResolver.standardize_molecule(mol2)
         
-        SMILES1 = Chem.MolToSmiles(mol1, isomericSmiles=isomeric) #, allHsExplicit = True, canonical=True
-        SMILES2 = Chem.MolToSmiles(mol2, isomericSmiles=isomeric) #, allHsExplicit = True, canonical=True
+        SMILES1 = Chem.MolToSmiles(mol1, isomericSmiles=isomeric)
+        SMILES2 = Chem.MolToSmiles(mol2, isomericSmiles=isomeric)
+
+        if check_for_resonance_structures is None:
+            SMILES1_structure_type = MoleculeResolver.get_structure_type_from_SMILES(SMILES1)
+            SMILES2_structure_type = MoleculeResolver.get_structure_type_from_SMILES(SMILES2)
+            if SMILES1_structure_type != SMILES2_structure_type:
+                return False
+            check_for_resonance_structures = SMILES1_structure_type in ['ion', 'salt'] or SMILES2_structure_type in ['ion', 'salt']
 
         if method == 1:
 
             if SMILES1 == SMILES2:
                 return True
-
-            if check_for_resonance_structures is None:
-                SMILES1_structure_type = MoleculeResolver.get_structure_type_from_SMILES(SMILES1)
-                SMILES2_structure_type = MoleculeResolver.get_structure_type_from_SMILES(SMILES2)
-                if SMILES1_structure_type != SMILES2_structure_type:
-                    return False
-                check_for_resonance_structures = SMILES1_structure_type in ['ion', 'salt'] or SMILES2_structure_type in ['ion', 'salt']
 
             if check_for_resonance_structures:
                 unique_partial_SMILES1 = set(SMILES1.split('.'))
@@ -1343,14 +1349,10 @@ class MoleculeResolver:
                 
                 matching_unique_partial_SMILES2_found = []
                 for unique_partial_SMILES1_ in unique_partial_SMILES1:
-                    resonance_SMILES1, ran_without_problems = MoleculeResolver.get_resonance_SMILES(unique_partial_SMILES1_)
-                    if not ran_without_problems:
-                        warnings.warn('Could not get resonance structure for ' + unique_partial_SMILES1_)
+                    resonance_SMILES1 = MoleculeResolver.get_resonance_SMILES(unique_partial_SMILES1_)
                     unique_partial_SMILES2 = unique_partial_SMILES2 - set(matching_unique_partial_SMILES2_found)
                     for unique_partial_SMILES2_ in unique_partial_SMILES2:
-                        resonance_SMILES2, ran_without_problems = MoleculeResolver.get_resonance_SMILES(unique_partial_SMILES2_)
-                        if not ran_without_problems:
-                            warnings.warn('Could not get resonance structure for ' + unique_partial_SMILES2_)
+                        resonance_SMILES2 = MoleculeResolver.get_resonance_SMILES(unique_partial_SMILES2_)
                         if set(resonance_SMILES1) == set(resonance_SMILES2):
                             matching_unique_partial_SMILES2_found.append(unique_partial_SMILES2_)
                             break
@@ -1369,7 +1371,7 @@ class MoleculeResolver:
             if isomeric:
                 hashscheme = RegistrationHash.HashScheme.ALL_LAYERS
             else:
-                hashscheme = RegistrationHash.HashScheme.STEREO_INSENSITIVE_LAYER
+                hashscheme = RegistrationHash.HashScheme.STEREO_INSENSITIVE_LAYERS
 
             mol1_hash = get_mol_hash(mol1, hashscheme)
             mol2_hash = get_mol_hash(mol2, hashscheme)
@@ -1386,8 +1388,8 @@ class MoleculeResolver:
 
                     unique_partial_SMILES2 = unique_partial_SMILES2 - set(matching_unique_partial_SMILES2_found)
                     for unique_partial_SMILES2_ in unique_partial_SMILES2:
-                        resonance_SMILES1 = get_resonance_structure_SMILES(unique_partial_SMILES1_)
-                        resonance_SMILES2 = get_resonance_structure_SMILES(unique_partial_SMILES2_)
+                        resonance_SMILES1 = MoleculeResolver.get_resonance_SMILES(unique_partial_SMILES1_)
+                        resonance_SMILES2 = MoleculeResolver.get_resonance_SMILES(unique_partial_SMILES2_)
                         if set(resonance_SMILES1) == set(resonance_SMILES2):
                             matching_unique_partial_SMILES2_found.append(unique_partial_SMILES2_)
                             break
@@ -2335,7 +2337,7 @@ class MoleculeResolver:
         def clean_identifier(identifier):
             if mode == 'name':
                 identifier =  identifier.replace('<', '&lt;').replace('>', '&gt;').replace('’', '\'').replace('α', 'alpha;').replace('β', 'beta').replace('γ', 'gamma')
-                identifier = identifier.replace("'", '&apos;').replace('/', '\/').replace('±', '+-')
+                identifier = identifier.replace("'", '&apos;').replace('±', '+-')
                 if identifier.endswith(', (+-)-'):
                     identifier = ''.join(identifier.split(', (+-)-')[:-1])
                 if identifier.startswith('(+-)-'):
@@ -2363,7 +2365,7 @@ class MoleculeResolver:
         def cid_search_request():
             query_Uids = []
             for cleaned_unique_identifier in cleaned_unique_identifiers:
-                query_Uids.append(f'<PCT-QueryUids_{pubchem_xml_mode[mode]}_E>{urllib.parse.quote(cleaned_unique_identifier)}</PCT-QueryUids_{pubchem_xml_mode[mode]}_E>')
+                query_Uids.append(f'<PCT-QueryUids_{pubchem_xml_mode[mode]}_E>{cleaned_unique_identifier}</PCT-QueryUids_{pubchem_xml_mode[mode]}_E>')
             temp = '\n'.join(query_Uids)
             root_query_Uids = f'<PCT-QueryUids_{pubchem_xml_mode[mode]}>{temp}</PCT-QueryUids_{pubchem_xml_mode[mode]}>'                                                
 
@@ -2490,10 +2492,8 @@ class MoleculeResolver:
             return found_results
 
         with self.query_molecule_cache_batchmode('pubchem', mode, original_identifiers) as (original_identifiers_to_search, indices_of_identifiers_to_search, results):
-            # if len(original_identifiers_to_search) == 0:
-            #     return results
-            original_identifiers_to_search = original_identifiers
-            indices_of_identifiers_to_search = [0]
+            if len(original_identifiers_to_search) == 0:
+                return results
 
             cleaned_identifiers = [clean_identifier(identifier) for identifier in original_identifiers_to_search] # cleaned identifiers
             cleaned_unique_identifiers = set(cleaned_identifiers)

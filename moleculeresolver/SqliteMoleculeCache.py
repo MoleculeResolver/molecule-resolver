@@ -334,6 +334,14 @@ class SqliteMoleculeCache:
                         WHERE datetime_added < ?
                     ''', (self.expiration_datetime,))
 
+    def delete_service(self, service: str) -> None:
+        this_thread_connection = self.get_connection()
+        with this_thread_connection:
+            this_thread_connection.execute('''
+                DELETE FROM molecules
+                WHERE service = ?
+            ''', (service,))
+
     def recreate_all_tables(self) -> None:
         if len(self._connections) > 1:
             raise RuntimeError('Cannot delete cache files in a multi-threaded environment.')
