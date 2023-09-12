@@ -226,7 +226,7 @@ class MoleculeResolver:
             user_agent_is_set = 'user-agent' in [key.lower() for key in headers.keys()]
 
         if user_agent_is_set is False:
-            headers['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36'
+            headers['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36'
 
         kwargs['headers'] = headers
 
@@ -1628,12 +1628,13 @@ class MoleculeResolver:
             raise NotImplementedError(f'For the following OS, getting the full path of the java executable needs to be programmed: {platform.system()}')
 
         output = subprocess.run([search_command, 'java'], capture_output=True)
-        java_path = output.stdout.decode('utf-8').strip()
+        java_paths = output.stdout.decode('utf-8').strip().split(os.linesep)
+        java_paths = [java_path for java_path in java_paths if os.path.exists(java_path)]
 
-        if output.returncode != 0 or not os.path.exists(java_path):
+        if output.returncode != 0 or len(java_paths) == 0:
             return None
         else:
-            return java_path
+            return java_paths[0]
 
     def get_molecule_from_OPSIN(self, name: str, required_formula: Optional[str] = None, required_charge: Optional[int] = None, required_structure_type: Optional[str] = None, standardize: bool = True, allow_warnings: bool = False) -> Optional[Molecule]:
         SMILES = None
@@ -2336,8 +2337,26 @@ class MoleculeResolver:
 
         def clean_identifier(identifier):
             if mode == 'name':
-                identifier =  identifier.replace('<', '&lt;').replace('>', '&gt;').replace('’', '\'').replace('α', 'alpha;').replace('β', 'beta').replace('γ', 'gamma')
-                identifier = identifier.replace("'", '&apos;').replace('±', '+-')
+                greek_letters = ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω',
+                'Α', 'Β', 'Γ', 'Δ', 'Ε', 'Ζ', 'Η', 'Θ', 'Ι', 'Κ', 'Λ', 'Μ', 'Ν', 'Ξ', 'Ο', 'Π', 'Ρ', 'Σ', 'Τ', 'Υ', 'Φ', 'Χ', 'Ψ', 'Ω']
+                spelled_out_versions = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega',
+                        'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega']
+
+                map_to_replace = [
+                    ('’', "'"),
+                    ('′', "'"),
+                    ('±', '+-'),
+                    ('→', '-->'),
+                    ('≥', '>='),
+                    ('≤', '<=')
+                ]
+
+                for greek_letter, spelled_out_version in zip(greek_letters, spelled_out_versions, strict=True):
+                    map_to_replace.append((greek_letter, spelled_out_version))
+
+                for old, new in map_to_replace:
+                    identifier = identifier.replace(old, new)
+
                 if identifier.endswith(', (+-)-'):
                     identifier = ''.join(identifier.split(', (+-)-')[:-1])
                 if identifier.startswith('(+-)-'):
@@ -2358,7 +2377,7 @@ class MoleculeResolver:
         def parse_request_id(request_text):
             matches = regex.findall('PCT-Waiting_reqid>(.*)</PCT-Waiting_reqid', request_text)
             if len(matches) != 1:
-                raise
+                return None
             request_id = matches[0]
             return request_id
 
@@ -2366,7 +2385,7 @@ class MoleculeResolver:
             query_Uids = []
             for cleaned_unique_identifier in cleaned_unique_identifiers:
                 query_Uids.append(f'<PCT-QueryUids_{pubchem_xml_mode[mode]}_E>{cleaned_unique_identifier}</PCT-QueryUids_{pubchem_xml_mode[mode]}_E>')
-            temp = '\n'.join(query_Uids)
+            temp = ''.join(query_Uids)
             root_query_Uids = f'<PCT-QueryUids_{pubchem_xml_mode[mode]}>{temp}</PCT-QueryUids_{pubchem_xml_mode[mode]}>'                                                
 
             xml_template = f'''<?xml version="1.0"?>
@@ -2399,7 +2418,18 @@ class MoleculeResolver:
                                 </PCT-Data_input>
                                 </PCT-Data>'''
 
-            return self._resilient_request(PUBCHEM_URL, {'data': xml_template.encode('utf-8'), 'headers':{'Content-type': 'application/xml; charset=utf-8'}}, request_type='post')
+            request_id = None
+            n_try = 0
+            while request_id is None or n_try < 5:
+                request_text = self._resilient_request(PUBCHEM_URL, {'data': xml_template.encode('utf-8'), 'headers':{'Content-type': 'application/xml; charset=utf-8'}}, request_type='post')
+            
+                if request_text is not None and request_text.count('Result set is empty.') == 0 and request_text.count('server-error') == 0:
+                    request_id = parse_request_id(request_text)
+
+                n_try += 1
+                time.sleep(3)
+
+            return request_id
 
         def info_request(cids_to_request, info_name):
             xml_for_cids_to_request = [f'<PCT-ID-List_uids_E>{cid}</PCT-ID-List_uids_E>' for cid in cids_to_request]
@@ -2440,7 +2470,18 @@ class MoleculeResolver:
                             </PCT-Data_input>
                             </PCT-Data>'''
 
-            return self._resilient_request(PUBCHEM_URL, {'data': xml_template.encode('utf-8'), 'headers':{'Content-type': 'application/xml; charset=utf-8'}}, request_type='post')
+            request_id = None
+            n_try = 0
+            while request_id is None or n_try < 5:
+                request_text = self._resilient_request(PUBCHEM_URL, {'data': xml_template.encode('utf-8'), 'headers':{'Content-type': 'application/xml; charset=utf-8'}}, request_type='post')
+            
+                if request_text is not None and request_text.count('Result set is empty.') == 0 and request_text.count('server-error') == 0:
+                    request_id = parse_request_id(request_text)
+
+                n_try += 1
+                time.sleep(3)
+
+            return request_id
 
         def poll_request(_request_id):
             download_url = None
@@ -2461,16 +2502,17 @@ class MoleculeResolver:
             
             n_try = 0
             while True:
-                poll_response = self._resilient_request(PUBCHEM_URL, {'data': poll_request_xml.encode('utf-8'), 'headers':{'Content-type': 'application/xml; charset=utf-8'}}, request_type='post')
-                matches = regex.findall('PCT-Download-URL_url>(.*)</PCT-Download-URL_url', poll_response)
+                poll_response = self._resilient_request(PUBCHEM_URL, {'data': poll_request_xml.encode('utf-8'), 'headers':{'Content-type': 'application/xml; charset=utf-8', 'timeout': str(30)},}, request_type='post')
+                if poll_response:
+                    matches = regex.findall('PCT-Download-URL_url>(.*)</PCT-Download-URL_url', poll_response)
 
-                if matches:
-                    if len(matches) != 1:
-                        raise
-                    download_url = matches[0]
-                    if download_url.startswith('ftp://'):
-                        download_url = 'https' +  download_url[3:]
-                    break
+                    if matches:
+                        if len(matches) != 1:
+                            raise
+                        download_url = matches[0]
+                        if download_url.startswith('ftp://'):
+                            download_url = 'https' +  download_url[3:]
+                            break
 
                 if n_try > 15:
                     break
@@ -2482,12 +2524,21 @@ class MoleculeResolver:
         def get_results(download_url):
             
             found_results = {}
-            with closing(urllib.request.urlopen(download_url)) as r:
-                zipped_content = gzip.GzipFile(fileobj=r)
-                content = zipped_content.read()
-                content_str = content.decode('utf-8')
-                results = content_str.split('\n')
-                found_results = [result for result in results if result != '' and result != 'Result set is empty.']
+            n_try = 5
+            while True:
+                try:
+                    with closing(urllib.request.urlopen(download_url)) as r:
+                        zipped_content = gzip.GzipFile(fileobj=r)
+                        content = zipped_content.read()
+                        content_str = content.decode('utf-8')
+                        results = content_str.split('\n')
+                        found_results = [result for result in results if result != '' and result != 'Result set is empty.']
+                        break
+                except Exception as e:
+                    if n_try > 5:
+                        raise e
+                    n_try += 1
+                    time.sleep(3)
 
             return found_results
 
@@ -2498,10 +2549,9 @@ class MoleculeResolver:
             cleaned_identifiers = [clean_identifier(identifier) for identifier in original_identifiers_to_search] # cleaned identifiers
             cleaned_unique_identifiers = set(cleaned_identifiers)
 
-            request_text = cid_search_request() 
+            request_id = cid_search_request() 
 
-            if request_text is not None and request_text.count('Result set is empty.') == 0:
-                request_id = parse_request_id(request_text)
+            if request_id is not None:
                 download_url = poll_request(request_id)
 
                 found_results_by_identifier = {}
@@ -2510,6 +2560,7 @@ class MoleculeResolver:
                 SMILES = {}
                 CAS = {}
 
+                results_with_name_errors = []
                 for result in get_results(download_url):
                     cleaned_unique_identifier, cid = result.split('\t')
 
@@ -2520,6 +2571,18 @@ class MoleculeResolver:
                         found_results_by_cid_identifier[cleaned_unique_identifier].append(int(cid))
                     else:
                         found_results_by_cid_identifier[cleaned_unique_identifier].append(None)
+
+                    if '#' in cleaned_unique_identifier:
+                        results_with_name_errors.append(cleaned_unique_identifier)
+                    
+                if results_with_name_errors:
+                    temp = {}
+                    for name_with_error in results_with_name_errors:
+                        parts = name_with_error.split('#')
+                        longest_part = max(parts, key=len)
+                        candidates = [v for v in cleaned_identifiers if longest_part in v]
+                        temp[name_with_error] = candidates
+                    print('The following identifiers have errors: {}'.format(', '.join(temp)))
 
                 if len(found_results_by_cid_identifier) > 0:
 
@@ -2547,8 +2610,8 @@ class MoleculeResolver:
                             this_cid_requested_name = found_results_by_cid[cid]
                             synonyms[cid].append(this_cid_requested_name)
 
-                    response = info_request(cids_to_request, 'iupac')
-                    download_url = poll_request(parse_request_id(response))
+                    request_id = info_request(cids_to_request, 'iupac')
+                    download_url = poll_request(request_id)
                     iupac_results = get_results(download_url)
                     if not len(cids_to_request) <= len(iupac_results):
                         raise
@@ -2559,16 +2622,16 @@ class MoleculeResolver:
                         if len(iupac_name) > 1:
                             synonyms[int(cid)].append(iupac_name)
 
-                    response = info_request(cids_to_request, 'synonyms')
-                    download_url = poll_request(parse_request_id(response))
+                    request_id = info_request(cids_to_request, 'synonyms')
+                    download_url = poll_request(request_id)
                     synonym_results = get_results(download_url)
 
                     for result in synonym_results:
                         cid, synonym = result.split('\t')
                         synonyms[int(cid)].append(synonym)
 
-                    response = info_request(cids_to_request, 'smiles')
-                    download_url = poll_request(parse_request_id(response))
+                    request_id = info_request(cids_to_request, 'smiles')
+                    download_url = poll_request(request_id)
                     SMILES_results = get_results(download_url)
                     if not len(cids_to_request) <= len(SMILES_results):
                         raise
