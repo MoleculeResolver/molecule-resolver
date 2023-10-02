@@ -2186,131 +2186,133 @@ class MoleculeResolver:
             # 3 Programmatically curated from high quality EPA source(s) and unique chemical identifiers have no conflicts in ChemIDPlus and PubChem
             # 4 Programmatically curated from ChemIDPlus. Unique chemical identifiers have no conflicts in PubChem
             # 5 Programmatically curated from ACToR or PubChem. Unique chemical identifiers have low confidence and have a single public source
+            
+            # in some rare occasions, this times out and returns None
+            if download_url:     
+                request_response = self._resilient_request(download_url, return_response=True)
+                with (tempfile.TemporaryDirectory() as temp_dir,
+                    warnings.catch_warnings()):
+                    warnings.simplefilter("ignore")
+
+                    temp_path = os.path.join(temp_dir, 'moleculeresolver_comptox_postdata.xlsx')
+                    with open(temp_path, 'wb') as f:
+                        f.write(request_response.content)
+
+                    wb = openpyxl.load_workbook(temp_path)
                     
-            request_response = self._resilient_request(download_url, return_response=True)
-            with (tempfile.TemporaryDirectory() as temp_dir,
-                  warnings.catch_warnings()):
-                warnings.simplefilter("ignore")
-
-                temp_path = os.path.join(temp_dir, 'moleculeresolver_comptox_postdata.xlsx')
-                with open(temp_path, 'wb') as f:
-                    f.write(request_response.content)
-
-                wb = openpyxl.load_workbook(temp_path)
-                
-                synonym_sheet = wb.worksheets[2]
-                synonyms_by_identifier_lower = {}
-                for i_row, row in enumerate(synonym_sheet.iter_rows()):
-                    if i_row == 0:
-                        continue
-                
-                    row_values = [cell.value for cell in row]
-                    synonyms = []
-                    identifier = row_values[0].strip()
-                    if row_values[1]:
-                        synonyms = [v.strip() for v in row_values[1].split('|')]
-
-                    synonyms_by_identifier_lower[identifier.lower()] = synonyms
-
-                temp_results_by_identifier = {}
-                def parse_CompTox_result(row):
+                    synonym_sheet = wb.worksheets[2]
+                    synonyms_by_identifier_lower = {}
+                    for i_row, row in enumerate(synonym_sheet.iter_rows()):
+                        if i_row == 0:
+                            continue
                     
-                    identifier = row[0].strip()
-                    found_by = row[1].lower().strip()
+                        row_values = [cell.value for cell in row]
+                        synonyms = []
+                        identifier = row_values[0].strip()
+                        if row_values[1]:
+                            synonyms = [v.strip() for v in row_values[1].split('|')]
 
-                    SMILES = None
-                    CAS = []
-                    synonyms = []
+                        synonyms_by_identifier_lower[identifier.lower()] = synonyms
 
-                    if found_by.count('found 0 results') == 0:
-                        SMILES = row[7].strip()
-                        if not SMILES:
-                            return
-                        dtxsid = row[2].strip()
-                        preferred_name = row[3].strip() 
-                        qc_level = row[4]
-                        CAS = str(row[5]).strip()
-                        iupac_name = row[6].strip()
+                    temp_results_by_identifier = {}
+                    def parse_CompTox_result(row):
+                        
+                        identifier = str(row[0]).strip()
+                        found_by = row[1].lower().strip()
 
-                        if iupac_name  and iupac_name != 'N/A':
-                            if iupac_name not in synonyms:
-                                synonyms.insert(0, iupac_name)
+                        SMILES = None
+                        CAS = []
+                        synonyms = []
 
-                        if preferred_name  and preferred_name != 'N/A':
-                            if preferred_name not in synonyms:
-                                synonyms.insert(0, preferred_name)
+                        if found_by.count('found 0 results') == 0:
+                            SMILES = row[7].strip()
+                            if not SMILES:
+                                return
+                            dtxsid = row[2].strip()
+                            preferred_name = row[3].strip() 
+                            qc_level = row[4]
+                            CAS = str(row[5]).strip()
+                            iupac_name = row[6].strip()
 
-                        if not MoleculeResolver.is_valid_CAS(CAS):
-                            CAS = []
+                            if iupac_name  and iupac_name != 'N/A':
+                                if iupac_name not in synonyms:
+                                    synonyms.insert(0, iupac_name)
+
+                            if preferred_name  and preferred_name != 'N/A':
+                                if preferred_name not in synonyms:
+                                    synonyms.insert(0, preferred_name)
+
+                            if not MoleculeResolver.is_valid_CAS(CAS):
+                                CAS = []
+                            else:
+                                CAS = [CAS]
+
+                            if 'N/A' in SMILES or not MoleculeResolver.is_valid_SMILES(SMILES):
+                                return
+                            
+                            SMILES = MoleculeResolver.standardize_SMILES(SMILES, standardize)
+
+                            # the rating is needed because for some substances it 
+                            # returns more than one row. It is used to get the best result later.
+                            if 'expert' in found_by:
+                                own_rating = 10
+                            elif 'approved' in found_by:
+                                own_rating = 8
+                            elif 'valid source' in found_by:
+                                own_rating = 6
+                            elif 'systematic name' in found_by:
+                                own_rating = 4
+                            else:
+                                own_rating = 2
+
+                            if CAS:
+                                own_rating += 1
+
+                            if identifier not in temp_results_by_identifier:
+                                temp_results_by_identifier[identifier] = []
+                            
+                            if SMILES:
+                                temp_results_by_identifier[identifier].append((qc_level, own_rating, SMILES, synonyms, CAS, dtxsid + '|QC_LEVEL:' + str(qc_level)))
+
                         else:
-                            CAS = [CAS]
+                            temp_results_by_identifier[identifier] = None
 
-                        if 'N/A' in SMILES or not MoleculeResolver.is_valid_SMILES(SMILES):
-                            return
-                        
-                        SMILES = MoleculeResolver.standardize_SMILES(SMILES, standardize)
+                    results_sheet = wb.worksheets[1]
+                    for i_row, row in enumerate(results_sheet.iter_rows()):
+                        if i_row == 0:
+                            continue
 
-                        # the rating is needed because for some substances it 
-                        # returns more than one row. It is used to get the best result later.
-                        if 'expert' in found_by:
-                            own_rating = 10
-                        elif 'approved' in found_by:
-                            own_rating = 8
-                        elif 'valid source' in found_by:
-                            own_rating = 6
-                        elif 'systematic name' in found_by:
-                            own_rating = 4
-                        else:
-                            own_rating = 2
+                        row_values = [cell.value for cell in row]
+                        parse_CompTox_result(row_values)
+                            
+                    for molecule_index, identifier in zip(indices_of_identifiers_to_search, identifiers_to_search):
+                        if identifier in temp_results_by_identifier:
+                            temp_result = temp_results_by_identifier[identifier]
+                            if temp_result:
+                                if len(temp_result) > 1:
+                                    best_results = temp_result
+                                    try:
+                                        best_qc_level = min(temp_result, key=lambda x: x[0])[0]
+                                        best_results = list(filter(lambda x: x[0] == best_qc_level, temp_result))
+                                    except Exception:
+                                        pass
 
-                        if CAS:
-                            own_rating += 1
+                                    if len(best_results) > 1:
+                                        best_own_rating = max(best_results, key=lambda x: x[1])[1]
+                                        best_results = list(filter(lambda x: x[1] == best_own_rating, best_results))
+                                        
+                                    temp_results_by_identifier[identifier] = best_results
+                                results[molecule_index] = []
 
-                        if identifier not in temp_results_by_identifier:
-                            temp_results_by_identifier[identifier] = []
-                        
-                        if SMILES:
-                            temp_results_by_identifier[identifier].append((qc_level, own_rating, SMILES, synonyms, CAS, dtxsid + '|QC_LEVEL:' + str(qc_level)))
-
-                    else:
-                        temp_results_by_identifier[identifier] = None
-
-                results_sheet = wb.worksheets[1]
-                for i_row, row in enumerate(results_sheet.iter_rows()):
-                    if i_row == 0:
-                        continue
-
-                    row_values = [cell.value for cell in row]
-                    parse_CompTox_result(row_values)
-                        
-                for molecule_index, identifier in zip(indices_of_identifiers_to_search, identifiers_to_search):
-                    if identifier in temp_results_by_identifier:
-                        temp_result = temp_results_by_identifier[identifier]
-                        if temp_result:
-                            if len(temp_result) > 1:
-                                best_results = temp_result
-                                try:
-                                    best_qc_level = min(temp_result, key=lambda x: x[0])[0]
-                                    best_results = list(filter(lambda x: x[0] == best_qc_level, temp_result))
-                                except Exception:
-                                    pass
-
-                                if len(best_results) > 1:
-                                    best_own_rating = max(best_results, key=lambda x: x[1])[1]
-                                    best_results = list(filter(lambda x: x[1] == best_own_rating, best_results))
-                                    
-                                temp_results_by_identifier[identifier] = best_results
-                            results[molecule_index] = []
-
-                            for _, _, SMILES, synonyms, CAS, additional_information in temp_results_by_identifier[identifier]:
-                                this_synonyms = synonyms.copy()
-                                for synonym in synonyms:
-                                    if synonym.lower() in synonyms_by_identifier_lower:
-                                        for new_synonym in synonyms_by_identifier_lower[synonym.lower()]:
-                                            if new_synonym not in this_synonyms:
-                                                this_synonyms.append(new_synonym)
-                                synonyms = MoleculeResolver.filter_and_sort_synonyms(this_synonyms)
-                                results[molecule_index].append(Molecule(SMILES, synonyms, CAS, additional_information, mode, 'comptox', identifier=identifier))
+                                for _, _, SMILES, synonyms, CAS, additional_information in temp_results_by_identifier[identifier]:
+                                    this_synonyms = synonyms.copy()
+                                    for synonym in synonyms:
+                                        if synonym.lower() in synonyms_by_identifier_lower:
+                                            for new_synonym in synonyms_by_identifier_lower[synonym.lower()]:
+                                                if new_synonym not in this_synonyms:
+                                                    this_synonyms.append(new_synonym)
+                                    synonyms = MoleculeResolver.filter_and_sort_synonyms(this_synonyms)
+                                    results[molecule_index].append(Molecule(SMILES, synonyms, CAS, additional_information, mode, 'comptox', identifier=identifier))
 
             return results
 
@@ -2396,9 +2398,9 @@ class MoleculeResolver:
 
         def clean_identifier(identifier):
             if mode == 'name':
-                greek_letters = ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω',
+                greek_letters = ['α', 'β', 'γ', 'δ', 'ε', 'ϵ', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω',
                 'Α', 'Β', 'Γ', 'Δ', 'Ε', 'Ζ', 'Η', 'Θ', 'Ι', 'Κ', 'Λ', 'Μ', 'Ν', 'Ξ', 'Ο', 'Π', 'Ρ', 'Σ', 'Τ', 'Υ', 'Φ', 'Χ', 'Ψ', 'Ω']
-                spelled_out_versions = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega',
+                spelled_out_versions = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega',
                         'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega']
 
                 map_to_replace = [
@@ -2407,7 +2409,9 @@ class MoleculeResolver:
                     ('±', '+-'),
                     ('→', '-->'),
                     ('≥', '>='),
-                    ('≤', '<=')
+                    ('≤', '<='),
+                    ('·', '.'),
+                    ('#', 'no. ')
                 ]
 
                 for greek_letter, spelled_out_version in zip(greek_letters, spelled_out_versions, strict=True):
@@ -2427,6 +2431,7 @@ class MoleculeResolver:
                 return identifier
             else:
                 return identifier
+            
         PUBCHEM_URL = 'https://pubchem.ncbi.nlm.nih.gov/pug/pug.cgi'
         pubchem_xml_mode = {
             'name' : 'synonyms',
@@ -2901,11 +2906,7 @@ class MoleculeResolver:
 
             synonyms = []
             if 'synonyms' in result:
-                synonyms.extend([synonym['synonymName'].strip() for synonym in result['synonyms']])
-
-            CAS = []
-            if 'currentCasNumber' in result:
-                CAS = [result['currentCasNumber']]
+                synonyms.extend([synonym['synonymName'].strip() for synonym in result['synonyms'] if synonym['synonymName']])
 
             ITN = result['internalTrackingNumber']
             SMILES = result['smilesNotation']
@@ -2956,11 +2957,12 @@ class MoleculeResolver:
                     ITNs_by_all_names[nl].append(ITN)
 
             for CAS_ in CAS:
-                if CAS_ not in ITNs_by_CAS:
-                    ITNs_by_CAS[CAS_] = []
+                if CAS_:
+                    if CAS_ not in ITNs_by_CAS:
+                        ITNs_by_CAS[CAS_] = []
 
-                if ITN not in ITNs_by_CAS[CAS_]:
-                    ITNs_by_CAS[CAS_].append(ITN)
+                    if ITN not in ITNs_by_CAS[CAS_]:
+                        ITNs_by_CAS[CAS_].append(ITN)
 
             infos_by_ITN[ITN] = (SMILES, primary_names, synonyms, CAS, ITN, all_synonyms_lower)
 
@@ -3109,11 +3111,11 @@ class MoleculeResolver:
 
         CIR_URL = 'https://cactus.nci.nih.gov/chemical/structure/'
         # info can be e.g. smiles, iupac_name
-        # although the documentation says otherwise it returns a 500 response even if it should return 404
         try:
             resolver_info = ''
             if resolvers_to_use:
                 resolver_info = f'?resolver={",".join(resolvers_to_use)}'
+            # although the documentation says otherwise it returns a 500 response even if it should return 404
             response_text = self._resilient_request(f'{CIR_URL}{urllib.parse.quote(structure_identifier)}/{representation}{resolver_info}', rejected_status_codes=[404, 500])
             if not response_text:
                 return None
