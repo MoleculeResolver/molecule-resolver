@@ -1,5 +1,17 @@
 # MoleculeResolver
-A python class allowing to use several web services to find molecule structures/names/CAS based on their identifiers such as name, CAS, SMILES, InChI, etc.
+
+A python pacakge allowing to use several web services to find molecule structures/names/CAS based on their identifiers such as name, CAS, SMILES, InChI, etc.
+
+
+## Installation
+
+The package is available on [pypi](https://pypi.org/project/molecule-resolver/).
+
+```
+pip intall molecule-resolver
+```
+
+## Usage
 
 It is supposed to be called as context manager:
 
