@@ -179,9 +179,19 @@ class MoleculeResolver:
             for molecule in molecules:
                 molecule.identifier = identifier
 
-            self.molecule_cache.save(
-                service, identifier_mode, identifier, molecules if molecules else None
-            )
+            should_save = True
+            if service == "cts" and "CTS_is_down" in self._message_slugs_shown:
+                should_save = False
+            elif service == "cir" and "CIR_is_down" in self._message_slugs_shown:
+                should_save = False
+
+            if should_save:
+                self.molecule_cache.save(
+                    service,
+                    identifier_mode,
+                    identifier,
+                    molecules if molecules else None,
+                )
 
         return
 
@@ -202,7 +212,7 @@ class MoleculeResolver:
         identifiers_to_search = []
         indices_of_identifiers_to_search = []
         for (molecule_index, molecule), identifier in zip(
-            enumerate(results), identifiers, strict=True
+            enumerate(results), identifiers
         ):
             if molecule is None:
                 identifiers_to_search.append(identifier)
@@ -212,7 +222,7 @@ class MoleculeResolver:
         identifiers_to_save = []
         molecules_to_save = []
         for molecule_index, identifier in zip(
-            indices_of_identifiers_to_search, identifiers_to_search, strict=True
+            indices_of_identifiers_to_search, identifiers_to_search
         ):
             molecules = results[molecule_index]
             if molecules:
@@ -2427,7 +2437,6 @@ class MoleculeResolver:
                 indices_of_identifiers_to_search,
                 identifiers_to_search,
                 SMILES,
-                strict=True,
             ):
                 smi = MoleculeResolver.standardize_SMILES(smi, standardize)
                 if smi:
@@ -2722,7 +2731,7 @@ class MoleculeResolver:
                         )
 
                     for index, result in zip(
-                        identifier_indices_chunk, results_for_this_chunk, strict=True
+                        identifier_indices_chunk, results_for_this_chunk
                     ):
                         if index not in this_mode_results:
                             this_mode_results[index] = None
@@ -2893,6 +2902,9 @@ class MoleculeResolver:
             molecules,
         ):
             if not entry_available:
+                if "CTS_is_down" in self._message_slugs_shown:
+                    return None
+
                 cts_modes = {
                     "name": "Chemical Name",
                     "cas": "CAS",
@@ -2917,72 +2929,85 @@ class MoleculeResolver:
                     CAS.append(identifier)
 
                 # unfortunatedly sometimes the server returns a status code 500 for valid names
-                CTS_URL = "https://cts.fiehnlab.ucdavis.edu/rest/convert/"
-                response_text = self._resilient_request(
-                    f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier, safe="")}',
-                    kwargs={"timeout": 10},
-                    rejected_status_codes=[404, 500],
-                )
-
-                # the search for synonyms returns a lot of unusable data
-                # only use the three most sensible ones
-                if response_text is not None:
-                    temp = json.loads(response_text)[0]
-                    synonyms.extend(self.filter_and_sort_synonyms(temp["results"], 3))
-
-                if mode != "cas":
+                try:
+                    CTS_URL = "https://cts.fiehnlab.ucdavis.edu/rest/convert/"
                     response_text = self._resilient_request(
-                        f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/CAS/{urllib.parse.quote(identifier, safe="")}',
-                        kwargs={"timeout": 10},
+                        f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier, safe="")}',
+                        kwargs={"timeout": 5},
                         rejected_status_codes=[404, 500],
+                        max_retries = 2
                     )
-                    if response_text is not None:
-                        CAS_rns = json.loads(response_text)[0]["results"]
-                        CAS = MoleculeResolver.filter_and_sort_CAS(CAS_rns)
+                except requests.exceptions.ConnectionError:
+                    # I don't know why, but somtimes CTS is offline. This would make the module much slower as
+                    # it tries to connect multiple times anyway. Instead we give a warning and skip CTS.
+                    if "CTS_is_down" not in self._message_slugs_shown:
+                        self._message_slugs_shown.append("CTS_is_down")
+                        warnings.warn(
+                            "CTS seems to be down, to continue working this instance of MoleculeResolver will skip CTS."
+                        )
 
-                if mode not in ["inchi", "smiles"]:
-                    response_text = self._resilient_request(
-                        f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/InChI%20Code/{urllib.parse.quote(identifier, safe="")}',
-                        kwargs={"timeout": 10},
-                        rejected_status_codes=[404, 500],
-                    )
+                if "CTS_is_down" not in self._message_slugs_shown:
+                    # the search for synonyms returns a lot of unusable data
+                    # only use the three most sensible ones
                     if response_text is not None:
                         temp = json.loads(response_text)[0]
-                        found_InChIs = temp["results"]
-                        accepted_SMILES = []
-                        for InChI in found_InChIs:
-                            this_SMILES = MoleculeResolver.InChI_to_SMILES(
-                                InChI, standardize
-                            )
-                            if not this_SMILES:
-                                continue
-                            if (
-                                not required_structure_type
-                                or "mixture" not in required_structure_type
-                            ):
-                                if "." in this_SMILES:
-                                    continue
-                            # try filtering radicals as CTS has them in some cases
-                            try:
-                                if (
-                                    Descriptors.NumRadicalElectrons(
-                                        self.get_from_SMILES(this_SMILES)
-                                    )
-                                    == 0
-                                ):
-                                    accepted_SMILES.append(this_SMILES)
-                            except Exception:
-                                continue
+                        synonyms.extend(
+                            self.filter_and_sort_synonyms(temp["results"], 3)
+                        )
 
-                        if len(accepted_SMILES) == 1:
-                            if mode == "name":
-                                synonyms.insert(0, identifier)
-                                synonyms = self.filter_and_sort_synonyms(synonyms)
-                            SMILES = accepted_SMILES[0]
-                if SMILES is not None:
-                    molecules.append(
-                        Molecule(SMILES, synonyms, CAS, None, mode_used, "cts")
-                    )
+                    if mode != "cas":
+                        response_text = self._resilient_request(
+                            f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/CAS/{urllib.parse.quote(identifier, safe="")}',
+                            kwargs={"timeout": 10},
+                            rejected_status_codes=[404, 500],
+                        )
+                        if response_text is not None:
+                            CAS_rns = json.loads(response_text)[0]["results"]
+                            CAS = MoleculeResolver.filter_and_sort_CAS(CAS_rns)
+
+                    if mode not in ["inchi", "smiles"]:
+                        response_text = self._resilient_request(
+                            f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/InChI%20Code/{urllib.parse.quote(identifier, safe="")}',
+                            kwargs={"timeout": 10},
+                            rejected_status_codes=[404, 500],
+                        )
+                        if response_text is not None:
+                            temp = json.loads(response_text)[0]
+                            found_InChIs = temp["results"]
+                            accepted_SMILES = []
+                            for InChI in found_InChIs:
+                                this_SMILES = MoleculeResolver.InChI_to_SMILES(
+                                    InChI, standardize
+                                )
+                                if not this_SMILES:
+                                    continue
+                                if (
+                                    not required_structure_type
+                                    or "mixture" not in required_structure_type
+                                ):
+                                    if "." in this_SMILES:
+                                        continue
+                                # try filtering radicals as CTS has them in some cases
+                                try:
+                                    if (
+                                        Descriptors.NumRadicalElectrons(
+                                            self.get_from_SMILES(this_SMILES)
+                                        )
+                                        == 0
+                                    ):
+                                        accepted_SMILES.append(this_SMILES)
+                                except Exception:
+                                    continue
+
+                            if len(accepted_SMILES) == 1:
+                                if mode == "name":
+                                    synonyms.insert(0, identifier)
+                                    synonyms = self.filter_and_sort_synonyms(synonyms)
+                                SMILES = accepted_SMILES[0]
+                    if SMILES is not None:
+                        molecules.append(
+                            Molecule(SMILES, synonyms, CAS, None, mode_used, "cts")
+                        )
 
         return MoleculeResolver.filter_and_combine_molecules(
             molecules,
@@ -3559,7 +3584,7 @@ class MoleculeResolver:
                 ]
 
                 for greek_letter, spelled_out_version in zip(
-                    greek_letters, spelled_out_versions, strict=True
+                    greek_letters, spelled_out_versions
                 ):
                     map_to_replace.append((greek_letter, spelled_out_version))
 
@@ -3927,7 +3952,6 @@ class MoleculeResolver:
                 for molecule_index, original_identifier in zip(
                     indices_of_identifiers_to_search,
                     original_identifiers_to_search,
-                    strict=True,
                 ):
                     cid = (
                         found_results_by_identifier[original_identifier]
@@ -4294,7 +4318,7 @@ class MoleculeResolver:
             CAS = []
             if "currentCasNumber" in result:
                 if result["currentCasNumber"]:
-                    CAS = result["currentCasNumber"].strip()
+                    CAS.append(result["currentCasNumber"].strip())
 
             synonyms = []
             if "synonyms" in result:
@@ -4494,7 +4518,7 @@ class MoleculeResolver:
                 chunks_identifer_indices.append(this_chunk_identifier_indices)
 
             for chunk_identifier_indices, chunk_identifiers in zip(
-                chunks_identifer_indices, chunks_identifiers, strict=True
+                chunks_identifer_indices, chunks_identifiers
             ):
                 search_response_text = self._resilient_request(
                     f'{SRS_URL}/{mode}?{mode}List={urllib.parse.quote("|".join(chunk_identifiers))}&qualifier=exact',
@@ -4511,7 +4535,7 @@ class MoleculeResolver:
                     )
 
                     for molecule_index, identifier in zip(
-                        chunk_identifier_indices, chunk_identifiers, strict=True
+                        chunk_identifier_indices, chunk_identifiers
                     ):
                         if identifier in infos_by_identifier:
                             this_molecules = []
@@ -4660,7 +4684,7 @@ class MoleculeResolver:
                 return response_values
         except requests.exceptions.ConnectionError:
             # I don't know why, but somtimes CIR is offline. This would make the module much slower as
-            # it tries to connect anyway mutiple times. Instead we give a warning and skip CIR.
+            # it tries to connect multiple times anyway. Instead we give a warning and skip CIR.
             if "CIR_is_down" not in self._message_slugs_shown:
                 self._message_slugs_shown.append("CIR_is_down")
                 warnings.warn(
@@ -5850,7 +5874,7 @@ class MoleculeResolver:
                         for (
                             original_SMILES_found,
                             molecule_found_by_opsin_from_synonym,
-                        ) in zip(SMILES_map, opsin_results, strict=True):
+                        ) in zip(SMILES_map, opsin_results):
                             if molecule_found_by_opsin_from_synonym:
                                 if (
                                     original_SMILES_found
