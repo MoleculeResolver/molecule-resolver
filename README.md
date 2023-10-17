@@ -13,7 +13,7 @@ pip intall molecule-resolver
 
 ## Usage
 
-It is supposed to be called as context manager:
+Other examples available in `apply.py`, it is supposed to be called as context manager:
 
 ```python
 with MoleculeResolver(available_service_API_keys={'chemeo': 'YOUR_API_KEY'}) as cf:
