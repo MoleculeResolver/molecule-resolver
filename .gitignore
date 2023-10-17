@@ -3,3 +3,4 @@ test.py
 __pycache__/
 *.egg-info
 moleculeresolver/molecule_cache.*
+.venv/
