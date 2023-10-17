@@ -1,6 +1,6 @@
 # MoleculeResolver
 
-A python pacakge allowing to use several web services to find molecule structures/names/CAS based on their identifiers such as name, CAS, SMILES, InChI, etc.
+A python package allowing to use several web services to find molecule structures/names/CAS based on their identifiers such as name, CAS, SMILES, InChI, etc.
 
 
 ## Installation

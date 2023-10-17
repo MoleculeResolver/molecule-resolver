@@ -1,6 +1,7 @@
 from contextlib import ContextDecorator
 from rdkit import rdBase
 
+
 class disabling_rdkit_logger(ContextDecorator):
     # From https://github.com/rdkit/rdkit/issues/2320#issuecomment-731261149
 

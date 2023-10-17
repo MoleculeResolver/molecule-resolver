@@ -1,4 +1,3 @@
-import csv
 import collections
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, contextmanager
@@ -39,11 +38,16 @@ from rdkit.Chem.rdchem import ResonanceMolSupplierCallback
 from tqdm import tqdm
 import urllib3
 import xmltodict
-
-# import xyz2mol
 from moleculeresolver.rdkitmods import disabling_rdkit_logger
 from moleculeresolver.molecule import Molecule
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
+
+
+class EmptyResonanceMolSupplierCallback(ResonanceMolSupplierCallback):
+    """Workaround for https://github.com/rdkit/rdkit/issues/6704"""
+
+    def __call__(self):
+        pass
 
 
 class CustomHttpAdapter(requests.adapters.HTTPAdapter):
@@ -298,7 +302,7 @@ class MoleculeResolver:
         if user_agent_is_set is False:
             headers[
                 "user-agent"
-            ] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36"
+            ] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
 
         kwargs["headers"] = headers
 
@@ -390,6 +394,68 @@ class MoleculeResolver:
             )
             if standardize
             else SMILES
+        )
+
+    @staticmethod
+    @cache
+    def try_disconnect_more_metals(SMILES, standardize):
+        # this does something very similar like the metal disconnector from rdkit
+        # but includes more metals and behaves correctly on Hg: https://github.com/rdkit/rdkit/discussions/6729
+        # if the problem for Hg is a bug, this should be replaced by the metal disconnector from rdkit
+        metals = "[#3,#11,#19,#37,#55,#87,#4,#12,#20,#38,#56,#88,#21,#22,#23,#24,#25,#26,#27,#28,#29,#30,#13,#31,#39,#40,#41,#42,#43,#44,#45,#46,#47,#48,#49,#50,#72,#73,#74,#75,#76,#77,#78,#79,#80,#81,#82,#83]"
+        SMARTS = f"{metals}~[B,C,#14,P,#33,#51,S,#34,#52,F,Cl,Br,I,#85]"
+        mol = Chem.MolFromSmiles(SMILES)
+        if not mol:
+            return SMILES
+        patt = Chem.MolFromSmarts(SMARTS)
+        hit_ats = list(mol.GetSubstructMatches(patt))
+        if not hit_ats:
+            return SMILES
+
+        property_name = "molecule_resolver_charge"
+        cation_charges = {}
+        bonds_to_be_broken = []
+        for cation_id, anion_id in hit_ats:
+            cation = mol.GetAtomWithIdx(cation_id)
+            if cation_id not in cation_charges:
+                cation_charge = cation.GetTotalDegree()
+                cation_charges[cation_id] = cation_charge
+                cation.SetIntProp(property_name, cation_charge)
+            else:
+                cation_charge = cation_charges[cation_id]
+
+            bond_to_be_broken = mol.GetBondBetweenAtoms(cation_id, anion_id)
+            bonds_to_be_broken.append(bond_to_be_broken.GetIdx())
+
+            anion_charge = -1 * int(bond_to_be_broken.GetBondType())
+            anion = mol.GetAtomWithIdx(anion_id)
+            anion.SetIntProp(property_name, anion_charge)
+            cation_charges[cation_id] += anion_charge
+
+        if not all(v == 0 for v in cation_charges.values()):
+            return SMILES  # charge missmatch
+
+        fragment_mols = rdmolops.GetMolFrags(
+            rdmolops.FragmentOnBonds(mol, bonds_to_be_broken), asMols=True
+        )
+
+        ion_mols = []
+        for m in fragment_mols:
+            rwmol = Chem.RWMol(m)
+            ai_dummy_atoms = []
+            for a in rwmol.GetAtoms():
+                if a.HasProp(property_name):
+                    a.SetFormalCharge(a.GetIntProp(property_name))
+                if a.GetSymbol() == "*":
+                    ai_dummy_atoms.append(a.GetIdx())
+
+            for ai in sorted(ai_dummy_atoms, reverse=True):
+                rwmol.RemoveAtom(ai)
+
+            ion_mols.append(rwmol.GetMol())
+
+        return MoleculeResolver.standardize_SMILES(
+            ".".join([Chem.MolToSmiles(m) for m in ion_mols]), standardize
         )
 
     @staticmethod
@@ -1191,9 +1257,16 @@ class MoleculeResolver:
                     cmp.SMILES, standardize
                 )
                 filtered_molecules.append(cmp)
-            elif required_structure_type == 'salt':
-                new_SMILES = MoleculeResolver.try_disconnect_more_metals(cmp.SMILES, standardize)
-                if MoleculeResolver.check_SMILES(new_SMILES, required_formula, required_charge, required_structure_type):
+            elif required_structure_type == "salt":
+                new_SMILES = MoleculeResolver.try_disconnect_more_metals(
+                    cmp.SMILES, standardize
+                )
+                if MoleculeResolver.check_SMILES(
+                    new_SMILES,
+                    required_formula,
+                    required_charge,
+                    required_structure_type,
+                ):
                     cmp.SMILES = new_SMILES
                     filtered_molecules.append(cmp)
 
@@ -1372,7 +1445,9 @@ class MoleculeResolver:
 
     @staticmethod
     def check_molecular_mass(
-        mol: Chem.rdchem.Mol, required_molecular_mass: Union[float, int]
+        mol: Chem.rdchem.Mol,
+        required_molecular_mass: Union[float, int],
+        percentage_deviation_allowed: float = 0.001,
     ) -> bool:
         if not isinstance(required_molecular_mass, float) and not isinstance(
             required_molecular_mass, int
@@ -1384,15 +1459,18 @@ class MoleculeResolver:
         absolute_relative_difference = abs(
             (required_molecular_mass - molecular_mass_from_mol) / minimum_value
         )
-        return absolute_relative_difference < 0.001
+        return absolute_relative_difference < percentage_deviation_allowed
 
     @staticmethod
     def get_structure_type_from_SMILES(SMILES: str) -> str:
         SMILES_parts = SMILES.split(".")
-        SMILES_parts_charges = [
-            Chem.rdmolops.GetFormalCharge(MoleculeResolver.get_from_SMILES(SMILES_part))
-            for SMILES_part in SMILES_parts
-        ]
+        SMILES_parts_charges = []
+        for SMILES_part in SMILES_parts:
+            mol = MoleculeResolver.get_from_SMILES(SMILES_part)
+            if not mol:
+                return "None"
+            SMILES_parts_charges.append(Chem.rdmolops.GetFormalCharge(mol))
+
         total_charge = sum(SMILES_parts_charges)
 
         if all([charge == 0 for charge in SMILES_parts_charges]):
@@ -1492,24 +1570,15 @@ class MoleculeResolver:
 
     @staticmethod
     @cache
-    def get_from_SMILES(
-        SMILES: str, addHs: bool = False, with_3D_structure: Optional[str] = None
-    ) -> Chem.rdchem.Mol:
+    def get_from_SMILES(SMILES: str, addHs: bool = False) -> Chem.rdchem.Mol:
         if SMILES is None:
             return None
-
-        if with_3D_structure is not None:
-            if not isinstance(with_3D_structure, str):
-                raise TypeError("with_3D_structure must be a string.")
-
         SMILES_parts = SMILES.split(".")
 
         if len(SMILES_parts) > 1:
             mol = Chem.Mol()
             for SMILES in SMILES_parts:
-                mol2 = MoleculeResolver.get_from_SMILES(
-                    SMILES, addHs, with_3D_structure
-                )
+                mol2 = MoleculeResolver.get_from_SMILES(SMILES, addHs)
                 if mol2 is None:
                     return None
                 mol = Chem.CombineMols(mol, mol2)
@@ -1540,26 +1609,8 @@ class MoleculeResolver:
         if mol is None:
             return None
 
-        if addHs or with_3D_structure is not None:
+        if addHs:
             mol = Chem.AddHs(mol)
-
-        if with_3D_structure is not None:
-            if with_3D_structure == "embed":
-                AllChem.EmbedMolecule(mol, randomSeed=0xF00D)
-            elif with_3D_structure.endswith(".xyz"):
-                mol_without_Hs = Chem.Mol(mol)
-                charge = Chem.rdmolops.GetFormalCharge(mol)
-                atoms, _, xyz_coordinates = xyz2mol.read_xyz_file(with_3D_structure)
-                AC, mol = xyz2mol.xyz2AC(atoms, xyz_coordinates, charge)
-                xyz_RWMol = Chem.RWMol(mol)
-                for i in range(len(atoms)):
-                    for j in range(i, len(atoms)):
-                        if AC[i, j] == 1:
-                            xyz_RWMol.AddBond(i, j, Chem.BondType.SINGLE)
-                xyz_mol = Chem.Mol(xyz_RWMol)
-                mol = AllChem.AssignBondOrdersFromTemplate(mol_without_Hs, xyz_mol)
-            else:
-                raise NotImplementedError(with_3D_structure)
 
         Chem.GetSymmSSSR(mol)
         return mol
@@ -1748,6 +1799,22 @@ class MoleculeResolver:
         )
 
     @staticmethod
+    @cache
+    def get_resonance_SMILES(SMILES):
+        mol = MoleculeResolver.get_from_SMILES(SMILES)
+        rms = Chem.ResonanceMolSupplier(mol)
+        rms.SetProgressCallback(EmptyResonanceMolSupplierCallback())
+        resonance_mols = list(rms)
+
+        # This workaround is needed in very few cornercases where the
+        # resonance mol suppler returns molecules that are None
+        # e.g. tetrabromocobaltate(II) [Co+2]([Br-])([Br-])([Br-])([Br-])
+        if all([resonance_mol is None for resonance_mol in resonance_mols]):
+            return [SMILES]
+
+        return [Chem.MolToSmiles(mol_) for mol_ in resonance_mols if mol_]
+
+    @staticmethod
     def are_equal(
         mol1: Chem.rdchem.Mol,
         mol2: Chem.rdchem.Mol,
@@ -1763,43 +1830,26 @@ class MoleculeResolver:
             mol1 = MoleculeResolver.standardize_molecule(mol1)
             mol2 = MoleculeResolver.standardize_molecule(mol2)
 
-        def get_resonance_structure_SMILES(SMILES, flags=0):
-            mol = MoleculeResolver.get_from_SMILES(SMILES)
-            resonance_mols = list(Chem.ResonanceMolSupplier(mol, flags))
+        SMILES1 = Chem.MolToSmiles(mol1, isomericSmiles=isomeric)
+        SMILES2 = Chem.MolToSmiles(mol2, isomericSmiles=isomeric)
 
-            # This workaround is needed in very few cornercases where the
-            # resonance mol suppler returns molecules that are None
-            # e.g. tetrabromocobaltate(II) [Co+2]([Br-])([Br-])([Br-])([Br-])
-            if any([resonance_mol is None for resonance_mol in resonance_mols]):
-                return [SMILES]
-
-            resonance_SMILES = [Chem.MolToSmiles(mol_) for mol_ in resonance_mols]
-            return resonance_SMILES
-
-        SMILES1 = Chem.MolToSmiles(
-            mol1, isomericSmiles=isomeric
-        )  # , allHsExplicit = True, canonical=True
-        SMILES2 = Chem.MolToSmiles(
-            mol2, isomericSmiles=isomeric
-        )  # , allHsExplicit = True, canonical=True
+        if check_for_resonance_structures is None:
+            SMILES1_structure_type = MoleculeResolver.get_structure_type_from_SMILES(
+                SMILES1
+            )
+            SMILES2_structure_type = MoleculeResolver.get_structure_type_from_SMILES(
+                SMILES2
+            )
+            if SMILES1_structure_type != SMILES2_structure_type:
+                return False
+            check_for_resonance_structures = SMILES1_structure_type in [
+                "ion",
+                "salt",
+            ] or SMILES2_structure_type in ["ion", "salt"]
 
         if method == 1:
             if SMILES1 == SMILES2:
                 return True
-
-            if check_for_resonance_structures is None:
-                SMILES1_structure_type = (
-                    MoleculeResolver.get_structure_type_from_SMILES(SMILES1)
-                )
-                SMILES2_structure_type = (
-                    MoleculeResolver.get_structure_type_from_SMILES(SMILES2)
-                )
-                if SMILES1_structure_type != SMILES2_structure_type:
-                    return False
-                check_for_resonance_structures = SMILES1_structure_type in [
-                    "ion",
-                    "salt",
-                ] or SMILES2_structure_type in ["ion", "salt"]
 
             if check_for_resonance_structures:
                 unique_partial_SMILES1 = set(SMILES1.split("."))
@@ -1810,14 +1860,14 @@ class MoleculeResolver:
 
                 matching_unique_partial_SMILES2_found = []
                 for unique_partial_SMILES1_ in unique_partial_SMILES1:
+                    resonance_SMILES1 = MoleculeResolver.get_resonance_SMILES(
+                        unique_partial_SMILES1_
+                    )
                     unique_partial_SMILES2 = unique_partial_SMILES2 - set(
                         matching_unique_partial_SMILES2_found
                     )
                     for unique_partial_SMILES2_ in unique_partial_SMILES2:
-                        resonance_SMILES1 = get_resonance_structure_SMILES(
-                            unique_partial_SMILES1_
-                        )
-                        resonance_SMILES2 = get_resonance_structure_SMILES(
+                        resonance_SMILES2 = MoleculeResolver.get_resonance_SMILES(
                             unique_partial_SMILES2_
                         )
                         if set(resonance_SMILES1) == set(resonance_SMILES2):
@@ -1862,10 +1912,10 @@ class MoleculeResolver:
                         matching_unique_partial_SMILES2_found
                     )
                     for unique_partial_SMILES2_ in unique_partial_SMILES2:
-                        resonance_SMILES1 = get_resonance_structure_SMILES(
+                        resonance_SMILES1 = MoleculeResolver.get_resonance_SMILES(
                             unique_partial_SMILES1_
                         )
-                        resonance_SMILES2 = get_resonance_structure_SMILES(
+                        resonance_SMILES2 = MoleculeResolver.get_resonance_SMILES(
                             unique_partial_SMILES2_
                         )
                         if set(resonance_SMILES1) == set(resonance_SMILES2):
@@ -1907,8 +1957,8 @@ class MoleculeResolver:
             mol_formula = rdMolDescriptors.CalcMolFormula(mol_molecule)
             if mol_formula not in temporary:
                 temporary[mol_formula] = {}
-            else:
-                temporary[mol_formula][key] = (mol_molecule, molecule)
+
+            temporary[mol_formula][key] = (mol_molecule, molecule)
 
         return temporary
 
@@ -2010,101 +2060,6 @@ class MoleculeResolver:
             return False
 
         return True
-
-    @staticmethod
-    def get_molecule_from_XYZ_file(
-        xyz_file_path: str,
-        charge: Optional[int] = None,
-        method: Optional[int] = None,
-        isZwitterionic: bool = False,
-        obabel_executable: str = "obabel.exe",
-    ) -> Chem.rdchem.Mol:
-        path, xyz_file = os.path.split(xyz_file_path)
-        if not os.path.exists(xyz_file_path):
-            raise FileNotFoundError("The xyz file does not exist.")
-        if not xyz_file.endswith(".xyz"):
-            raise ValueError("The specified file is not an xyz file.")
-
-        mol = None
-
-        # try xyz2mol
-        if method == 1 or method is None:
-            try:
-                charged_fragments = charge != 0 or isZwitterionic
-                atomicNumList, chargefromXYZ, xyz_coordinates = xyz2mol.read_xyz_file(
-                    xyz_file_path
-                )
-                if charge is None:
-                    charge = chargefromXYZ
-
-                mol = xyz2mol.xyz2mol(
-                    atomicNumList, xyz_coordinates, charge, charged_fragments, False
-                )
-                if mol:
-                    mol = mol[0]
-
-            except Exception:
-                mol = None
-
-        # try obabel
-        # this needs obabel installed and the path added to the environment variables
-        # or set by the variable obabel_executable
-        if method == 2 or (mol is None and method is None):
-            try:
-                tried2 = True
-                mol_file = xyz_file_path.replace(".xyz", ".mol")
-                with tempfile.TemporaryDirectory() as tempfolder:
-                    mol_file_path = os.path.join(tempfolder, mol_file)
-
-                    if not os.path.exists(obabel_executable):
-                        print("could not find obabel_executable.")
-                        return False
-
-                    command = (
-                        obabel_executable
-                        + " "
-                        + xyz_file_path
-                        + " -omol -O "
-                        + mol_file_path
-                    )
-                    _ = subprocess.run(command)
-                    mol = Chem.MolFromMolFile(str(mol_file_path))
-            except Exception:
-                mol = None
-
-        if (
-            method == 3
-            or (mol is None and tried2 == True)
-            or (mol is None and method is None)
-        ):
-            try:
-                smi_file = xyz_file.replace(".xyz", ".smi")
-                with tempfile.TemporaryDirectory() as tempfolder:
-                    smi_file_path = os.path.join(tempfolder, smi_file)
-                    command = (
-                        obabel_executable
-                        + " "
-                        + xyz_file_path
-                        + " -osmi -xI -O "
-                        + smi_file_path
-                    )
-                    _ = subprocess.run(command)
-
-                    mol_file = xyz_file.replace(".xyz", ".mol")
-                    mol_file_path = os.path.join(tempfolder, mol_file)
-                    command = (
-                        obabel_executable
-                        + " "
-                        + smi_file_path
-                        + " -omol -xI -O "
-                        + mol_file_path
-                    )
-                    _ = subprocess.run(command)
-                    mol = Chem.MolFromMolFile(str(mol_file_path))
-            except Exception:
-                mol = None
-
-        return mol
 
     def get_SMILES_from_Mol_format(
         self,
@@ -2295,7 +2250,10 @@ class MoleculeResolver:
             )
 
         output = subprocess.run([search_command, "java"], capture_output=True)
-        java_path = output.stdout.decode("utf-8").strip()
+        java_paths = output.stdout.decode("utf-8").strip().split(os.linesep)
+        java_paths = [
+            java_path for java_path in java_paths if os.path.exists(java_path)
+        ]
 
         if output.returncode != 0 or len(java_paths) == 0:
             return None
@@ -2501,7 +2459,7 @@ class MoleculeResolver:
         )
 
         search_response_text = self._resilient_request(
-            f"https://www.ncbi.nlm.nih.gov/pccompound/?term={urllib.parse.quote(identifier)}"
+            f'https://www.ncbi.nlm.nih.gov/pccompound/?term={urllib.parse.quote(identifier, safe="")}'
         )
         found_SMILES = []
         if search_response_text is not None:
@@ -2575,7 +2533,7 @@ class MoleculeResolver:
                 }
                 maximumResults = 5 if mode == "formula" else 1
                 search_response_text = self._resilient_request(
-                    f"{CHEBI_URL}getLiteEntity?search={urllib.parse.quote(identifier)}&searchCategory={mode_mapping[mode]}&maximumResults={maximumResults}&starsCategory=ALL"
+                    f'{CHEBI_URL}getLiteEntity?search={urllib.parse.quote(identifier, safe="")}&searchCategory={mode_mapping[mode]}&maximumResults={maximumResults}&starsCategory=ALL'
                 )
 
                 SMILES = None
@@ -2821,7 +2779,7 @@ class MoleculeResolver:
                 COMPTOX_URL = "https://comptox.epa.gov/dashboard-api/"
 
                 response_text = self._resilient_request(
-                    f"{COMPTOX_URL}ccdapp1/search/chemical/equal/{urllib.parse.quote(identifier)}",
+                    f'{COMPTOX_URL}ccdapp1/search/chemical/equal/{urllib.parse.quote(identifier, safe="")}',
                     rejected_status_codes=[400, 404],
                 )
 
@@ -2875,6 +2833,11 @@ class MoleculeResolver:
                             if mode == "name":
                                 temp_synonyms.append(identifier)
 
+                            QC_LEVEL_str = ""
+                            if "qcLevel" in temp_substance:
+                                QC_LEVEL_str = (
+                                    f'|QC_LEVEL:{float(temp_substance["qcLevel"])}'
+                                )
                             temp_synonyms = MoleculeResolver.filter_and_sort_synonyms(
                                 temp_synonyms
                             )
@@ -2883,7 +2846,7 @@ class MoleculeResolver:
                                     temp_SMILES,
                                     temp_synonyms,
                                     temp_CAS,
-                                    temp_dtxsid,
+                                    temp_dtxsid + QC_LEVEL_str,
                                     mode,
                                     service="comptox",
                                 )
@@ -2956,7 +2919,7 @@ class MoleculeResolver:
                 # unfortunatedly sometimes the server returns a status code 500 for valid names
                 CTS_URL = "https://cts.fiehnlab.ucdavis.edu/rest/convert/"
                 response_text = self._resilient_request(
-                    f"{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier)}",
+                    f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier, safe="")}',
                     kwargs={"timeout": 10},
                     rejected_status_codes=[404, 500],
                 )
@@ -2969,7 +2932,7 @@ class MoleculeResolver:
 
                 if mode != "cas":
                     response_text = self._resilient_request(
-                        f"{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/CAS/{urllib.parse.quote(identifier)}",
+                        f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/CAS/{urllib.parse.quote(identifier, safe="")}',
                         kwargs={"timeout": 10},
                         rejected_status_codes=[404, 500],
                     )
@@ -2979,7 +2942,7 @@ class MoleculeResolver:
 
                 if mode not in ["inchi", "smiles"]:
                     response_text = self._resilient_request(
-                        f"{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/InChI%20Code/{urllib.parse.quote(identifier)}",
+                        f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/InChI%20Code/{urllib.parse.quote(identifier, safe="")}',
                         kwargs={"timeout": 10},
                         rejected_status_codes=[404, 500],
                     )
@@ -3068,11 +3031,9 @@ class MoleculeResolver:
         if not all([isinstance(identifier, str) for identifier in identifiers]):
             raise TypeError("All identifiers must be strings.")
 
-        with self.query_molecule_cache_batchmode("comptox", mode, identifiers) as (
-            identifiers_to_search,
-            indices_of_identifiers_to_search,
-            results,
-        ):
+        with self.query_molecule_cache_batchmode(
+            "comptox", mode, identifiers, save_not_found=False
+        ) as (identifiers_to_search, indices_of_identifiers_to_search, results):
             if len(identifiers_to_search) == 0:
                 return results
 
@@ -3136,65 +3097,64 @@ class MoleculeResolver:
             # 4 Programmatically curated from ChemIDPlus. Unique chemical identifiers have no conflicts in PubChem
             # 5 Programmatically curated from ACToR or PubChem. Unique chemical identifiers have low confidence and have a single public source
 
-            request_response = self._resilient_request(
-                download_url, return_response=True
-            )
-            with tempfile.TemporaryDirectory() as temp_dir, warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-
-                temp_path = os.path.join(
-                    temp_dir, "moleculeresolver_comptox_postdata.xlsx"
+            # in some rare occasions, this times out and returns None
+            if download_url:
+                request_response = self._resilient_request(
+                    download_url, return_response=True
                 )
-                with open(temp_path, "wb") as f:
-                    f.write(request_response.content)
+                with (
+                    tempfile.TemporaryDirectory() as temp_dir,
+                    warnings.catch_warnings(),
+                ):
+                    warnings.simplefilter("ignore")
 
-                wb = openpyxl.load_workbook(temp_path)
+                    temp_path = os.path.join(
+                        temp_dir, "moleculeresolver_comptox_postdata.xlsx"
+                    )
+                    with open(temp_path, "wb") as f:
+                        f.write(request_response.content)
 
-                synonym_sheet = wb.worksheets[2]
-                synonyms_by_identifier = {}
-                for i_row, row in enumerate(synonym_sheet.iter_rows()):
-                    if i_row == 0:
-                        continue
+                    wb = openpyxl.load_workbook(temp_path)
 
-                    row_values = [cell.value for cell in row]
-                    synonyms = []
-                    identifier = row_values[0].strip()
-                    if row_values[1]:
-                        synonyms = [v.strip() for v in row_values[1].split("|")]
+                    synonym_sheet = wb.worksheets[2]
+                    synonyms_by_identifier_lower = {}
+                    for i_row, row in enumerate(synonym_sheet.iter_rows()):
+                        if i_row == 0:
+                            continue
 
-                    synonyms_by_identifier[identifier] = synonyms
-
-                temp_results_by_identifier = {}
-
-                def parse_CompTox_result(row):
-                    identifier = row[0].strip()
-                    found_by = row[1].lower().strip()
+                        row_values = [cell.value for cell in row]
+                        synonyms = []
+                        identifier = row_values[0].strip()
+                        if row_values[1]:
+                            synonyms = [v.strip() for v in row_values[1].split("|")]
 
                         synonyms_by_identifier_lower[identifier.lower()] = synonyms
 
-                    if found_by.count("found 0 results") == 0:
-                        SMILES = row[7].strip()
-                        if not SMILES:
-                            return
-                        dtxsid = row[2].strip()
-                        preferred_name = row[3].strip()
-                        qc_level = row[4]
-                        CAS = str(row[5]).strip()
-                        iupac_name = row[6].strip()
+                    temp_results_by_identifier = {}
 
-                        if iupac_name and iupac_name != "N/A":
-                            if iupac_name not in synonyms:
-                                synonyms.insert(0, iupac_name)
+                    def parse_CompTox_result(row):
+                        identifier = str(row[0]).strip()
+                        found_by = row[1].lower().strip()
 
-                        if preferred_name and preferred_name != "N/A":
-                            if preferred_name not in synonyms:
-                                synonyms.insert(0, preferred_name)
+                        SMILES = None
+                        CAS = []
+                        synonyms = []
 
-                            if iupac_name  and iupac_name != 'N/A':
+                        if found_by.count("found 0 results") == 0:
+                            SMILES = row[7].strip()
+                            if not SMILES:
+                                return
+                            dtxsid = row[2].strip()
+                            preferred_name = row[3].strip()
+                            qc_level = row[4]
+                            CAS = str(row[5]).strip()
+                            iupac_name = row[6].strip()
+
+                            if iupac_name and iupac_name != "N/A":
                                 if iupac_name not in synonyms:
                                     synonyms.insert(0, iupac_name)
 
-                            if preferred_name  and preferred_name != 'N/A':
+                            if preferred_name and preferred_name != "N/A":
                                 if preferred_name not in synonyms:
                                     synonyms.insert(0, preferred_name)
 
@@ -3203,20 +3163,24 @@ class MoleculeResolver:
                             else:
                                 CAS = [CAS]
 
-                            if 'N/A' in SMILES or not MoleculeResolver.is_valid_SMILES(SMILES):
+                            if "N/A" in SMILES or not MoleculeResolver.is_valid_SMILES(
+                                SMILES
+                            ):
                                 return
-                            
-                            SMILES = MoleculeResolver.standardize_SMILES(SMILES, standardize)
 
-                            # the rating is needed because for some substances it 
+                            SMILES = MoleculeResolver.standardize_SMILES(
+                                SMILES, standardize
+                            )
+
+                            # the rating is needed because for some substances it
                             # returns more than one row. It is used to get the best result later.
-                            if 'expert' in found_by:
+                            if "expert" in found_by:
                                 own_rating = 10
-                            elif 'approved' in found_by:
+                            elif "approved" in found_by:
                                 own_rating = 8
-                            elif 'valid source' in found_by:
+                            elif "valid source" in found_by:
                                 own_rating = 6
-                            elif 'systematic name' in found_by:
+                            elif "systematic name" in found_by:
                                 own_rating = 4
                             else:
                                 own_rating = 2
@@ -3226,121 +3190,104 @@ class MoleculeResolver:
 
                             if identifier not in temp_results_by_identifier:
                                 temp_results_by_identifier[identifier] = []
-                            
+
                             if SMILES:
-                                temp_results_by_identifier[identifier].append((qc_level, own_rating, SMILES, synonyms, CAS, dtxsid + '|QC_LEVEL:' + str(qc_level)))
+                                temp_results_by_identifier[identifier].append(
+                                    (
+                                        qc_level,
+                                        own_rating,
+                                        SMILES,
+                                        synonyms,
+                                        CAS,
+                                        dtxsid + "|QC_LEVEL:" + str(qc_level),
+                                    )
+                                )
 
                         else:
                             temp_results_by_identifier[identifier] = None
 
-                        if "N/A" in SMILES or not MoleculeResolver.is_valid_SMILES(
-                            SMILES
-                        ):
-                            return
+                    results_sheet = wb.worksheets[1]
+                    for i_row, row in enumerate(results_sheet.iter_rows()):
+                        if i_row == 0:
+                            continue
 
-                        SMILES = MoleculeResolver.standardize_SMILES(
-                            SMILES, standardize
-                        )
+                        row_values = [cell.value for cell in row]
+                        parse_CompTox_result(row_values)
 
-                        # the rating is needed because for some substances it
-                        # returns more than one row. It is used to get the best result later.
-                        if "expert" in found_by:
-                            own_rating = 10
-                        elif "approved" in found_by:
-                            own_rating = 8
-                        elif "valid source" in found_by:
-                            own_rating = 6
-                        elif "systematic name" in found_by:
-                            own_rating = 4
-                        else:
-                            own_rating = 2
+                    for molecule_index, identifier in zip(
+                        indices_of_identifiers_to_search, identifiers_to_search
+                    ):
+                        if identifier in temp_results_by_identifier:
+                            temp_result = temp_results_by_identifier[identifier]
+                            if temp_result:
+                                if len(temp_result) > 1:
+                                    best_results = temp_result
+                                    try:
+                                        best_qc_level = min(
+                                            temp_result, key=lambda x: x[0]
+                                        )[0]
+                                        best_results = list(
+                                            filter(
+                                                lambda x: x[0] == best_qc_level,
+                                                temp_result,
+                                            )
+                                        )
+                                    except Exception:
+                                        pass
 
                                     if len(best_results) > 1:
-                                        best_own_rating = max(best_results, key=lambda x: x[1])[1]
-                                        best_results = list(filter(lambda x: x[1] == best_own_rating, best_results))
-                                        
-                                    temp_results_by_identifier[identifier] = best_results
+                                        best_own_rating = max(
+                                            best_results, key=lambda x: x[1]
+                                        )[1]
+                                        best_results = list(
+                                            filter(
+                                                lambda x: x[1] == best_own_rating,
+                                                best_results,
+                                            )
+                                        )
+
+                                    temp_results_by_identifier[
+                                        identifier
+                                    ] = best_results
                                 results[molecule_index] = []
 
-                        if identifier not in temp_results_by_identifier:
-                            temp_results_by_identifier[identifier] = []
-
-                        if SMILES:
-                            temp_results_by_identifier[identifier].append(
-                                (
-                                    qc_level,
-                                    own_rating,
+                                for (
+                                    _,
+                                    _,
                                     SMILES,
                                     synonyms,
                                     CAS,
-                                    dtxsid + "|QC_LEVEL:" + str(qc_level),
-                                )
-                            )
-
-                    else:
-                        temp_results_by_identifier[identifier] = None
-
-                results_sheet = wb.worksheets[1]
-                for i_row, row in enumerate(results_sheet.iter_rows()):
-                    if i_row == 0:
-                        continue
-
-                    row_values = [cell.value for cell in row]
-                    parse_CompTox_result(row_values)
-
-                for molecule_index, identifier in zip(
-                    indices_of_identifiers_to_search, identifiers_to_search
-                ):
-                    if identifier in temp_results_by_identifier:
-                        temp_result = temp_results_by_identifier[identifier]
-                        if temp_result:
-                            if len(temp_result) > 1:
-                                best_results = temp_result
-                                try:
-                                    best_qc_level = min(
-                                        temp_result, key=lambda x: x[0]
-                                    )[0]
-                                    best_results = list(
-                                        filter(
-                                            lambda x: x[0] == best_qc_level, temp_result
+                                    additional_information,
+                                ) in temp_results_by_identifier[identifier]:
+                                    this_synonyms = synonyms.copy()
+                                    for synonym in synonyms:
+                                        if (
+                                            synonym.lower()
+                                            in synonyms_by_identifier_lower
+                                        ):
+                                            for (
+                                                new_synonym
+                                            ) in synonyms_by_identifier_lower[
+                                                synonym.lower()
+                                            ]:
+                                                if new_synonym not in this_synonyms:
+                                                    this_synonyms.append(new_synonym)
+                                    synonyms = (
+                                        MoleculeResolver.filter_and_sort_synonyms(
+                                            this_synonyms
                                         )
                                     )
-                                except Exception:
-                                    pass
-
-                                if len(best_results) > 1:
-                                    best_own_rating = max(
-                                        best_results, key=lambda x: x[1]
-                                    )[1]
-                                    best_results = list(
-                                        filter(
-                                            lambda x: x[1] == best_own_rating,
-                                            best_results,
+                                    results[molecule_index].append(
+                                        Molecule(
+                                            SMILES,
+                                            synonyms,
+                                            CAS,
+                                            additional_information,
+                                            mode,
+                                            "comptox",
+                                            identifier=identifier,
                                         )
                                     )
-
-                                temp_results_by_identifier[identifier] = best_results
-                            results[molecule_index] = []
-
-                            for (
-                                _,
-                                _,
-                                SMILES,
-                                synonyms,
-                                CAS,
-                                additional_information,
-                            ) in temp_results_by_identifier[identifier]:
-                                results[molecule_index].append(
-                                    Molecule(
-                                        SMILES,
-                                        synonyms,
-                                        CAS,
-                                        additional_information,
-                                        mode,
-                                        "comptox",
-                                        identifier=identifier,
-                                    )
-                                )
 
             return results
 
@@ -3397,7 +3344,7 @@ class MoleculeResolver:
                 ] = f'Bearer {self.available_service_API_keys["chemeo"]}'
 
                 request_text = self._resilient_request(
-                    f"{CHEMEO_URL}convert/{mode}/{urllib.parse.quote(identifier)}",
+                    f'{CHEMEO_URL}convert/{mode}/{urllib.parse.quote(identifier, safe="")}',
                     kwargs={"headers": API_bearer_headers},
                     rejected_status_codes=[403, 404],
                 )
@@ -3493,19 +3440,137 @@ class MoleculeResolver:
 
         def clean_identifier(identifier):
             if mode == "name":
-                identifier = (
-                    identifier.replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                    .replace("’", "'")
-                    .replace("α", "alpha;")
-                    .replace("β", "beta")
-                    .replace("γ", "gamma")
+                greek_letters = [
+                    "α",
+                    "β",
+                    "γ",
+                    "δ",
+                    "ε",
+                    "ϵ",
+                    "ζ",
+                    "η",
+                    "θ",
+                    "ι",
+                    "κ",
+                    "λ",
+                    "μ",
+                    "ν",
+                    "ξ",
+                    "ο",
+                    "π",
+                    "ρ",
+                    "σ",
+                    "τ",
+                    "υ",
+                    "φ",
+                    "χ",
+                    "ψ",
+                    "ω",
+                    "Α",
+                    "Β",
+                    "Γ",
+                    "Δ",
+                    "Ε",
+                    "Ζ",
+                    "Η",
+                    "Θ",
+                    "Ι",
+                    "Κ",
+                    "Λ",
+                    "Μ",
+                    "Ν",
+                    "Ξ",
+                    "Ο",
+                    "Π",
+                    "Ρ",
+                    "Σ",
+                    "Τ",
+                    "Υ",
+                    "Φ",
+                    "Χ",
+                    "Ψ",
+                    "Ω",
+                    "µ",
+                    "∆",
+                ]
+                spelled_out_versions = [
+                    "alpha",
+                    "beta",
+                    "gamma",
+                    "delta",
+                    "epsilon",
+                    "epsilon",
+                    "zeta",
+                    "eta",
+                    "theta",
+                    "iota",
+                    "kappa",
+                    "lambda",
+                    "mu",
+                    "nu",
+                    "xi",
+                    "omicron",
+                    "pi",
+                    "rho",
+                    "sigma",
+                    "tau",
+                    "upsilon",
+                    "phi",
+                    "chi",
+                    "psi",
+                    "omega",
+                    "alpha",
+                    "beta",
+                    "gamma",
+                    "delta",
+                    "epsilon",
+                    "zeta",
+                    "eta",
+                    "theta",
+                    "iota",
+                    "kappa",
+                    "lambda",
+                    "mu",
+                    "nu",
+                    "xi",
+                    "omicron",
+                    "pi",
+                    "rho",
+                    "sigma",
+                    "tau",
+                    "upsilon",
+                    "phi",
+                    "chi",
+                    "psi",
+                    "omega",
+                    "mu",
+                    "delta",
+                ]
+
+                map_to_replace = [
+                    ("’", "'"),
+                    ("′", "'"),
+                    ("±", "+-"),
+                    ("→", "-->"),
+                    ("≥", ">="),
+                    ("≤", "<="),
+                    ("·", "."),
+                    ("#", "no. "),
+                ]
+
+                for greek_letter, spelled_out_version in zip(
+                    greek_letters, spelled_out_versions, strict=True
+                ):
+                    map_to_replace.append((greek_letter, spelled_out_version))
+
+                for old, new in map_to_replace:
+                    identifier = identifier.replace(old, new)
+
+                nfkd_form = unicodedata.normalize("NFKD", identifier)
+                identifier = "".join(
+                    [c for c in nfkd_form if not unicodedata.combining(c)]
                 )
-                identifier = (
-                    identifier.replace("'", "&apos;")
-                    .replace("/", "")
-                    .replace("±", "+-")
-                )
+
                 if identifier.endswith(", (+-)-"):
                     identifier = "".join(identifier.split(", (+-)-")[:-1])
                 if identifier.startswith("(+-)-"):
@@ -3519,6 +3584,7 @@ class MoleculeResolver:
         pubchem_xml_mode = {
             "name": "synonyms",
             "cas": "synonyms",
+            "formula": "synonyms",
             "smiles": "smiles",
             "inchi": "inchis",
             "inchikey": "inchi-keys",
@@ -3537,9 +3603,9 @@ class MoleculeResolver:
             query_Uids = []
             for cleaned_unique_identifier in cleaned_unique_identifiers:
                 query_Uids.append(
-                    f"<PCT-QueryUids_{pubchem_xml_mode[mode]}_E>{urllib.parse.quote(cleaned_unique_identifier)}</PCT-QueryUids_{pubchem_xml_mode[mode]}_E>"
+                    f"<PCT-QueryUids_{pubchem_xml_mode[mode]}_E>{cleaned_unique_identifier}</PCT-QueryUids_{pubchem_xml_mode[mode]}_E>"
                 )
-            temp = "\n".join(query_Uids)
+            temp = "".join(query_Uids)
             root_query_Uids = f"<PCT-QueryUids_{pubchem_xml_mode[mode]}>{temp}</PCT-QueryUids_{pubchem_xml_mode[mode]}>"
 
             xml_template = f"""<?xml version="1.0"?>
@@ -3572,14 +3638,29 @@ class MoleculeResolver:
                                 </PCT-Data_input>
                                 </PCT-Data>"""
 
-            return self._resilient_request(
-                PUBCHEM_URL,
-                {
-                    "data": xml_template.encode("utf-8"),
-                    "headers": {"Content-type": "application/xml; charset=utf-8"},
-                },
-                request_type="post",
-            )
+            request_id = None
+            n_try = 0
+            while request_id is None or n_try < 5:
+                request_text = self._resilient_request(
+                    PUBCHEM_URL,
+                    {
+                        "data": xml_template.encode("utf-8"),
+                        "headers": {"Content-type": "application/xml; charset=utf-8"},
+                    },
+                    request_type="post",
+                )
+
+                if (
+                    request_text is not None
+                    and request_text.count("Result set is empty.") == 0
+                    and request_text.count("server-error") == 0
+                ):
+                    request_id = parse_request_id(request_text)
+
+                n_try += 1
+                time.sleep(3)
+
+            return request_id
 
         def info_request(cids_to_request, info_name):
             xml_for_cids_to_request = [
@@ -3623,14 +3704,29 @@ class MoleculeResolver:
                             </PCT-Data_input>
                             </PCT-Data>"""
 
-            return self._resilient_request(
-                PUBCHEM_URL,
-                {
-                    "data": xml_template.encode("utf-8"),
-                    "headers": {"Content-type": "application/xml; charset=utf-8"},
-                },
-                request_type="post",
-            )
+            request_id = None
+            n_try = 0
+            while request_id is None or n_try < 5:
+                request_text = self._resilient_request(
+                    PUBCHEM_URL,
+                    {
+                        "data": xml_template.encode("utf-8"),
+                        "headers": {"Content-type": "application/xml; charset=utf-8"},
+                    },
+                    request_type="post",
+                )
+
+                if (
+                    request_text is not None
+                    and request_text.count("Result set is empty.") == 0
+                    and request_text.count("server-error") == 0
+                ):
+                    request_id = parse_request_id(request_text)
+
+                n_try += 1
+                time.sleep(3)
+
+            return request_id
 
         def poll_request(_request_id):
             download_url = None
@@ -3655,21 +3751,25 @@ class MoleculeResolver:
                     PUBCHEM_URL,
                     {
                         "data": poll_request_xml.encode("utf-8"),
-                        "headers": {"Content-type": "application/xml; charset=utf-8"},
+                        "headers": {
+                            "Content-type": "application/xml; charset=utf-8",
+                            "timeout": str(30),
+                        },
                     },
                     request_type="post",
                 )
-                matches = regex.findall(
-                    "PCT-Download-URL_url>(.*)</PCT-Download-URL_url", poll_response
-                )
+                if poll_response:
+                    matches = regex.findall(
+                        "PCT-Download-URL_url>(.*)</PCT-Download-URL_url", poll_response
+                    )
 
-                if matches:
-                    if len(matches) != 1:
-                        raise
-                    download_url = matches[0]
-                    if download_url.startswith("ftp://"):
-                        download_url = "https" + download_url[3:]
-                    break
+                    if matches:
+                        if len(matches) != 1:
+                            raise
+                        download_url = matches[0]
+                        if download_url.startswith("ftp://"):
+                            download_url = "https" + download_url[3:]
+                            break
 
                 if n_try > 15:
                     break
@@ -3680,21 +3780,30 @@ class MoleculeResolver:
 
         def get_results(download_url):
             found_results = {}
-            with closing(urllib.request.urlopen(download_url)) as r:
-                zipped_content = gzip.GzipFile(fileobj=r)
-                content = zipped_content.read()
-                content_str = content.decode("utf-8")
-                results = content_str.split("\n")
-                found_results = [
-                    result
-                    for result in results
-                    if result != "" and result != "Result set is empty."
-                ]
+            n_try = 5
+            while True:
+                try:
+                    with closing(urllib.request.urlopen(download_url)) as r:
+                        zipped_content = gzip.GzipFile(fileobj=r)
+                        content = zipped_content.read()
+                        content_str = content.decode("utf-8")
+                        results = content_str.split("\n")
+                        found_results = [
+                            result
+                            for result in results
+                            if result != "" and result != "Result set is empty."
+                        ]
+                        break
+                except Exception as e:
+                    if n_try > 5:
+                        raise e
+                    n_try += 1
+                    time.sleep(3)
 
             return found_results
 
         with self.query_molecule_cache_batchmode(
-            "pubchem", mode, original_identifiers
+            "pubchem", mode, original_identifiers, save_not_found=False
         ) as (
             original_identifiers_to_search,
             indices_of_identifiers_to_search,
@@ -3709,13 +3818,9 @@ class MoleculeResolver:
             ]  # cleaned identifiers
             cleaned_unique_identifiers = set(cleaned_identifiers)
 
-            request_text = cid_search_request()
+            request_id = cid_search_request()
 
-            if (
-                request_text is not None
-                and request_text.count("Result set is empty.") == 0
-            ):
-                request_id = parse_request_id(request_text)
+            if request_id is not None:
                 download_url = poll_request(request_id)
 
                 found_results_by_identifier = {}
@@ -3740,17 +3845,23 @@ class MoleculeResolver:
                             cleaned_unique_identifier
                         ].append(None)
 
-                    if '#' in cleaned_unique_identifier:
+                    if "#" in cleaned_unique_identifier:
                         results_with_name_errors.append(cleaned_unique_identifier)
-                    
+
                 if results_with_name_errors:
                     temp = {}
                     for name_with_error in results_with_name_errors:
-                        parts = name_with_error.split('#')
+                        parts = name_with_error.split("#")
                         longest_part = max(parts, key=len)
-                        candidates = [v for v in cleaned_identifiers if longest_part in v]
+                        candidates = [
+                            v for v in cleaned_identifiers if longest_part in v
+                        ]
                         temp[name_with_error] = candidates
-                    print('The following identifiers have errors: {}'.format(', '.join(temp)))
+                    print(
+                        "The following identifiers have errors: {}".format(
+                            ", ".join(temp)
+                        )
+                    )
 
                 if len(found_results_by_cid_identifier) > 0:
                     for original_identifier, cleaned_identifier in zip(
@@ -3780,8 +3891,8 @@ class MoleculeResolver:
                             this_cid_requested_name = found_results_by_cid[cid]
                             synonyms[cid].append(this_cid_requested_name)
 
-                    response = info_request(cids_to_request, "iupac")
-                    download_url = poll_request(parse_request_id(response))
+                    request_id = info_request(cids_to_request, "iupac")
+                    download_url = poll_request(request_id)
                     iupac_results = get_results(download_url)
                     if not len(cids_to_request) <= len(iupac_results):
                         raise
@@ -3792,16 +3903,16 @@ class MoleculeResolver:
                         if len(iupac_name) > 1:
                             synonyms[int(cid)].append(iupac_name)
 
-                    response = info_request(cids_to_request, "synonyms")
-                    download_url = poll_request(parse_request_id(response))
+                    request_id = info_request(cids_to_request, "synonyms")
+                    download_url = poll_request(request_id)
                     synonym_results = get_results(download_url)
 
                     for result in synonym_results:
                         cid, synonym = result.split("\t")
                         synonyms[int(cid)].append(synonym)
 
-                    response = info_request(cids_to_request, "smiles")
-                    download_url = poll_request(parse_request_id(response))
+                    request_id = info_request(cids_to_request, "smiles")
+                    download_url = poll_request(request_id)
                     SMILES_results = get_results(download_url)
                     if not len(cids_to_request) <= len(SMILES_results):
                         raise
@@ -3883,7 +3994,7 @@ class MoleculeResolver:
                     [200, 202] if pubchem_mode == "formula" else [200]
                 )
                 request_text = self._resilient_request(
-                    f"{PUBCHEM_URL}{pubchem_mode}/{urllib.parse.quote(identifier)}/json",
+                    f'{PUBCHEM_URL}{pubchem_mode}/json?{pubchem_mode}={urllib.parse.quote(identifier, safe="")}',
                     rejected_status_codes=[400, 404],
                     accepted_status_codes=accepted_status_codes,
                 )
@@ -4064,7 +4175,7 @@ class MoleculeResolver:
                 mode_used = mode
 
                 search_response_text = self._resilient_request(
-                    f"{CAS_URL}search?q={urllib.parse.quote(identifier)}",
+                    f'{CAS_URL}search?q={urllib.parse.quote(identifier, safe="")}',
                     {"headers": {"accept": "application/json"}},
                     rejected_status_codes=[403, 404],
                 )
@@ -4188,12 +4299,12 @@ class MoleculeResolver:
             synonyms = []
             if "synonyms" in result:
                 synonyms.extend(
-                    [synonym["synonymName"].strip() for synonym in result["synonyms"]]
+                    [
+                        synonym["synonymName"].strip()
+                        for synonym in result["synonyms"]
+                        if synonym["synonymName"]
+                    ]
                 )
-
-            CAS = []
-            if "currentCasNumber" in result:
-                CAS = [result["currentCasNumber"]]
 
             ITN = result["internalTrackingNumber"]
             SMILES = result["smilesNotation"]
@@ -4457,7 +4568,7 @@ class MoleculeResolver:
             if not entry_available:
                 SRS_URL = "https://cdxappstest.epacdx.net/oms-substance-registry-services/rest-api/substance"
                 search_response_text = self._resilient_request(
-                    f"{SRS_URL}/{mode}/{urllib.parse.quote(identifier)}",
+                    f'{SRS_URL}/{mode}/{urllib.parse.quote(identifier, safe="")}',
                     rejected_status_codes=[400, 404, 500],
                     kwargs={"timeout": 10},
                 )
@@ -4532,6 +4643,7 @@ class MoleculeResolver:
             resolver_info = ""
             if resolvers_to_use:
                 resolver_info = f'?resolver={",".join(resolvers_to_use)}'
+            # although the documentation says otherwise it returns a 500 response even if it should return 404
             response_text = self._resilient_request(
                 f"{CIR_URL}{urllib.parse.quote(structure_identifier)}/{representation}{resolver_info}",
                 rejected_status_codes=[404, 500],
@@ -4671,7 +4783,7 @@ class MoleculeResolver:
                     mode_used = "inchi calculated from smiles"
 
                 response_text = self._resilient_request(
-                    f"https://webbook.nist.gov/cgi/cbook.cgi?{urllib.parse.quote(nist_modes[mode])}={urllib.parse.quote(identifier)}"
+                    f'https://webbook.nist.gov/cgi/cbook.cgi?{urllib.parse.quote(nist_modes[mode])}={urllib.parse.quote(identifier, safe="")}'
                 )
 
                 def parse_molecule(temp_content):
