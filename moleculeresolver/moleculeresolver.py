@@ -192,7 +192,7 @@ class MoleculeResolver:
         identifier_mode: str,
         identifiers: list[str],
         save_not_found: bool = True,
-    ) -> Tuple[list[str], list[int], list[list[Molecule] | None]]:
+    ) -> Tuple[list[str], list[int], Optional[list[list[Molecule], None]]]:
         results = self.molecule_cache.search(
             [service] * len(identifiers),
             [identifier_mode] * len(identifiers),
@@ -5750,7 +5750,7 @@ class MoleculeResolver:
         minimum_number_of_cross_checks: Optional[int] = 1,
         try_to_choose_best_structure: bool = True,
         ignore_exceptions: bool = False,
-    ) -> Optional[Molecule] | list[Optional[Molecule]]:
+    ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
         if services_to_use is None:
             services_to_use = MoleculeResolver._available_services
 

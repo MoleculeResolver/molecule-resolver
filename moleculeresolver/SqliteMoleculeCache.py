@@ -1,7 +1,7 @@
 from datetime import datetime
 import os
 import sqlite3
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 import threading
 import uuid
 
@@ -116,10 +116,10 @@ class SqliteMoleculeCache:
 
     def save(
         self,
-        service: str | Sequence[str],
-        identifier_mode: str | Sequence[str],
-        identifier: str | Sequence[str],
-        molecules: Molecule | Sequence[Molecule],
+        service: Union[str, Sequence[str]],
+        identifier_mode: Union[str, Sequence[str]],
+        identifier: Union[str, Sequence[str]],
+        molecules: Union[Molecule, Sequence[Molecule]],
     ) -> None:
         if isinstance(molecules, Molecule) or molecules is None:
             molecules = [molecules]
@@ -215,11 +215,11 @@ class SqliteMoleculeCache:
 
     def _search(
         self,
-        service: str | Sequence[str],
-        identifier_mode: str | Sequence[str],
-        identifier: str | Sequence[str],
+        service: Union[str, Sequence[str]],
+        identifier_mode: Union[str, Sequence[str]],
+        identifier: Union[str, Sequence[str]],
         only_check_for_existance: bool = False,
-    ) -> Optional[list[Molecule]] | list[Optional[list[Molecule]]] | bool | list[bool]:
+    ) -> Union[Optional[list[Molecule]], list[Optional[list[Molecule]]], bool, list[bool]]:
         if not isinstance(identifier, str):
             search_mode = "multiple"
             if not (isinstance(identifier_mode, str) and isinstance(service, str)):
@@ -438,20 +438,20 @@ class SqliteMoleculeCache:
 
     def exists(
         self,
-        service: str | Sequence[str],
-        identifier_mode: str | Sequence[str],
-        identifier: str | Sequence[str],
-    ) -> bool | list[bool]:
+        service: Union[str,  Sequence[str]],
+        identifier_mode: Union[str,  Sequence[str]],
+        identifier: Union[str,  Sequence[str]],
+    ) -> Union[bool,  list[bool]]:
         return self._search(
             service, identifier_mode, identifier, only_check_for_existance=True
         )
 
     def search(
         self,
-        service: str | Sequence[str],
-        identifier_mode: str | Sequence[str],
-        identifier: str | Sequence[str],
-    ) -> Optional[list[Molecule]] | list[Optional[list[Molecule]]]:
+        service: Union[str,  Sequence[str]],
+        identifier_mode: Union[str,  Sequence[str]],
+        identifier: Union[str,  Sequence[str]],
+    ) -> Union[Optional[list[Molecule]],  list[Optional[list[Molecule]]]]:
         return self._search(service, identifier_mode, identifier)
 
     def delete_expired(self) -> None:
