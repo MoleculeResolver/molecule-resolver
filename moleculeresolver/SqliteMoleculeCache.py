@@ -146,7 +146,7 @@ class SqliteMoleculeCache:
             # and then matching the returned ids to the inserted data. Idk what is faster though.
             molecule_ids = []
             for s, m, i, molecule in zip(
-                service, identifier_mode, identifier, molecules, strict=True
+                service, identifier_mode, identifier, molecules
             ):
                 if molecule is None:
                     this_data = (s, m, i, None, None)
@@ -181,7 +181,7 @@ class SqliteMoleculeCache:
 
             name_rows_to_insert = []
             cas_number_rows_to_insert = []
-            for molecule_id, molecule in zip(molecule_ids, molecules, strict=True):
+            for molecule_id, molecule in zip(molecule_ids, molecules):
                 if molecule:
                     if molecule.synonyms:
                         this_molecule_synonyms = [
@@ -350,7 +350,6 @@ class SqliteMoleculeCache:
                             service,
                             identifier_mode,
                             identifier,
-                            strict=True,
                         )
                     ),
                 )
