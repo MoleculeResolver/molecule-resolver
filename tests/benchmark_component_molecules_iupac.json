@@ -1,0 +1,2296 @@
+{
+    "Acetic Acid": {
+        "SMILES": "CC(=O)O",
+        "synonyms": [
+            "Acetic Acid",
+            "Ethanoic acid",
+            "Ethylic acid",
+            "Glacial acetic acid",
+            "Methanecarboxylic acid"
+        ],
+        "CAS": [
+            "64-19-7"
+        ],
+        "additional_information": "cas_registry; chemeo id: 51-574-8; cir; comptox id: DTXSID5024394|QC_LEVEL:1.0; nist id: C1186523; opsin; pubchem id: 176; srs id: 3848",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Acetic Acid",
+        "found_molecules": [],
+        "pubchem_cid": 176,
+        "formula": "C2H4O2",
+        "hill_formula": "C2H4O2",
+        "inchi": "InChI=1S/C2H4O2/c1-2(3)4/h1H3,(H,3,4)",
+        "inchikey": "QTBSBXVTEAMEQO-UHFFFAOYSA-N",
+        "iupac_name": "Ethanoic acid"
+    },
+    "Acetone": {
+        "SMILES": "CC(C)=O",
+        "synonyms": [
+            "Acetone",
+            "2-Propanone",
+            "Dimethyl ketone",
+            "propan-2-one",
+            "Methyl ketone"
+        ],
+        "CAS": [
+            "67-64-1"
+        ],
+        "additional_information": "cas_registry; chebi id: 15347; chemeo id: 50-301-1; cir; comptox id: DTXSID8021482|QC_LEVEL:1.0; nist id: C666524; opsin; pubchem id: 180; srs id: 4309",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Acetone",
+        "found_molecules": [],
+        "pubchem_cid": 180,
+        "formula": "C3H6O",
+        "hill_formula": "C3H6O",
+        "inchi": "InChI=1S/C3H6O/c1-3(2)4/h1-2H3",
+        "inchikey": "CSCPPACGZOOCGX-UHFFFAOYSA-N",
+        "iupac_name": "propan-2-one"
+    },
+    "Acetylsalicylic Acid": {
+        "SMILES": "CC(=O)Oc1ccccc1C(=O)O",
+        "synonyms": [
+            "Acetylsalicylic Acid",
+            "Aspirin",
+            "2-(acetyloxy)-Benzoic acid",
+            "2-(acetyloxy)benzoic acid",
+            "Rhodine"
+        ],
+        "CAS": [
+            "50-78-2"
+        ],
+        "additional_information": "cas_registry; chebi id: 15365; chemeo id: 43-227-2; cir; comptox id: DTXSID5020108|QC_LEVEL:1.0; nist id: C50782; opsin; pubchem id: 2244; srs id: 1198",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Acetylsalicylic Acid",
+        "found_molecules": [],
+        "pubchem_cid": 2244,
+        "formula": "C9H8O4",
+        "hill_formula": "C9H8O4",
+        "inchi": "InChI=1S/C9H8O4/c1-6(10)13-8-5-3-2-4-7(8)9(11)12/h2-5H,1H3,(H,11,12)",
+        "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
+        "iupac_name": "2-acetyloxybenzoic acid"
+    },
+    "Adenine": {
+        "SMILES": "Nc1ncnc2nc[nH]c12",
+        "synonyms": [
+            "Adenine",
+            "1H-Purin-6-amine",
+            "9H-Purin-6-amine",
+            "6-Aminopurine",
+            "Adeninimine"
+        ],
+        "CAS": [
+            "73-24-5"
+        ],
+        "additional_information": "cas_registry; cir; opsin; pubchem id: 190",
+        "mode": "name; name; name; name",
+        "service": "cas_registry; cir; opsin; pubchem",
+        "number_of_crosschecks": 4,
+        "identifier": "Adenine",
+        "found_molecules": [],
+        "pubchem_cid": 190,
+        "formula": "C5H5N5",
+        "hill_formula": "C5H5N5",
+        "inchi": "InChI=1S/C5H5N5/c6-4-3-5(9-1-7-3)10-2-8-4/h1-2H,(H3,6,7,8,9,10)",
+        "inchikey": "GFFGJBXGBJISGV-UHFFFAOYSA-N",
+        "iupac_name": "7H-purin-6-amine"
+    },
+    "Adenosine Triphosphate": {
+        "SMILES": "Nc1ncnc2c1ncn2[C@@H]1O[C@H](COP(=O)(O)OP(=O)(O)OP(=O)(O)O)[C@@H](O)[C@H]1O",
+        "synonyms": [
+            "Adenosine Triphosphate",
+            "atp",
+            "[[(2R,3S,4R,5R)-5-(6-aminopurin-9-yl)-3,4-dihydroxyoxolan-2-yl]methoxy-hydroxyphosphoryl] phosphono hydrogen phosphate",
+            "Adenosine 5'-triphosphate",
+            "Triphosphaden"
+        ],
+        "CAS": [
+            "56-65-5"
+        ],
+        "additional_information": "cir; comptox id: DTXSID6022559|QC_LEVEL:1.0; opsin; pubchem id: 5957; srs id: 2220",
+        "mode": "name; name; name; name; name",
+        "service": "cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 5,
+        "identifier": "Adenosine Triphosphate",
+        "found_molecules": [],
+        "pubchem_cid": 5957,
+        "formula": "C10H16N5O13P3",
+        "hill_formula": "C10H16N5O13P3",
+        "inchi": "InChI=1S/C10H16N5O13P3/c11-8-5-9(13-2-12-8)15(3-14-5)10-7(17)6(16)4(26-10)1-25-30(21,22)28-31(23,24)27-29(18,19)20/h2-4,6-7,10,16-17H,1H2,(H,21,22)(H,23,24)(H2,11,12,13)(H2,18,19,20)/t4-,6-,7-,10-/m1/s1",
+        "inchikey": "ZKHQWZAMYRWXGA-KQYNXXCUSA-N",
+        "iupac_name": "[[(2R,3S,4R,5R)-5-(6-aminopurin-9-yl)-3,4-dihydroxyoxolan-2-yl]methoxy-hydroxyphosphoryl] phosphono hydrogen phosphate"
+    },
+    "Adipic Acid": {
+        "SMILES": "O=C(O)CCCCC(=O)O",
+        "synonyms": [
+            "Adipic Acid",
+            "Hexanedioic acid",
+            "1,4-Butanedicarboxylic acid",
+            "Adipinic acid",
+            "1,6-Hexanedioic acid"
+        ],
+        "CAS": [
+            "124-04-9"
+        ],
+        "additional_information": "cas_registry; chebi id: 30832; chemeo id: 12-837-9; cir; comptox id: DTXSID7021605|QC_LEVEL:1.0; nist id: C124049; opsin; pubchem id: 196; srs id: 33340",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Adipic Acid",
+        "found_molecules": [],
+        "pubchem_cid": 196,
+        "formula": "C6H10O4",
+        "hill_formula": "C6H10O4",
+        "inchi": "InChI=1S/C6H10O4/c7-5(8)3-1-2-4-6(9)10/h1-4H2,(H,7,8)(H,9,10)",
+        "inchikey": "WNLRTRBMVRJNCN-UHFFFAOYSA-N",
+        "iupac_name": "hexanedioic acid"
+    },
+    "Aluminum(III) Oxide": {
+        "SMILES": "[Al+3].[Al+3].[O-2].[O-2].[O-2]",
+        "synonyms": [
+            "Aluminum(III) Oxide"
+        ],
+        "CAS": [],
+        "additional_information": "opsin",
+        "mode": "name",
+        "service": "opsin",
+        "number_of_crosschecks": 1,
+        "identifier": "Aluminum(III) Oxide",
+        "found_molecules": [],
+        "pubchem_cid": null,
+        "formula": "Al2O3",
+        "hill_formula": "Al2O3",
+        "inchi": "InChI=1S/2Al.3O/q2*+3;3*-2",
+        "inchikey": "PNEYBMLMFCGWSK-UHFFFAOYSA-N",
+        "iupac_name": "Aluminum(III) Oxide"
+    },
+    "Ammonia": {
+        "SMILES": "N",
+        "synonyms": [
+            "Ammonia",
+            "Ammonia gas",
+            "Nitro-Sil",
+            "Spirit of Hartshorn",
+            "azane"
+        ],
+        "CAS": [
+            "7664-41-7"
+        ],
+        "additional_information": "cas_registry; chebi id: 16134; chemeo id: 22-992-6; cir; comptox id: DTXSID0023872|QC_LEVEL:1.0; nist id: C84796145; opsin; pubchem id: 222; srs id: 152389",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Ammonia",
+        "found_molecules": [],
+        "pubchem_cid": 222,
+        "formula": "H3N",
+        "hill_formula": "H3N",
+        "inchi": "InChI=1S/H3N/h1H3",
+        "inchikey": "QGZKDVFQNNGYKY-UHFFFAOYSA-N",
+        "iupac_name": "azane"
+    },
+    "Ascorbic Acid": {
+        "SMILES": "O=C1O[C@H]([C@@H](O)CO)C(O)=C1O",
+        "synonyms": [
+            "Ascorbic Acid",
+            "(2R)-2-[(1S)-1,2-dihydroxyethyl]-3,4-dihydroxy-2H-furan-5-one",
+            "l-ascorbic acid",
+            "vitamin C",
+            "L-Xyloascorbic acid"
+        ],
+        "CAS": [
+            "50-81-7"
+        ],
+        "additional_information": "opsin; pubchem id: 54670067; srs id: 1214",
+        "mode": "name; name; name",
+        "service": "opsin; pubchem; srs",
+        "number_of_crosschecks": 3,
+        "identifier": "Ascorbic Acid",
+        "found_molecules": [],
+        "pubchem_cid": 54670067,
+        "formula": "C6H8O6",
+        "hill_formula": "C6H8O6",
+        "inchi": "InChI=1S/C6H8O6/c7-1-2(8)5-3(9)4(10)6(11)12-5/h2,5,7-10H,1H2/t2-,5+/m0/s1",
+        "inchikey": "CIWBSHSKHKDKBQ-JLAZNSOCSA-N",
+        "iupac_name": "(2R)-2-[(1S)-1,2-dihydroxyethyl]-3,4-dihydroxy-2H-furan-5-one"
+    },
+    "Aspartame": {
+        "SMILES": "COC(=O)C(Cc1ccccc1)NC(=O)C(N)CC(=O)O",
+        "synonyms": [
+            "Aspartame",
+            "<span class=\"text-smallcaps\">L</smallcap>-Phenylalanine, <smallcap>L</span>-\u03b1-aspartyl-, 2-methyl ester",
+            "Succinamic acid, 3-amino-N-(\u03b1-carboxyphenethyl)-, N-methyl ester, stereoisomer",
+            "<span class=\"text-smallcaps\">L</smallcap>-Phenylalanine, N-<smallcap>L</span>-\u03b1-aspartyl-, 1-methyl ester",
+            "<span class=\"text-smallcaps\">L</smallcap>-Aspartyl-<smallcap>L</span>-phenylalanine methyl ester"
+        ],
+        "CAS": [
+            "22839-47-0"
+        ],
+        "additional_information": "cas_registry; cir; srs id: 222604",
+        "mode": "name; name; name",
+        "service": "cas_registry; cir; srs",
+        "number_of_crosschecks": 3,
+        "identifier": "Aspartame",
+        "found_molecules": [],
+        "pubchem_cid": null,
+        "formula": "C14H18N2O5",
+        "hill_formula": "C14H18N2O5",
+        "inchi": "InChI=1S/C14H18N2O5/c1-21-14(20)11(7-9-5-3-2-4-6-9)16-13(19)10(15)8-12(17)18/h2-6,10-11H,7-8,15H2,1H3,(H,16,19)(H,17,18)",
+        "inchikey": "IAOZJIPTCAWIRG-UHFFFAOYSA-N",
+        "iupac_name": "3-amino-4-[(1-methoxy-1-oxo-3-phenylpropan-2-yl)amino]-4-oxobutanoic acid"
+    },
+    "Benzene": {
+        "SMILES": "c1ccccc1",
+        "synonyms": [
+            "Benzene",
+            "Benzol",
+            "Cyclohexatriene",
+            "Benzole",
+            "Coal naphtha"
+        ],
+        "CAS": [
+            "71-43-2"
+        ],
+        "additional_information": "cas_registry; chebi id: 16716; chemeo id: 12-667-8; cir; comptox id: DTXSID3039242|QC_LEVEL:1.0; nist id: C1076433; opsin; pubchem id: 241; srs id: 4754",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Benzene",
+        "found_molecules": [],
+        "pubchem_cid": 241,
+        "formula": "C6H6",
+        "hill_formula": "C6H6",
+        "inchi": "InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H",
+        "inchikey": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
+        "iupac_name": "benzene"
+    },
+    "Benzoic Acid": {
+        "SMILES": "O=C(O)c1ccccc1",
+        "synonyms": [
+            "Benzoic Acid",
+            "Benzenecarboxylic acid",
+            "Benzeneformic acid",
+            "Carboxybenzene",
+            "Dracylic acid"
+        ],
+        "CAS": [
+            "65-85-0"
+        ],
+        "additional_information": "cas_registry; chemeo id: 18-337-8; cir; comptox id: DTXSID6020143|QC_LEVEL:1.0; nist id: C65850; opsin; pubchem id: 243; srs id: 4044",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Benzoic Acid",
+        "found_molecules": [],
+        "pubchem_cid": 243,
+        "formula": "C7H6O2",
+        "hill_formula": "C7H6O2",
+        "inchi": "InChI=1S/C7H6O2/c8-7(9)6-4-2-1-3-5-6/h1-5H,(H,8,9)",
+        "inchikey": "WPYMKLBDIGXBTP-UHFFFAOYSA-N",
+        "iupac_name": "benzoic acid"
+    },
+    "Biphenyl ": {
+        "SMILES": "c1ccc(-c2ccccc2)cc1",
+        "synonyms": [
+            "Biphenyl",
+            "1,1'-biphenyl",
+            "Diphenyl",
+            "Phenylbenzene",
+            "Bibenzene"
+        ],
+        "CAS": [
+            "92-52-4"
+        ],
+        "additional_information": "cas_registry; chebi id: 17097; chemeo id: 41-472-2; cir; comptox id: DTXSID4020161|QC_LEVEL:1.0; nist id: C1486017; opsin; pubchem id: 7095; srs id: 14183",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Biphenyl",
+        "found_molecules": [],
+        "pubchem_cid": 7095,
+        "formula": "C12H10",
+        "hill_formula": "C12H10",
+        "inchi": "InChI=1S/C12H10/c1-3-7-11(8-4-1)12-9-5-2-6-10-12/h1-10H",
+        "inchikey": "ZUOUZKKEUPVFJK-UHFFFAOYSA-N",
+        "iupac_name": "1,1'-biphenyl"
+    },
+    "Butane": {
+        "SMILES": "CCCC",
+        "synonyms": [
+            "Butane",
+            "n-Butane",
+            "Diethyl",
+            "lpg",
+            "Liquefied petroleum gas"
+        ],
+        "CAS": [
+            "106-97-8"
+        ],
+        "additional_information": "cas_registry; chebi id: 37808; chemeo id: 26-823-9; cir; comptox id: DTXSID7024665|QC_LEVEL:1.0; nist id: C106978; opsin; pubchem id: 7843; srs id: 24026",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Butane",
+        "found_molecules": [],
+        "pubchem_cid": 7843,
+        "formula": "C4H10",
+        "hill_formula": "C4H10",
+        "inchi": "InChI=1S/C4H10/c1-3-4-2/h3-4H2,1-2H3",
+        "inchikey": "IJDNQMDRQITEOD-UHFFFAOYSA-N",
+        "iupac_name": "butane"
+    },
+    "Butene": {
+        "SMILES": "C=CCC",
+        "synonyms": [
+            "Butene",
+            "but-1-ene",
+            "1-butene",
+            "Ethylethylene",
+            "1-Butylene"
+        ],
+        "CAS": [
+            "106-98-9"
+        ],
+        "additional_information": "cir; pubchem id: 7844; srs id: 230482",
+        "mode": "name; name; name",
+        "service": "cir; pubchem; srs",
+        "number_of_crosschecks": 3,
+        "identifier": "Butene",
+        "found_molecules": [],
+        "pubchem_cid": 7844,
+        "formula": "C4H8",
+        "hill_formula": "C4H8",
+        "inchi": "InChI=1S/C4H8/c1-3-4-2/h3H,1,4H2,2H3",
+        "inchikey": "VXNZUUAINFGPBY-UHFFFAOYSA-N",
+        "iupac_name": "but-1-ene"
+    },
+    "Butyric Acid": {
+        "SMILES": "CCCC(=O)O",
+        "synonyms": [
+            "Butyric Acid",
+            "Butanoic acid",
+            "n-Butyric acid",
+            "Ethylacetic acid",
+            "1-Propanecarboxylic acid"
+        ],
+        "CAS": [
+            "107-92-6"
+        ],
+        "additional_information": "cas_registry; chebi id: 30772; chemeo id: 41-010-4; cir; comptox id: DTXSID8021515|QC_LEVEL:1.0; nist id: C107926; opsin; pubchem id: 264; srs id: 24729",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Butyric Acid",
+        "found_molecules": [],
+        "pubchem_cid": 264,
+        "formula": "C4H8O2",
+        "hill_formula": "C4H8O2",
+        "inchi": "InChI=1S/C4H8O2/c1-2-3-4(5)6/h2-3H2,1H3,(H,5,6)",
+        "inchikey": "FERIUCNNQQJTOY-UHFFFAOYSA-N",
+        "iupac_name": "butanoic acid"
+    },
+    "Caffeine": {
+        "SMILES": "Cn1c(=O)c2c(ncn2C)n(C)c1=O",
+        "synonyms": [
+            "Caffeine",
+            "3,7-dihydro-1,3,7-trimethyl-1H-Purine-2,6-dione",
+            "Guaranine",
+            "1,3,7-Trimethylxanthine",
+            "1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione"
+        ],
+        "CAS": [
+            "58-08-2"
+        ],
+        "additional_information": "cas_registry; chebi id: 27732; chemeo id: 39-014-3; cir; comptox id: DTXSID0020232|QC_LEVEL:1.0; nist id: C58082; opsin; pubchem id: 2519; srs id: 2741",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Caffeine",
+        "found_molecules": [],
+        "pubchem_cid": 2519,
+        "formula": "C8H10N4O2",
+        "hill_formula": "C8H10N4O2",
+        "inchi": "InChI=1S/C8H10N4O2/c1-10-4-9-6-5(10)7(13)12(3)8(14)11(6)2/h4H,1-3H3",
+        "inchikey": "RYYVLZVUVIJVGH-UHFFFAOYSA-N",
+        "iupac_name": "1,3,7-Trimethyl-3,7-dihydro-1H-purine-2,6-dione"
+    },
+    "Calcium Carbonate": {
+        "SMILES": "O=C([O-])[O-].[Ca+2]",
+        "synonyms": [
+            "Calcium Carbonate",
+            "calcium trioxidocarbonate",
+            "Calciumcarbonat",
+            "carbonate de calcium",
+            "carbonato de calcio"
+        ],
+        "CAS": [
+            "471-34-1"
+        ],
+        "additional_information": "chebi id: 3311; cir; comptox id: DTXSID3036238|QC_LEVEL:1.0; opsin; pubchem id: 10112; srs id: 46755",
+        "mode": "name; name; name; name; name; name",
+        "service": "chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Calcium Carbonate",
+        "found_molecules": [],
+        "pubchem_cid": 10112,
+        "formula": "CCaO3",
+        "hill_formula": "CCaO3",
+        "inchi": "InChI=1S/CH2O3.Ca/c2-1(3)4;/h(H2,2,3,4);/q;+2/p-2",
+        "inchikey": "VTYYLEPIZMXCLO-UHFFFAOYSA-L",
+        "iupac_name": "Calcium Carbonate"
+    },
+    "Calcium Oxide": {
+        "SMILES": "O=[Ca]",
+        "synonyms": [
+            "Calcium Oxide",
+            "Calcium monoxide",
+            "Calx",
+            "Calcia",
+            "Calxyl"
+        ],
+        "CAS": [
+            "1305-78-8"
+        ],
+        "additional_information": "cas_registry; chemeo id: 68-200-4; cir; pubchem id: 14778; srs id: 82263",
+        "mode": "name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; pubchem; srs",
+        "number_of_crosschecks": 5,
+        "identifier": "Calcium Oxide",
+        "found_molecules": [],
+        "pubchem_cid": 14778,
+        "formula": "CaO",
+        "hill_formula": "CaO",
+        "inchi": "InChI=1S/Ca.O",
+        "inchikey": "ODINCKMPIJJUCX-UHFFFAOYSA-N",
+        "iupac_name": "Calcium Oxide"
+    },
+    "Calcium Sulfate": {
+        "SMILES": "O=S(=O)([O-])[O-].[Ca+2]",
+        "synonyms": [
+            "Calcium Sulfate",
+            "calcium sulphate",
+            "Kalziumsulfat",
+            "Sulfuric acid, calcium salt",
+            "calcium;sulfate"
+        ],
+        "CAS": [
+            "7778-18-9"
+        ],
+        "additional_information": "chebi id: 31346; cir; comptox id: DTXSID9029699|QC_LEVEL:1.0; opsin; pubchem id: 24497; srs id: 153858",
+        "mode": "name; name; name; name; name; name",
+        "service": "chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Calcium Sulfate",
+        "found_molecules": [],
+        "pubchem_cid": 24497,
+        "formula": "CaO4S",
+        "hill_formula": "CaO4S",
+        "inchi": "InChI=1S/Ca.H2O4S/c;1-5(2,3)4/h;(H2,1,2,3,4)/q+2;/p-2",
+        "inchikey": "OSGAYBCDTDRGGQ-UHFFFAOYSA-L",
+        "iupac_name": "Calcium Sulfate"
+    },
+    "Chloroform": {
+        "SMILES": "ClC(Cl)Cl",
+        "synonyms": [
+            "Chloroform",
+            "Trichloromethane",
+            "trichloro-Methane",
+            "Formyl trichloride",
+            "Trichloroform"
+        ],
+        "CAS": [
+            "67-66-3"
+        ],
+        "additional_information": "cas_registry; chebi id: 35255; chemeo id: 21-368-0; cir; comptox id: DTXSID1020306|QC_LEVEL:1.0; nist id: B6007499; opsin; pubchem id: 6212; srs id: 4317",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Chloroform",
+        "found_molecules": [],
+        "pubchem_cid": 6212,
+        "formula": "CHCl3",
+        "hill_formula": "CHCl3",
+        "inchi": "InChI=1S/CHCl3/c2-1(3)4/h1H",
+        "inchikey": "HEDRZPFGACZZDS-UHFFFAOYSA-N",
+        "iupac_name": "chloroform"
+    },
+    "Cholesterol": {
+        "SMILES": "CC(C)CCC[C@@H](C)[C@H]1CC[C@H]2[C@@H]3CC=C4C[C@@H](O)CC[C@]4(C)[C@H]3CC[C@]12C",
+        "synonyms": [
+            "Cholesterol",
+            "cholest-5-en-3beta-ol",
+            "Cholesterin",
+            "(3beta,14beta,17alpha)-cholest-5-en-3-ol",
+            "(3S,8S,9S,10R,13R,14S,17R)-10,13-dimethyl-17-[(2R)-6-methylheptan-2-yl]-2,3,4,7,8,9,11,12,14,15,16,17-dodecahydro-1H-cyclopenta[a]phenanthren-3-ol"
+        ],
+        "CAS": [
+            "57-88-5"
+        ],
+        "additional_information": "chebi id: 16113; cir; comptox id: DTXSID3022401|QC_LEVEL:1.0; opsin; pubchem id: 5997; srs id: 2717",
+        "mode": "name; name; name; name; name; name",
+        "service": "chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Cholesterol",
+        "found_molecules": [],
+        "pubchem_cid": 5997,
+        "formula": "C27H46O",
+        "hill_formula": "C27H46O",
+        "inchi": "InChI=1S/C27H46O/c1-18(2)7-6-8-19(3)23-11-12-24-22-10-9-20-17-21(28)13-15-26(20,4)25(22)14-16-27(23,24)5/h9,18-19,21-25,28H,6-8,10-17H2,1-5H3/t19-,21+,22+,23-,24+,25+,26+,27-/m1/s1",
+        "inchikey": "HVYWMOMLDIMFJA-DPAQBDIFSA-N",
+        "iupac_name": "(3S,8S,9S,10R,13R,14S,17R)-10,13-dimethyl-17-[(2R)-6-methylheptan-2-yl]-2,3,4,7,8,9,11,12,14,15,16,17-dodecahydro-1H-cyclopenta[a]phenanthren-3-ol"
+    },
+    "Citric Acid": {
+        "SMILES": "O=C(O)CC(O)(CC(=O)O)C(=O)O",
+        "synonyms": [
+            "Citric Acid",
+            "2-hydroxy-1,2,3-Propanetricarboxylic acid",
+            "2-hydroxypropane-1,2,3-tricarboxylic acid",
+            "Aciletten",
+            "Citretten"
+        ],
+        "CAS": [
+            "77-92-9"
+        ],
+        "additional_information": "cas_registry; chebi id: 30769; cir; comptox id: DTXSID3020332|QC_LEVEL:1.0; nist id: C77929; opsin; pubchem id: 311; srs id: 6775",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Citric Acid",
+        "found_molecules": [],
+        "pubchem_cid": 311,
+        "formula": "C6H8O7",
+        "hill_formula": "C6H8O7",
+        "inchi": "InChI=1S/C6H8O7/c7-3(8)1-6(13,5(11)12)2-4(9)10/h13H,1-2H2,(H,7,8)(H,9,10)(H,11,12)",
+        "inchikey": "KRKNYBCHXYNGOX-UHFFFAOYSA-N",
+        "iupac_name": "2-hydroxypropane-1,2,3-tricarboxylic acid"
+    },
+    "Cocaine": {
+        "SMILES": "COC(=O)[C@H]1[C@@H](OC(=O)c2ccccc2)C[C@@H]2CC[C@H]1N2C",
+        "synonyms": [
+            "Cocaine",
+            "methyl (1R,2R,3S,5S)-3-(benzoyloxy)-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate",
+            "Kokain",
+            "(1R,2R,3S,5S)-2-(methoxycarbonyl)tropan-3-yl benzoate",
+            "(-)-cocaine"
+        ],
+        "CAS": [
+            "50-36-2"
+        ],
+        "additional_information": "chebi id: 27958; comptox id: DTXSID2038443|QC_LEVEL:1.0; pubchem id: 446220",
+        "mode": "name; name; name",
+        "service": "chebi; comptox; pubchem",
+        "number_of_crosschecks": 3,
+        "identifier": "Cocaine",
+        "found_molecules": [],
+        "pubchem_cid": 446220,
+        "formula": "C17H21NO4",
+        "hill_formula": "C17H21NO4",
+        "inchi": "InChI=1S/C17H21NO4/c1-18-12-8-9-13(18)15(17(20)21-2)14(10-12)22-16(19)11-6-4-3-5-7-11/h3-7,12-15H,8-10H2,1-2H3/t12-,13+,14-,15+/m0/s1",
+        "inchikey": "ZPUCINDJVBIVPJ-LJISPDSOSA-N",
+        "iupac_name": "methyl (1R,2R,3S,5S)-3-benzoyloxy-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate"
+    },
+    "Cytosine": {
+        "SMILES": "Nc1cc[nH]c(=O)n1",
+        "synonyms": [
+            "Cytosine",
+            "4-amino-2(1H)-pyrimidinone",
+            "4-aminopyrimidin-2(1H)-one",
+            "4-amino-2-hydroxypyrimidine",
+            "c"
+        ],
+        "CAS": [
+            "71-30-7"
+        ],
+        "additional_information": "chebi id: 16040; chemeo id: 64-259-4; opsin; srs id: 4721",
+        "mode": "name; name; name; name",
+        "service": "chebi; chemeo; opsin; srs",
+        "number_of_crosschecks": 4,
+        "identifier": "Cytosine",
+        "found_molecules": [],
+        "pubchem_cid": null,
+        "formula": "C4H5N3O",
+        "hill_formula": "C4H5N3O",
+        "inchi": "InChI=1S/C4H5N3O/c5-3-1-2-6-4(8)7-3/h1-2H,(H3,5,6,7,8)",
+        "inchikey": "OPTASPLRGRRNAP-UHFFFAOYSA-N",
+        "iupac_name": "6-amino-1H-pyrimidin-2-one"
+    },
+    "DDT": {
+        "SMILES": "Clc1ccc(C(c2ccc(Cl)cc2)C(Cl)(Cl)Cl)cc1",
+        "synonyms": [
+            "ddt",
+            "p,p'-DDT",
+            "1,1,1-trichloro-2,2-bis(p-chlorophenyl)-Ethane",
+            "\u03b1,\u03b1-Bis(p-chlorophenyl)-\u03b2,\u03b2,\u03b2-trichlorethane",
+            "Dichlorodiphenyltrichloroethane"
+        ],
+        "CAS": [
+            "50-29-3"
+        ],
+        "additional_information": "cas_registry; chebi id: 16130; chemeo id: 82-476-3; cir; comptox id: DTXSID4020375|QC_LEVEL:1.0; nist id: C50293; pubchem id: 3036; srs id: 1107",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "DDT",
+        "found_molecules": [],
+        "pubchem_cid": 3036,
+        "formula": "C14H9Cl5",
+        "hill_formula": "C14H9Cl5",
+        "inchi": "InChI=1S/C14H9Cl5/c15-11-5-1-9(2-6-11)13(14(17,18)19)10-3-7-12(16)8-4-10/h1-8,13H",
+        "inchikey": "YVGGHNCTFXOJCH-UHFFFAOYSA-N",
+        "iupac_name": "1-chloro-4-[2,2,2-trichloro-1-(4-chlorophenyl)ethyl]benzene"
+    },
+    "DEET": {
+        "SMILES": "CCN(CC)C(=O)c1cccc(C)c1",
+        "synonyms": [
+            "deet",
+            "N,N-Diethyl-m-toluamide",
+            "N,N-diethyl-3-methyl-Benzamide",
+            "N,N-Diethyl-3-methylbenzamide",
+            "diethyltoluamide"
+        ],
+        "CAS": [
+            "134-62-3"
+        ],
+        "additional_information": "cas_registry; chebi id: 7071; chemeo id: 13-638-9; cir; comptox id: DTXSID2021995|QC_LEVEL:1.0; nist id: C134623; pubchem id: 4284; srs id: 36137",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "DEET",
+        "found_molecules": [],
+        "pubchem_cid": 4284,
+        "formula": "C12H17NO",
+        "hill_formula": "C12H17NO",
+        "inchi": "InChI=1S/C12H17NO/c1-4-13(5-2)12(14)11-8-6-7-10(3)9-11/h6-9H,4-5H2,1-3H3",
+        "inchikey": "MMOXZBCLCQITDF-UHFFFAOYSA-N",
+        "iupac_name": "N,N-diethyl-3-methylbenzamide"
+    },
+    "R-12": {
+        "SMILES": "FC(F)(Cl)Cl",
+        "synonyms": [
+            "Difluorodichloromethane",
+            "Dwuchlorodwufluorometan",
+            "dichlorodifluoro-Methane",
+            "R 12, Refrigerant",
+            "Dichlorodifluoromethane"
+        ],
+        "CAS": [
+            "75-71-8"
+        ],
+        "additional_information": "chemeo id: 13-346-3; nist id: C75718",
+        "mode": "name; name",
+        "service": "chemeo; nist",
+        "number_of_crosschecks": 2,
+        "identifier": "R-12",
+        "found_molecules": [],
+        "pubchem_cid": null,
+        "formula": "CCl2F2",
+        "hill_formula": "CCl2F2",
+        "inchi": "InChI=1S/CCl2F2/c2-1(3,4)5",
+        "inchikey": "PXBRQCKWGAHEHS-UHFFFAOYSA-N",
+        "iupac_name": "dichloro(difluoro)methane"
+    },
+    "Dopamine": {
+        "SMILES": "NCCc1ccc(O)c(O)c1",
+        "synonyms": [
+            "Dopamine",
+            "4-(2-aminoethyl)-1,2-Benzenediol",
+            "4-(2-aminoethyl)-Pyrocatechol",
+            "4-(2-aminoethyl)benzene-1,2-diol",
+            "Dopamin"
+        ],
+        "CAS": [
+            "51-61-6"
+        ],
+        "additional_information": "cas_registry; chebi id: 18243; chemeo id: 36-704-0; cir; comptox id: DTXSID6022420|QC_LEVEL:1.0; nist id: C51616; opsin; pubchem id: 681; srs id: 17163551",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Dopamine",
+        "found_molecules": [],
+        "pubchem_cid": 681,
+        "formula": "C8H11NO2",
+        "hill_formula": "C8H11NO2",
+        "inchi": "InChI=1S/C8H11NO2/c9-4-3-6-1-2-7(10)8(11)5-6/h1-2,5,10-11H,3-4,9H2",
+        "inchikey": "VYFYYTLLBUKUHU-UHFFFAOYSA-N",
+        "iupac_name": "4-(2-aminoethyl)benzene-1,2-diol"
+    },
+    "Adrenaline": {
+        "SMILES": "CNC[C@H](O)c1ccc(O)c(O)c1",
+        "synonyms": [
+            "Adrenaline",
+            "Epinephrine",
+            "4-[(1R)-1-Hydroxy-2-(methylamino)ethyl]benzene-1,2-diol",
+            "(-)-Epinephrine",
+            "(R)-4-[1-hydroxy-2-(methylamino)ethyl]-1,2-Benzenediol"
+        ],
+        "CAS": [
+            "51-43-4"
+        ],
+        "additional_information": "cir; comptox id: DTXSID5022986|QC_LEVEL:1.0; nist id: C51434; pubchem id: 5816",
+        "mode": "name; name; name; name",
+        "service": "cir; comptox; nist; pubchem",
+        "number_of_crosschecks": 4,
+        "identifier": "Adrenaline",
+        "found_molecules": [],
+        "pubchem_cid": 5816,
+        "formula": "C9H13NO3",
+        "hill_formula": "C9H13NO3",
+        "inchi": "InChI=1S/C9H13NO3/c1-10-5-9(13)6-2-3-7(11)8(12)4-6/h2-4,9-13H,5H2,1H3/t9-/m0/s1",
+        "inchikey": "UCTWMZQNUQWSLP-VIFPVBQESA-N",
+        "iupac_name": "4-[(1R)-1-hydroxy-2-(methylamino)ethyl]benzene-1,2-diol"
+    },
+    "Ethane": {
+        "SMILES": "CC",
+        "synonyms": [
+            "Ethane",
+            "Bimethyl",
+            "Dimethyl",
+            "Methylmethane",
+            "Ethyl hydride"
+        ],
+        "CAS": [
+            "74-84-0"
+        ],
+        "additional_information": "cas_registry; chebi id: 42266; chemeo id: 31-101-4; cir; comptox id: DTXSID6026377|QC_LEVEL:1.0; nist id: R633468; opsin; pubchem id: 6324; srs id: 5082",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Ethane",
+        "found_molecules": [],
+        "pubchem_cid": 6324,
+        "formula": "C2H6",
+        "hill_formula": "C2H6",
+        "inchi": "InChI=1S/C2H6/c1-2/h1-2H3",
+        "inchikey": "OTMSDBZUPAUEDD-UHFFFAOYSA-N",
+        "iupac_name": "ethane"
+    },
+    "Ethylene": {
+        "SMILES": "C=C",
+        "synonyms": [
+            "Ethylene",
+            "Ethene",
+            "Acetene",
+            "Elayl",
+            "Bicarburretted hydrogen"
+        ],
+        "CAS": [
+            "74-85-1"
+        ],
+        "additional_information": "cas_registry; chemeo id: 56-863-2; cir; comptox id: DTXSID1026378|QC_LEVEL:1.0; nist id: C2813629; opsin; pubchem id: 6325; srs id: 5090",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Ethylene",
+        "found_molecules": [],
+        "pubchem_cid": 6325,
+        "formula": "C2H4",
+        "hill_formula": "C2H4",
+        "inchi": "InChI=1S/C2H4/c1-2/h1-2H2",
+        "inchikey": "VGGSQFUCUMXWEO-UHFFFAOYSA-N",
+        "iupac_name": "ethene"
+    },
+    "Ether": {
+        "SMILES": "CCOCC",
+        "synonyms": [
+            "Ether",
+            "Ethyl ether",
+            "Diethyl ether",
+            "1,1'-oxybis-ethane",
+            "Anaesthetic ether"
+        ],
+        "CAS": [
+            "60-29-7"
+        ],
+        "additional_information": "cas_registry; chemeo id: 52-430-6; cir; nist id: C60297; pubchem id: 3283; srs id: 3335",
+        "mode": "name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; nist; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Ether",
+        "found_molecules": [],
+        "pubchem_cid": 3283,
+        "formula": "C4H10O",
+        "hill_formula": "C4H10O",
+        "inchi": "InChI=1S/C4H10O/c1-3-5-4-2/h3-4H2,1-2H3",
+        "inchikey": "RTZKZFJDLAIYFH-UHFFFAOYSA-N",
+        "iupac_name": "ethoxyethane"
+    },
+    "Ethanol": {
+        "SMILES": "CCO",
+        "synonyms": [
+            "Ethanol",
+            "Alcohol",
+            "Ethyl alcohol",
+            "Algrain",
+            "Anhydrol"
+        ],
+        "CAS": [
+            "64-17-5"
+        ],
+        "additional_information": "cas_registry; chebi id: 16236; chemeo id: 35-653-8; cir; comptox id: DTXSID9020584|QC_LEVEL:1.0; nist id: C1516081; opsin; pubchem id: 702; srs id: 3822",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Ethanol",
+        "found_molecules": [],
+        "pubchem_cid": 702,
+        "formula": "C2H6O",
+        "hill_formula": "C2H6O",
+        "inchi": "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
+        "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+        "iupac_name": "ethanol"
+    },
+    "Ethylenediaminetetraacetic Acid": {
+        "SMILES": "O=C(O)CN(CCN(CC(=O)O)CC(=O)O)CC(=O)O",
+        "synonyms": [
+            "Ethylenediaminetetraacetic Acid",
+            "(ethylenedinitrilo)tetra-Acetic acid",
+            "Edetic Acid",
+            "N,N'-1,2-ethanediylbis[N-(carboxymethyl)-Glycine",
+            "2,2',2'',2'''-(ethane-1,2-diyldinitrilo)tetraacetic acid"
+        ],
+        "CAS": [
+            "60-00-4"
+        ],
+        "additional_information": "cas_registry; chebi id: 4735; chemeo id: 119-689-6; cir; comptox id: DTXSID6022977|QC_LEVEL:1.0; nist id: C60004; opsin; pubchem id: 6049; srs id: 3228",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Ethylenediaminetetraacetic Acid",
+        "found_molecules": [],
+        "pubchem_cid": 6049,
+        "formula": "C10H16N2O8",
+        "hill_formula": "C10H16N2O8",
+        "inchi": "InChI=1S/C10H16N2O8/c13-7(14)3-11(4-8(15)16)1-2-12(5-9(17)18)6-10(19)20/h1-6H2,(H,13,14)(H,15,16)(H,17,18)(H,19,20)",
+        "inchikey": "KCXVZYZYPLLWCC-UHFFFAOYSA-N",
+        "iupac_name": "2-[2-[bis(carboxymethyl)amino]ethyl-(carboxymethyl)amino]acetic acid"
+    },
+    "Fluoxetine": {
+        "SMILES": "CNCCC(Oc1ccc(C(F)(F)F)cc1)c1ccccc1",
+        "synonyms": [
+            "Fluoxetine",
+            "N-Methyl-3-phenyl-3-[4-(trifluoromethyl)phenoxy]propan-1-amine",
+            "Prozac",
+            "N-methyl-\u03b3-[4-(trifluoromethyl)phenoxy]-Benzenepropanamine",
+            "(\u00b1)-N-methyl-\u03b3-[4-(trifluoromethyl)phenoxy]-Benzenepropanamine"
+        ],
+        "CAS": [
+            "54910-89-3"
+        ],
+        "additional_information": "cas_registry; chemeo id: 106-550-3; cir; comptox id: DTXSID7023067|QC_LEVEL:1.0; nist id: C54910893; pubchem id: 3386; srs id: 1735870",
+        "mode": "name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; pubchem; srs",
+        "number_of_crosschecks": 7,
+        "identifier": "Fluoxetine",
+        "found_molecules": [],
+        "pubchem_cid": 3386,
+        "formula": "C17H18F3NO",
+        "hill_formula": "C17H18F3NO",
+        "inchi": "InChI=1S/C17H18F3NO/c1-21-12-11-16(13-5-3-2-4-6-13)22-15-9-7-14(8-10-15)17(18,19)20/h2-10,16,21H,11-12H2,1H3",
+        "inchikey": "RTHCYVBBDHJXIQ-UHFFFAOYSA-N",
+        "iupac_name": "N-methyl-3-phenyl-3-[4-(trifluoromethyl)phenoxy]propan-1-amine"
+    },
+    "Formaldehyde": {
+        "SMILES": "C=O",
+        "synonyms": [
+            "Formaldehyde",
+            "Formalin",
+            "Methanal",
+            "bfv",
+            "Fannoform"
+        ],
+        "CAS": [
+            "50-00-0"
+        ],
+        "additional_information": "cas_registry; chebi id: 16842; chemeo id: 44-234-3; cir; comptox id: DTXSID7020637|QC_LEVEL:1.0; nist id: C1664999; opsin; pubchem id: 712; srs id: 1008",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Formaldehyde",
+        "found_molecules": [],
+        "pubchem_cid": 712,
+        "formula": "CH2O",
+        "hill_formula": "CH2O",
+        "inchi": "InChI=1S/CH2O/c1-2/h1H2",
+        "inchikey": "WSFSSNUMVMOOMR-UHFFFAOYSA-N",
+        "iupac_name": "formaldehyde"
+    },
+    "Formic Acid": {
+        "SMILES": "O=CO",
+        "synonyms": [
+            "Formic Acid",
+            "Aminic acid",
+            "Methanoic acid",
+            "Formylic acid",
+            "bilorin"
+        ],
+        "CAS": [
+            "64-18-6"
+        ],
+        "additional_information": "cas_registry; chebi id: 30751; chemeo id: 39-377-1; cir; comptox id: DTXSID2024115|QC_LEVEL:1.0; nist id: C64186; opsin; pubchem id: 284; srs id: 3830",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Formic Acid",
+        "found_molecules": [],
+        "pubchem_cid": 284,
+        "formula": "CH2O2",
+        "hill_formula": "CH2O2",
+        "inchi": "InChI=1S/CH2O2/c2-1-3/h1H,(H,2,3)",
+        "inchikey": "BDAGIHXWWSANSR-UHFFFAOYSA-N",
+        "iupac_name": "formic acid"
+    },
+    "Glucose": {
+        "SMILES": "O=C[C@H](O)[C@@H](O)[C@H](O)[C@H](O)CO",
+        "synonyms": [
+            "Glucose",
+            "D-Glucose",
+            "DL-Glucose",
+            "Cartose",
+            "Cerelose"
+        ],
+        "CAS": [
+            "58367-01-4"
+        ],
+        "additional_information": "comptox id: DTXSID4048729|QC_LEVEL:1.0; nist id: C3458284; opsin",
+        "mode": "name; name; name",
+        "service": "comptox; nist; opsin",
+        "number_of_crosschecks": 3,
+        "identifier": "Glucose",
+        "found_molecules": [],
+        "pubchem_cid": null,
+        "formula": "C6H12O6",
+        "hill_formula": "C6H12O6",
+        "inchi": "InChI=1S/C6H12O6/c7-1-3(9)5(11)6(12)4(10)2-8/h1,3-6,8-12H,2H2/t3-,4+,5+,6+/m0/s1",
+        "inchikey": "GZCGUPFRVQAUEE-SLPGGIOYSA-N",
+        "iupac_name": "(2R,3S,4R,5R)-2,3,4,5,6-pentahydroxyhexanal"
+    },
+    "Glycerol": {
+        "SMILES": "OCC(O)CO",
+        "synonyms": [
+            "Glycerol",
+            "1,2,3-Propanetriol",
+            "Glycerin",
+            "Glycerine",
+            "Propane-1,2,3-triol"
+        ],
+        "CAS": [
+            "56-81-5"
+        ],
+        "additional_information": "cas_registry; chemeo id: 47-118-9; cir; comptox id: DTXSID9020663|QC_LEVEL:1.0; nist id: C56815; opsin; pubchem id: 753; srs id: 2279",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Glycerol",
+        "found_molecules": [],
+        "pubchem_cid": 753,
+        "formula": "C3H8O3",
+        "hill_formula": "C3H8O3",
+        "inchi": "InChI=1S/C3H8O3/c4-1-3(6)2-5/h3-6H,1-2H2",
+        "inchikey": "PEDCQBHIVMGVHV-UHFFFAOYSA-N",
+        "iupac_name": "propane-1,2,3-triol"
+    },
+    "Guanine": {
+        "SMILES": "Nc1nc2nc[nH]c2c(=O)[nH]1",
+        "synonyms": [
+            "Guanine",
+            "2-amino-1,7-dihydro-6H-Purin-6-one",
+            "2-amino-1,9-dihydro-6H-purin-6-one",
+            "2-amino-1,7-dihydropurin-6-one",
+            "2-amino-Hypoxanthine"
+        ],
+        "CAS": [
+            "73-40-5"
+        ],
+        "additional_information": "opsin; pubchem id: 135398634; srs id: 5009",
+        "mode": "name; name; name",
+        "service": "opsin; pubchem; srs",
+        "number_of_crosschecks": 3,
+        "identifier": "Guanine",
+        "found_molecules": [],
+        "pubchem_cid": 135398634,
+        "formula": "C5H5N5O",
+        "hill_formula": "C5H5N5O",
+        "inchi": "InChI=1S/C5H5N5O/c6-5-9-3-2(4(11)10-5)7-1-8-3/h1H,(H4,6,7,8,9,10,11)",
+        "inchikey": "UYTPUPDQBNUYGX-UHFFFAOYSA-N",
+        "iupac_name": "2-amino-1,7-dihydropurin-6-one"
+    },
+    "Hydrochloric Acid": {
+        "SMILES": "Cl",
+        "synonyms": [
+            "Hydrochloric Acid",
+            "Hydrogen chloride",
+            "Chlorohydric acid",
+            "Muriatic acid",
+            "Dilute hydrochloric acid"
+        ],
+        "CAS": [
+            "7647-01-0"
+        ],
+        "additional_information": "cas_registry; chemeo id: 57-172-8; comptox id: DTXSID2020711|QC_LEVEL:1.0; nist id: C7698057; opsin; pubchem id: 313; srs id: 152231",
+        "mode": "name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 7,
+        "identifier": "Hydrochloric Acid",
+        "found_molecules": [],
+        "pubchem_cid": 313,
+        "formula": "HCl",
+        "hill_formula": "ClH",
+        "inchi": "InChI=1S/ClH/h1H",
+        "inchikey": "VEXZGXHMUGYJMC-UHFFFAOYSA-N",
+        "iupac_name": "Hydrogen chloride"
+    },
+    "Hydrogen Peroxide": {
+        "SMILES": "OO",
+        "synonyms": [
+            "Hydrogen Peroxide",
+            "Albone",
+            "Inhibine",
+            "Perhydrol",
+            "dihydrogen dioxide"
+        ],
+        "CAS": [
+            "7722-84-1"
+        ],
+        "additional_information": "cas_registry; chebi id: 16240; chemeo id: 67-803-6; cir; comptox id: DTXSID2020715|QC_LEVEL:1.0; nist id: C7722841; opsin; pubchem id: 784; srs id: 153015",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Hydrogen Peroxide",
+        "found_molecules": [],
+        "pubchem_cid": 784,
+        "formula": "H2O2",
+        "hill_formula": "H2O2",
+        "inchi": "InChI=1S/H2O2/c1-2/h1-2H",
+        "inchikey": "MHAJPDPJQMAIIY-UHFFFAOYSA-N",
+        "iupac_name": "hydrogen peroxide"
+    },
+    "Hydrogen Sulfide": {
+        "SMILES": "S",
+        "synonyms": [
+            "Hydrogen Sulfide",
+            "Hydrosulfuric acid",
+            "dihydrogen monosulfide",
+            "Stink damp",
+            "Sulfur hydride"
+        ],
+        "CAS": [
+            "7783-06-4"
+        ],
+        "additional_information": "cas_registry; chebi id: 16136; chemeo id: 51-105-8; cir; comptox id: DTXSID4024149|QC_LEVEL:1.0; nist id: C7783064; opsin; pubchem id: 402; srs id: 154518",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Hydrogen Sulfide",
+        "found_molecules": [],
+        "pubchem_cid": 402,
+        "formula": "H2S",
+        "hill_formula": "H2S",
+        "inchi": "InChI=1S/H2S/h1H2",
+        "inchikey": "RWSOTUBLDIXVET-UHFFFAOYSA-N",
+        "iupac_name": "sulfane"
+    },
+    "Ibuprofen": {
+        "SMILES": "CC(C)Cc1ccc(C(C)C(=O)O)cc1",
+        "synonyms": [
+            "Ibuprofen",
+            "\u03b1-methyl-4-(2-methylpropyl)-Benzeneacetic acid",
+            "p-isobutyl-Hydratropic acid",
+            "2-[4-(2-Methylpropyl)phenyl]propanoic acid",
+            "\u03b1-Methyl-4-(2-methylpropyl)benzeneacetic acid"
+        ],
+        "CAS": [
+            "15687-27-1"
+        ],
+        "additional_information": "cas_registry; chemeo id: 20-897-4; cir; comptox id: DTXSID5020732|QC_LEVEL:1.0; nist id: T999947192; opsin; pubchem id: 3672; srs id: 200931",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Ibuprofen",
+        "found_molecules": [],
+        "pubchem_cid": 3672,
+        "formula": "C13H18O2",
+        "hill_formula": "C13H18O2",
+        "inchi": "InChI=1S/C13H18O2/c1-9(2)8-11-4-6-12(7-5-11)10(3)13(14)15/h4-7,9-10H,8H2,1-3H3,(H,14,15)",
+        "inchikey": "HEFNNWSXXWATRW-UHFFFAOYSA-N",
+        "iupac_name": "2-[4-(2-methylpropyl)phenyl]propanoic acid"
+    },
+    "Indigo": {
+        "SMILES": "O=C1C(=C2Nc3ccccc3C2=O)Nc2ccccc21",
+        "synonyms": [
+            "Indigo",
+            "2-(1,3-dihydro-3-oxo-2H-indol-2-ylidene)-1,2-dihydro-3H-Indol-3-one",
+            "Indigo Blue",
+            "[\u0394<sup>2,2\u2032</sup>-Biindoline]-3,3\u2032-dione",
+            "Indigo Pure BASF"
+        ],
+        "CAS": [
+            "482-89-3"
+        ],
+        "additional_information": "cas_registry; chemeo id: 114-901-4; comptox id: DTXSID3026279|QC_LEVEL:1.0; srs id: 47183",
+        "mode": "name; name; name; name",
+        "service": "cas_registry; chemeo; comptox; srs",
+        "number_of_crosschecks": 4,
+        "identifier": "Indigo",
+        "found_molecules": [],
+        "pubchem_cid": null,
+        "formula": "C16H10N2O2",
+        "hill_formula": "C16H10N2O2",
+        "inchi": "InChI=1S/C16H10N2O2/c19-15-9-5-1-3-7-11(9)17-13(15)14-16(20)10-6-2-4-8-12(10)18-14/h1-8,17-18H",
+        "inchikey": "COHYTHOBJLSHDF-UHFFFAOYSA-N",
+        "iupac_name": "[2,2'-biindolinylidene]-3,3'-dione"
+    },
+    "Iron(III) Oxide": {
+        "SMILES": "O=[Fe]O[Fe]=O",
+        "synonyms": [
+            "Iron(III) Oxide",
+            "diiron trioxide",
+            "iron oxide red",
+            "mu-Oxido[bis(oxido)]diiron",
+            "Indian red"
+        ],
+        "CAS": [
+            "1309-37-1"
+        ],
+        "additional_information": "chemeo id: 86-147-4; cir; comptox id: DTXSID0029632|QC_LEVEL:1.0; pubchem id: 518696",
+        "mode": "name; name; name; name",
+        "service": "chemeo; cir; comptox; pubchem",
+        "number_of_crosschecks": 4,
+        "identifier": "Iron(III) Oxide",
+        "found_molecules": [],
+        "pubchem_cid": 518696,
+        "formula": "Fe2O3",
+        "hill_formula": "Fe2O3",
+        "inchi": "InChI=1S/2Fe.3O",
+        "inchikey": "JEIPFZHSYJVQDO-UHFFFAOYSA-N",
+        "iupac_name": "Iron(III) Oxide"
+    },
+    "Isooctane": {
+        "SMILES": "CC(C)CC(C)(C)C",
+        "synonyms": [
+            "Isooctane",
+            "2,2,4-Trimethylpentane",
+            "Isobutyltrimethylmethane",
+            "2,2,4-trimethyl-Pentane",
+            "iso-Octane"
+        ],
+        "CAS": [
+            "540-84-1"
+        ],
+        "additional_information": "cas_registry; chebi id: 62805; chemeo id: 55-702-1; cir; nist id: C540841; opsin; pubchem id: 10907",
+        "mode": "name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; nist; opsin; pubchem",
+        "number_of_crosschecks": 7,
+        "identifier": "Isooctane",
+        "found_molecules": [],
+        "pubchem_cid": 10907,
+        "formula": "C8H18",
+        "hill_formula": "C8H18",
+        "inchi": "InChI=1S/C8H18/c1-7(2)6-8(3,4)5/h7H,6H2,1-5H3",
+        "inchikey": "NHTMVDHEPJAVLT-UHFFFAOYSA-N",
+        "iupac_name": "2,2,4-trimethylpentane"
+    },
+    "Isoprene": {
+        "SMILES": "C=CC(=C)C",
+        "synonyms": [
+            "Isoprene",
+            "2-methyl-1,3-Butadiene",
+            "2-Methylbutadiene",
+            "2-methylbuta-1,3-diene",
+            "Isopentadiene"
+        ],
+        "CAS": [
+            "78-79-5"
+        ],
+        "additional_information": "cas_registry; chebi id: 35194; chemeo id: 10-713-8; cir; comptox id: DTXSID2020761|QC_LEVEL:1.0; nist id: C78795; opsin; pubchem id: 6557; srs id: 7328",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Isoprene",
+        "found_molecules": [],
+        "pubchem_cid": 6557,
+        "formula": "C5H8",
+        "hill_formula": "C5H8",
+        "inchi": "InChI=1S/C5H8/c1-4-5(2)3/h4H,1-2H2,3H3",
+        "inchikey": "RRHGJUQNOFWUDK-UHFFFAOYSA-N",
+        "iupac_name": "2-methylbuta-1,3-diene"
+    },
+    "l-Dopa": {
+        "SMILES": "N[C@@H](Cc1ccc(O)c(O)c1)C(=O)O",
+        "synonyms": [
+            "l-Dopa",
+            "Levodopa",
+            "3-Hydroxy-L-tyrosine",
+            "(2S)-2-amino-3-(3,4-dihydroxyphenyl)propanoic acid",
+            "L-3-(3,4-dihydroxyphenyl)-Alanine"
+        ],
+        "CAS": [
+            "59-92-7"
+        ],
+        "additional_information": "chebi id: 15765; comptox id: DTXSID9023209|QC_LEVEL:1.0; nist id: C63843; opsin; pubchem id: 6047",
+        "mode": "name; name; name; name; name",
+        "service": "chebi; comptox; nist; opsin; pubchem",
+        "number_of_crosschecks": 5,
+        "identifier": "l-Dopa",
+        "found_molecules": [],
+        "pubchem_cid": 6047,
+        "formula": "C9H11NO4",
+        "hill_formula": "C9H11NO4",
+        "inchi": "InChI=1S/C9H11NO4/c10-6(9(13)14)3-5-1-2-7(11)8(12)4-5/h1-2,4,6,11-12H,3,10H2,(H,13,14)/t6-/m0/s1",
+        "inchikey": "WTDRDQBEARUVNC-LURJTMIESA-N",
+        "iupac_name": "(2S)-2-amino-3-(3,4-dihydroxyphenyl)propanoic acid"
+    },
+    "Methane": {
+        "SMILES": "C",
+        "synonyms": [
+            "Methane",
+            "Marsh gas",
+            "Methyl hydride",
+            "Biogas",
+            "Fire Damp"
+        ],
+        "CAS": [
+            "74-82-8"
+        ],
+        "additional_information": "cas_registry; chebi id: 16183; chemeo id: 27-471-9; cir; comptox id: DTXSID8025545|QC_LEVEL:1.0; nist id: C74828; opsin; pubchem id: 297; srs id: 5066",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Methane",
+        "found_molecules": [],
+        "pubchem_cid": 297,
+        "formula": "CH4",
+        "hill_formula": "CH4",
+        "inchi": "InChI=1S/CH4/h1H4",
+        "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+        "iupac_name": "methane"
+    },
+    "Methyl Alcohol": {
+        "SMILES": "CO",
+        "synonyms": [
+            "Methyl Alcohol",
+            "Methanol",
+            "Carbinol",
+            "Methyl hydroxide",
+            "wood alcohol"
+        ],
+        "CAS": [
+            "67-56-1"
+        ],
+        "additional_information": "cas_registry; chemeo id: 69-136-5; cir; comptox id: DTXSID2021731|QC_LEVEL:1.0; nist id: C1849292; opsin; pubchem id: 887; srs id: 4283",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Methyl Alcohol",
+        "found_molecules": [],
+        "pubchem_cid": 887,
+        "formula": "CH4O",
+        "hill_formula": "CH4O",
+        "inchi": "InChI=1S/CH4O/c1-2/h2H,1H3",
+        "inchikey": "OKKJLVBELUTLKV-UHFFFAOYSA-N",
+        "iupac_name": "methanol"
+    },
+    "Methylphenidate": {
+        "SMILES": "COC(=O)C(c1ccccc1)C1CCCCN1",
+        "synonyms": [
+            "Methylphenidate",
+            "Calocain",
+            "2-Piperidineacetic acid, \u03b1-phenyl-, methyl ester",
+            "Methylphenidan",
+            "Concerta"
+        ],
+        "CAS": [
+            "113-45-1"
+        ],
+        "additional_information": "cas_registry; chemeo id: 42-778-2; cir; comptox id: DTXSID5023299|QC_LEVEL:1.0; nist id: C113451; pubchem id: 4158",
+        "mode": "name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; pubchem",
+        "number_of_crosschecks": 6,
+        "identifier": "Methylphenidate",
+        "found_molecules": [],
+        "pubchem_cid": 4158,
+        "formula": "C14H19NO2",
+        "hill_formula": "C14H19NO2",
+        "inchi": "InChI=1S/C14H19NO2/c1-17-14(16)13(11-7-3-2-4-8-11)12-9-5-6-10-15-12/h2-4,7-8,12-13,15H,5-6,9-10H2,1H3",
+        "inchikey": "DUGOZIWVEXMGBE-UHFFFAOYSA-N",
+        "iupac_name": "methyl 2-phenyl-2-piperidin-2-ylacetate"
+    },
+    "Monosodium Glutamate": {
+        "SMILES": "N[C@@H](CCC(=O)O)C(=O)[O-].[Na+]",
+        "synonyms": [
+            "Monosodium Glutamate",
+            "Sodium L-glutamate",
+            "Sodium (2S)-2-amino-4-carboxybutanoate",
+            "sodium;(2S)-2-amino-5-hydroxy-5-oxopentanoate",
+            "Ajinomoto"
+        ],
+        "CAS": [
+            "142-47-2"
+        ],
+        "additional_information": "comptox id: DTXSID9020906|QC_LEVEL:1.0; opsin; pubchem id: 23672308",
+        "mode": "name; name; name",
+        "service": "comptox; opsin; pubchem",
+        "number_of_crosschecks": 3,
+        "identifier": "Monosodium Glutamate",
+        "found_molecules": [],
+        "pubchem_cid": 23672308,
+        "formula": "C5H8NNaO4",
+        "hill_formula": "C5H8NNaO4",
+        "inchi": "InChI=1S/C5H9NO4.Na/c6-3(5(9)10)1-2-4(7)8;/h3H,1-2,6H2,(H,7,8)(H,9,10);/q;+1/p-1/t3-;/m0./s1",
+        "inchikey": "LPUQAYUQRXPFSQ-DFWYDOINSA-M",
+        "iupac_name": "sodium;(2S)-2-amino-5-hydroxy-5-oxopentanoate"
+    },
+    "Morphine": {
+        "SMILES": "CN1CC[C@]23c4c5ccc(O)c4O[C@H]2[C@@H](O)C=C[C@H]3[C@H]1C5",
+        "synonyms": [
+            "Morphine",
+            "17-methyl-7,8-didehydro-4,5alpha-epoxymorphinan-3,6alpha-diol",
+            "(-)-morphine",
+            "(5alpha,6alpha)-17-methyl-7,8-didehydro-4,5-epoxymorphinan-3,6-diol",
+            "(5alpha,6alpha)-didehydro-4,5-epoxy-17-methylmorphinan-3,6-diol"
+        ],
+        "CAS": [
+            "57-27-2"
+        ],
+        "additional_information": "chebi id: 17303; comptox id: DTXSID9023336|QC_LEVEL:1.0; opsin; pubchem id: 5288826; srs id: 1736708",
+        "mode": "name; name; name; name; name",
+        "service": "chebi; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 5,
+        "identifier": "Morphine",
+        "found_molecules": [],
+        "pubchem_cid": 5288826,
+        "formula": "C17H19NO3",
+        "hill_formula": "C17H19NO3",
+        "inchi": "InChI=1S/C17H19NO3/c1-18-7-6-17-10-3-5-13(20)16(17)21-15-12(19)4-2-9(14(15)17)8-11(10)18/h2-5,10-11,13,16,19-20H,6-8H2,1H3/t10-,11+,13-,16-,17-/m0/s1",
+        "inchikey": "BQJCRHHNABKAKU-KBQPJGBKSA-N",
+        "iupac_name": "(4R,4aR,7S,7aR,12bS)-3-methyl-2,4,4a,7,7a,13-hexahydro-1H-4,12-methanobenzofuro[3,2-e]isoquinoline-7,9-diol"
+    },
+    "Naphthalene": {
+        "SMILES": "c1ccc2ccccc2c1",
+        "synonyms": [
+            "Naphthalene",
+            "Albocarbon",
+            "Tar camphor",
+            "White tar",
+            "Naphthalin"
+        ],
+        "CAS": [
+            "91-20-3"
+        ],
+        "additional_information": "cas_registry; chebi id: 16482; chemeo id: 69-516-3; cir; comptox id: DTXSID8020913|QC_LEVEL:1.0; nist id: C1146652; opsin; pubchem id: 931; srs id: 13326",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Naphthalene",
+        "found_molecules": [],
+        "pubchem_cid": 931,
+        "formula": "C10H8",
+        "hill_formula": "C10H8",
+        "inchi": "InChI=1S/C10H8/c1-2-6-10-8-4-3-7-9(10)5-1/h1-8H",
+        "inchikey": "UFWIBTONFRDIAS-UHFFFAOYSA-N",
+        "iupac_name": "naphthalene"
+    },
+    "Nicotine": {
+        "SMILES": "CN1CCC[C@H]1c1cccnc1",
+        "synonyms": [
+            "Nicotine",
+            "3-[(2S)-1-Methylpyrrolidin-2-yl]pyridine",
+            "(-)-Nicotine",
+            "1-methyl-2-(3-pyridal)-Pyrrolidine",
+            "1-methyl-2-(3-pyridal)-pyrrolidene"
+        ],
+        "CAS": [
+            "54-11-5"
+        ],
+        "additional_information": "cir; comptox id: DTXSID1020930|QC_LEVEL:1.0; pubchem id: 89594",
+        "mode": "name; name; name",
+        "service": "cir; comptox; pubchem",
+        "number_of_crosschecks": 3,
+        "identifier": "Nicotine",
+        "found_molecules": [],
+        "pubchem_cid": 89594,
+        "formula": "C10H14N2",
+        "hill_formula": "C10H14N2",
+        "inchi": "InChI=1S/C10H14N2/c1-12-7-3-5-10(12)9-4-2-6-11-8-9/h2,4,6,8,10H,3,5,7H2,1H3/t10-/m0/s1",
+        "inchikey": "SNICXCGAKADSCV-JTQLQIEISA-N",
+        "iupac_name": "3-[(2S)-1-methylpyrrolidin-2-yl]pyridine"
+    },
+    "Nitric Acid": {
+        "SMILES": "O=[N+]([O-])O",
+        "synonyms": [
+            "Nitric Acid",
+            "Aqua fortis",
+            "Azotic acid",
+            "Hydrogen nitrate",
+            "Nitryl hydroxide"
+        ],
+        "CAS": [
+            "7697-37-2"
+        ],
+        "additional_information": "cas_registry; chebi id: 48107; cir; comptox id: DTXSID5029685|QC_LEVEL:1.0; nist id: C7697372; opsin; pubchem id: 944; srs id: 152686",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Nitric Acid",
+        "found_molecules": [],
+        "pubchem_cid": 944,
+        "formula": "HNO3",
+        "hill_formula": "HNO3",
+        "inchi": "InChI=1S/HNO3/c2-1(3)4/h(H,2,3,4)",
+        "inchikey": "GRYLNZFGIOXLOG-UHFFFAOYSA-N",
+        "iupac_name": "nitric acid"
+    },
+    "Nitric Oxide": {
+        "SMILES": "[N]=O",
+        "synonyms": [
+            "Nitric Oxide",
+            "Nitrogen monoxide",
+            "Nitrosyl radical",
+            "nitrogen oxide",
+            "oxo-Amidogen"
+        ],
+        "CAS": [
+            "10102-43-9"
+        ],
+        "additional_information": "cas_registry; chemeo id: 26-216-3; comptox id: DTXSID1020938|QC_LEVEL:1.0; nist id: C10102439; pubchem id: 145068; srs id: 167916",
+        "mode": "name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; comptox; nist; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Nitric Oxide",
+        "found_molecules": [],
+        "pubchem_cid": 145068,
+        "formula": "NO",
+        "hill_formula": "NO",
+        "inchi": "InChI=1S/NO/c1-2",
+        "inchikey": "MWUXSHHQAYIFBG-UHFFFAOYSA-N",
+        "iupac_name": "nitrogen(II) oxide"
+    },
+    "Nitrogen Dioxide": {
+        "SMILES": "[O]N=O",
+        "synonyms": [
+            "Nitrogen Dioxide",
+            "Nitrito",
+            "Nitro",
+            "Nitrogen peroxide",
+            "Nitrosooxidanyl"
+        ],
+        "CAS": [
+            "10102-44-0"
+        ],
+        "additional_information": "cas_registry; chemeo id: 47-874-0; comptox id: DTXSID7020974|QC_LEVEL:1.0; nist id: C10102440; pubchem id: 3032552",
+        "mode": "name; name; name; name; name",
+        "service": "cas_registry; chemeo; comptox; nist; pubchem",
+        "number_of_crosschecks": 5,
+        "identifier": "Nitrogen Dioxide",
+        "found_molecules": [],
+        "pubchem_cid": 3032552,
+        "formula": "NO2",
+        "hill_formula": "NO2",
+        "inchi": "InChI=1S/NO2/c2-1-3",
+        "inchikey": "JCXJVPUVTGWSNB-UHFFFAOYSA-N",
+        "iupac_name": "Nitrogen Dioxide"
+    },
+    "Nitrous Oxide": {
+        "SMILES": "[N-]=[N+]=O",
+        "synonyms": [
+            "Nitrous Oxide",
+            "Dinitrogen oxide",
+            "Dinitrogen monoxide",
+            "Laughing gas",
+            "Hyponitrous acid anhydride"
+        ],
+        "CAS": [
+            "10024-97-2"
+        ],
+        "additional_information": "cas_registry; chemeo id: 17-856-3; cir; nist id: C10024972; pubchem id: 948",
+        "mode": "name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; nist; pubchem",
+        "number_of_crosschecks": 5,
+        "identifier": "Nitrous Oxide",
+        "found_molecules": [],
+        "pubchem_cid": 948,
+        "formula": "N2O",
+        "hill_formula": "N2O",
+        "inchi": "InChI=1S/N2O/c1-2-3",
+        "inchikey": "GQPLMRYTRLFLPF-UHFFFAOYSA-N",
+        "iupac_name": "nitrous oxide"
+    },
+    "Nitroglycerin": {
+        "SMILES": "O=[N+]([O-])OCC(CO[N+](=O)[O-])O[N+](=O)[O-]",
+        "synonyms": [
+            "Nitroglycerin",
+            "1,2,3-Propanetriol, trinitrate",
+            "1,2,3-Propanetriol, 1,2,3-trinitrate",
+            "Anginine",
+            "1,2,3-propanetriyl nitrate"
+        ],
+        "CAS": [
+            "55-63-0"
+        ],
+        "additional_information": "cas_registry; chebi id: 28787; chemeo id: 41-624-3; cir; comptox id: DTXSID1021407|QC_LEVEL:1.0; nist id: C55630; opsin; pubchem id: 4510; srs id: 1941",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Nitroglycerin",
+        "found_molecules": [],
+        "pubchem_cid": 4510,
+        "formula": "C3H5N3O9",
+        "hill_formula": "C3H5N3O9",
+        "inchi": "InChI=1S/C3H5N3O9/c7-4(8)13-1-3(15-6(11)12)2-14-5(9)10/h3H,1-2H2",
+        "inchikey": "SNIOPGDIGTZGOP-UHFFFAOYSA-N",
+        "iupac_name": "1,3-dinitrooxypropan-2-yl nitrate"
+    },
+    "Penicillin": {
+        "SMILES": "CC1(C)SC2C(NC(=O)Cc3ccccc3)C(=O)N2C1C(=O)O",
+        "synonyms": [
+            "Penicillin",
+            "Penicillin G",
+            "3,3-dimethyl-7-oxo-6-[(2-phenylacetyl)amino]- (2S,5R,6R)-4-Thia-1-azabicyclo[3.2.0]heptane-2-carboxylic acid",
+            "3,3-dimethyl-7-oxo-6-(2-phenylacetamido)-4-Thia-1-azabicyclo[3.2.0]heptane-2-carboxylic acid",
+            "3,3-dimethyl-7-oxo-6-[(phenylacetyl)amino]- [2S-(2\u03b1,5\u03b1,6\u03b2)]-4-Thia-1-azabicyclo[3.2.0]heptane-2-carboxylic acid"
+        ],
+        "CAS": [
+            "61-33-6"
+        ],
+        "additional_information": "cas_registry; pubchem id: 2349",
+        "mode": "name; name",
+        "service": "cas_registry; pubchem",
+        "number_of_crosschecks": 2,
+        "identifier": "Penicillin",
+        "found_molecules": [],
+        "pubchem_cid": 2349,
+        "formula": "C16H18N2O4S",
+        "hill_formula": "C16H18N2O4S",
+        "inchi": "InChI=1S/C16H18N2O4S/c1-16(2)12(15(21)22)18-13(20)11(14(18)23-16)17-10(19)8-9-6-4-3-5-7-9/h3-7,11-12,14H,8H2,1-2H3,(H,17,19)(H,21,22)",
+        "inchikey": "JGSARLDLIJGVTE-UHFFFAOYSA-N",
+        "iupac_name": "3,3-dimethyl-7-oxo-6-[(2-phenylacetyl)amino]-4-thia-1-azabicyclo[3.2.0]heptane-2-carboxylic acid"
+    },
+    "Phenol": {
+        "SMILES": "Oc1ccccc1",
+        "synonyms": [
+            "Phenol",
+            "Carbolic acid",
+            "Hydroxybenzene",
+            "Phenic acid",
+            "acide carbolique"
+        ],
+        "CAS": [
+            "108-95-2"
+        ],
+        "additional_information": "cas_registry; chebi id: 15882; chemeo id: 69-137-4; cir; comptox id: DTXSID5021124|QC_LEVEL:1.0; opsin; pubchem id: 996; srs id: 25510",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Phenol",
+        "found_molecules": [],
+        "pubchem_cid": 996,
+        "formula": "C6H6O",
+        "hill_formula": "C6H6O",
+        "inchi": "InChI=1S/C6H6O/c7-6-4-2-1-3-5-6/h1-5,7H",
+        "inchikey": "ISWSIDIOOBJBQZ-UHFFFAOYSA-N",
+        "iupac_name": "phenol"
+    },
+    "Phosphoric Acid": {
+        "SMILES": "O=P(O)(O)O",
+        "synonyms": [
+            "Phosphoric Acid",
+            "Orthophosphoric acid",
+            "o-phosphoric acid",
+            "WC-Reiniger",
+            "acide phosphorique"
+        ],
+        "CAS": [
+            "7664-38-2"
+        ],
+        "additional_information": "cas_registry; chebi id: 26078; chemeo id: 125-325-2; cir; comptox id: DTXSID5024263|QC_LEVEL:1.0; nist id: C7664382; opsin; pubchem id: 1004; srs id: 152363",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Phosphoric Acid",
+        "found_molecules": [],
+        "pubchem_cid": 1004,
+        "formula": "H3O4P",
+        "hill_formula": "H3O4P",
+        "inchi": "InChI=1S/H3O4P/c1-5(2,3)4/h(H3,1,2,3,4)",
+        "inchikey": "NBIIXXVUZAFLBC-UHFFFAOYSA-N",
+        "iupac_name": "phosphoric acid"
+    },
+    "Potassium Carbonate": {
+        "SMILES": "O=C([O-])[O-].[K+].[K+]",
+        "synonyms": [
+            "Potassium Carbonate",
+            "dipotassium carbonate",
+            "Carbonate of potash",
+            "Carbonic acid, dipotassium salt",
+            "Kaliumcarbonat"
+        ],
+        "CAS": [
+            "584-08-7"
+        ],
+        "additional_information": "chebi id: 131526; comptox id: DTXSID2036245|QC_LEVEL:2.0; opsin; pubchem id: 11430; srs id: 55863",
+        "mode": "name; name; name; name; name",
+        "service": "chebi; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 5,
+        "identifier": "Potassium Carbonate",
+        "found_molecules": [],
+        "pubchem_cid": 11430,
+        "formula": "CK2O3",
+        "hill_formula": "CK2O3",
+        "inchi": "InChI=1S/CH2O3.2K/c2-1(3)4;;/h(H2,2,3,4);;/q;2*+1/p-2",
+        "inchikey": "BWHMMNNQKKPAPP-UHFFFAOYSA-L",
+        "iupac_name": "dipotassium;carbonate"
+    },
+    "Potassium Nitrate": {
+        "SMILES": "O=[N+]([O-])[O-].[K+]",
+        "synonyms": [
+            "Potassium Nitrate",
+            "Nitre",
+            "Saltpeter",
+            "Kaliumnitrat",
+            "Niter"
+        ],
+        "CAS": [
+            "7757-79-1"
+        ],
+        "additional_information": "chebi id: 63043; cir; comptox id: DTXSID4029692|QC_LEVEL:1.0; opsin; pubchem id: 24434; srs id: 153312",
+        "mode": "name; name; name; name; name; name",
+        "service": "chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Potassium Nitrate",
+        "found_molecules": [],
+        "pubchem_cid": 24434,
+        "formula": "KNO3",
+        "hill_formula": "KNO3",
+        "inchi": "InChI=1S/K.NO3/c;2-1(3)4/q+1;-1",
+        "inchikey": "FGIUAXJPYTZDNR-UHFFFAOYSA-N",
+        "iupac_name": "potassium;nitrate"
+    },
+    "Propane": {
+        "SMILES": "CCC",
+        "synonyms": [
+            "Propane",
+            "Dimethylmethane",
+            "Propyl hydride",
+            "n-Propane",
+            "Liquefied petroleum gas"
+        ],
+        "CAS": [
+            "74-98-6"
+        ],
+        "additional_information": "cas_registry; chebi id: 32879; chemeo id: 13-317-5; cir; comptox id: DTXSID5026386|QC_LEVEL:1.0; nist id: C17251626; opsin; pubchem id: 6334; srs id: 5207",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Propane",
+        "found_molecules": [],
+        "pubchem_cid": 6334,
+        "formula": "C3H8",
+        "hill_formula": "C3H8",
+        "inchi": "InChI=1S/C3H8/c1-3-2/h3H2,1-2H3",
+        "inchikey": "ATUOYWHBWRKTHZ-UHFFFAOYSA-N",
+        "iupac_name": "propane"
+    },
+    "Propylene": {
+        "SMILES": "C=CC",
+        "synonyms": [
+            "Propylene",
+            "1-Propene",
+            "Propene",
+            "Methylethylene",
+            "1-Propylene"
+        ],
+        "CAS": [
+            "115-07-1"
+        ],
+        "additional_information": "cas_registry; chemeo id: 23-076-2; cir; comptox id: DTXSID5021205|QC_LEVEL:1.0; nist id: C1517528; opsin; pubchem id: 8252; srs id: 29009",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Propylene",
+        "found_molecules": [],
+        "pubchem_cid": 8252,
+        "formula": "C3H6",
+        "hill_formula": "C3H6",
+        "inchi": "InChI=1S/C3H6/c1-3-2/h3H,1H2,2H3",
+        "inchikey": "QQONPFPTGQHPMA-UHFFFAOYSA-N",
+        "iupac_name": "prop-1-ene"
+    },
+    "Quinine": {
+        "SMILES": "C=CC1CN2CCC1CC2C(O)c1ccnc2ccc(OC)cc12",
+        "synonyms": [
+            "Quinine",
+            "(-)-Quinine",
+            "(8\u03b1,9R)-6\u2032-methoxy-Cinchonan-9-ol",
+            "(8\u03b1,9R)-6\u2032-Methoxycinchonan-9-ol",
+            "6\u2032-Methoxycinchonidine"
+        ],
+        "CAS": [
+            "130-95-0"
+        ],
+        "additional_information": "cas_registry; chemeo id: 68-320-1; srs id: 35261",
+        "mode": "name; name; name",
+        "service": "cas_registry; chemeo; srs",
+        "number_of_crosschecks": 3,
+        "identifier": "Quinine",
+        "found_molecules": [],
+        "pubchem_cid": null,
+        "formula": "C20H24N2O2",
+        "hill_formula": "C20H24N2O2",
+        "inchi": "InChI=1S/C20H24N2O2/c1-3-13-12-22-9-7-14(13)10-19(22)20(23)16-6-8-21-18-5-4-15(24-2)11-17(16)18/h3-6,8,11,13-14,19-20,23H,1,7,9-10,12H2,2H3",
+        "inchikey": "LOUPRKONTZGTKE-UHFFFAOYSA-N",
+        "iupac_name": "(5-ethenyl-1-azabicyclo[2.2.2]octan-2-yl)-(6-methoxyquinolin-4-yl)methanol"
+    },
+    "Saccharin": {
+        "SMILES": "O=C1NS(=O)(=O)c2ccccc21",
+        "synonyms": [
+            "Saccharin",
+            "1,2-Benzisothiazol-3(2H)-one, 1,1-dioxide",
+            "1,2-Benzisothiazolin-3-one, 1,1-dioxide",
+            "1,2-benzisothiazol-3(2H)-one 1,1-dioxide",
+            "1,1-Dioxo-1,2-benzisothiazol-3(2H)-one"
+        ],
+        "CAS": [
+            "81-07-2"
+        ],
+        "additional_information": "cas_registry; chebi id: 32111; chemeo id: 57-750-6; cir; comptox id: DTXSID5021251|QC_LEVEL:1.0; opsin; pubchem id: 5143; srs id: 8557",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Saccharin",
+        "found_molecules": [],
+        "pubchem_cid": 5143,
+        "formula": "C7H5NO3S",
+        "hill_formula": "C7H5NO3S",
+        "inchi": "InChI=1S/C7H5NO3S/c9-7-5-3-1-2-4-6(5)12(10,11)8-7/h1-4H,(H,8,9)",
+        "inchikey": "CVHZOJJKTDOEJC-UHFFFAOYSA-N",
+        "iupac_name": "1,1-dioxo-1,2-benzothiazol-3-one"
+    },
+    "Silicon Dioxide": {
+        "SMILES": "O=[Si]=O",
+        "synonyms": [
+            "Silicon Dioxide",
+            "Silica",
+            "Dioxosilane",
+            "Acticel",
+            "Aerosil"
+        ],
+        "CAS": [
+            "7631-86-9"
+        ],
+        "additional_information": "cas_registry; chebi id: 30563; chemeo id: 69-388-6; cir; comptox id: DTXSID1029677|QC_LEVEL:1.0; nist id: ['C14808607', 'C14808607']; opsin; pubchem id: 24261; srs id: 151977",
+        "mode": "name; name; name; name; name; ['name', 'name']; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Silicon Dioxide",
+        "found_molecules": [],
+        "pubchem_cid": 24261,
+        "formula": "O2Si",
+        "hill_formula": "O2Si",
+        "inchi": "InChI=1S/O2Si/c1-3-2",
+        "inchikey": "VYPSYNLAJGMNEJ-UHFFFAOYSA-N",
+        "iupac_name": "dioxosilane"
+    },
+    "Sodium Bicarbonate": {
+        "SMILES": "O=C([O-])O.[Na+]",
+        "synonyms": [
+            "Sodium Bicarbonate",
+            "Sodium hydrogen carbonate",
+            "sodium hydrogencarbonate",
+            "baking soda",
+            "carbonic acid monosodium salt"
+        ],
+        "CAS": [
+            "144-55-8"
+        ],
+        "additional_information": "chebi id: 32139; cir; comptox id: DTXSID9021269|QC_LEVEL:2.0; opsin; pubchem id: 516892; srs id: 39438",
+        "mode": "name; name; name; name; name; name",
+        "service": "chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Sodium Bicarbonate",
+        "found_molecules": [],
+        "pubchem_cid": 516892,
+        "formula": "CHNaO3",
+        "hill_formula": "CHNaO3",
+        "inchi": "InChI=1S/CH2O3.Na/c2-1(3)4;/h(H2,2,3,4);/q;+1/p-1",
+        "inchikey": "UIIMBOGNXHQVGW-UHFFFAOYSA-M",
+        "iupac_name": "sodium;hydrogen carbonate"
+    },
+    "Sodium Carbonate": {
+        "SMILES": "O=C([O-])[O-].[Na+].[Na+]",
+        "synonyms": [
+            "Sodium Carbonate",
+            "disodium carbonate",
+            "disodium trioxidocarbonate",
+            "Natriumkarbonat",
+            "disodium;carbonate"
+        ],
+        "CAS": [
+            "497-19-8"
+        ],
+        "additional_information": "chebi id: 29377; comptox id: DTXSID1029621|QC_LEVEL:1.0; opsin; pubchem id: 10340; srs id: 48017",
+        "mode": "name; name; name; name; name",
+        "service": "chebi; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 5,
+        "identifier": "Sodium Carbonate",
+        "found_molecules": [],
+        "pubchem_cid": 10340,
+        "formula": "CNa2O3",
+        "hill_formula": "CNa2O3",
+        "inchi": "InChI=1S/CH2O3.2Na/c2-1(3)4;;/h(H2,2,3,4);;/q;2*+1/p-2",
+        "inchikey": "CDBYLPFSWZWCQE-UHFFFAOYSA-L",
+        "iupac_name": "disodium;carbonate"
+    },
+    "Sodium Chloride": {
+        "SMILES": "[Cl-].[Na+]",
+        "synonyms": [
+            "Sodium Chloride",
+            "Salt",
+            "halite",
+            "chlorure de sodium",
+            "cloruro sodico"
+        ],
+        "CAS": [
+            "7647-14-5"
+        ],
+        "additional_information": "chebi id: 26710; chemeo id: 27-421-4; cir; comptox id: DTXSID3021271|QC_LEVEL:1.0; opsin; pubchem id: 5234; srs id: 152256",
+        "mode": "name; name; name; name; name; name; name",
+        "service": "chebi; chemeo; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 7,
+        "identifier": "Sodium Chloride",
+        "found_molecules": [],
+        "pubchem_cid": 5234,
+        "formula": "ClNa",
+        "hill_formula": "ClNa",
+        "inchi": "InChI=1S/ClH.Na/h1H;/q;+1/p-1",
+        "inchikey": "FAPWRFPIFSIZLT-UHFFFAOYSA-M",
+        "iupac_name": "sodium;chloride"
+    },
+    "Sodium Hydroxide": {
+        "SMILES": "[Na+].[OH-]",
+        "synonyms": [
+            "Sodium Hydroxide",
+            "caustic soda",
+            "Aetznatron",
+            "hydroxyde de sodium",
+            "Natriumhydroxid"
+        ],
+        "CAS": [
+            "1310-73-2"
+        ],
+        "additional_information": "chebi id: 32145; cir; comptox id: DTXSID0029634|QC_LEVEL:1.0; opsin; pubchem id: 14798; srs id: 82644",
+        "mode": "name; name; name; name; name; name",
+        "service": "chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Sodium Hydroxide",
+        "found_molecules": [],
+        "pubchem_cid": 14798,
+        "formula": "HNaO",
+        "hill_formula": "HNaO",
+        "inchi": "InChI=1S/Na.H2O/h;1H2/q+1;/p-1",
+        "inchikey": "HEMHJVSKTPXQMS-UHFFFAOYSA-M",
+        "iupac_name": "sodium;hydroxide"
+    },
+    "Sodium Hypochlorite": {
+        "SMILES": "[Na+].[O-]Cl",
+        "synonyms": [
+            "Sodium Hypochlorite",
+            "Hypochlorous acid, sodium salt",
+            "Clorox",
+            "Hypochlorite sodium",
+            "Sodium oxychloride"
+        ],
+        "CAS": [
+            "7681-52-9"
+        ],
+        "additional_information": "chebi id: 32146; cir; comptox id: DTXSID8021276|QC_LEVEL:1.0; opsin; pubchem id: 23665760; srs id: 152512",
+        "mode": "name; name; name; name; name; name",
+        "service": "chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 6,
+        "identifier": "Sodium Hypochlorite",
+        "found_molecules": [],
+        "pubchem_cid": 23665760,
+        "formula": "ClNaO",
+        "hill_formula": "ClNaO",
+        "inchi": "InChI=1S/ClO.Na/c1-2;/q-1;+1",
+        "inchikey": "SUKJFIGYRHOWBL-UHFFFAOYSA-N",
+        "iupac_name": "sodium;hypochlorite"
+    },
+    "Strychnine": {
+        "SMILES": "O=C1C[C@@H]2OCC=C3CN4CC[C@]56c7ccccc7N1[C@H]5[C@H]2[C@H]3C[C@H]46",
+        "synonyms": [
+            "Strychnine",
+            "strychnidin-10-one",
+            "Strychnin",
+            "(19S)-Strychnidin-10-one",
+            "(4aR,5aS,8aR,13aS,15aS,15bR)-4a,5,5a,7,8,13a,15,15a,15b,16-decahydro-2H-4,6-methanoindolo[3,2,1-ij]oxepino[2,3,4-de]pyrrolo[2,3-h]quinolin-14-one"
+        ],
+        "CAS": [
+            "57-24-9"
+        ],
+        "additional_information": "chebi id: 28973; comptox id: DTXSID6023600|QC_LEVEL:1.0; pubchem id: 441071; srs id: 2485",
+        "mode": "name; name; name; name",
+        "service": "chebi; comptox; pubchem; srs",
+        "number_of_crosschecks": 4,
+        "identifier": "Strychnine",
+        "found_molecules": [],
+        "pubchem_cid": 441071,
+        "formula": "C21H22N2O2",
+        "hill_formula": "C21H22N2O2",
+        "inchi": "InChI=1S/C21H22N2O2/c24-18-10-16-19-13-9-17-21(6-7-22(17)11-12(13)5-8-25-16)14-3-1-2-4-15(14)23(18)20(19)21/h1-5,13,16-17,19-20H,6-11H2/t13-,16-,17-,19-,20-,21+/m0/s1",
+        "inchikey": "QMGVPVSNSZLJIA-FVWCLLPLSA-N",
+        "iupac_name": "(4aR,5aS,8aR,13aS,15aS,15bR)-4a,5,5a,7,8,13a,15,15a,15b,16-decahydro-2H-4,6-methanoindolo[3,2,1-ij]oxepino[2,3,4-de]pyrrolo[2,3-h]quinolin-14-one"
+    },
+    "Styrene": {
+        "SMILES": "C=Cc1ccccc1",
+        "synonyms": [
+            "Styrene",
+            "ethenyl-Benzene",
+            "Ethenylbenzene",
+            "Cinnamene",
+            "Phenethylene"
+        ],
+        "CAS": [
+            "100-42-5"
+        ],
+        "additional_information": "cas_registry; chebi id: 27452; chemeo id: 24-192-2; cir; comptox id: DTXSID2021284|QC_LEVEL:1.0; nist id: C100425; opsin; pubchem id: 7501; srs id: 19414",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Styrene",
+        "found_molecules": [],
+        "pubchem_cid": 7501,
+        "formula": "C8H8",
+        "hill_formula": "C8H8",
+        "inchi": "InChI=1S/C8H8/c1-2-8-6-4-3-5-7-8/h2-7H,1H2",
+        "inchikey": "PPBRXRYQALVLMV-UHFFFAOYSA-N",
+        "iupac_name": "styrene"
+    },
+    "Sucrose": {
+        "SMILES": "OC[C@H]1O[C@@](CO)(O[C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2O)[C@@H](O)[C@@H]1O",
+        "synonyms": [
+            "Sucrose",
+            "beta-D-fructofuranosyl alpha-D-glucopyranoside",
+            "Cane sugar",
+            "1-alpha-D-Glucopyranosyl-2-beta-D-fructofuranoside",
+            "beta-D-Fruf-(2<->1)-alpha-D-Glcp"
+        ],
+        "CAS": [
+            "57-50-1"
+        ],
+        "additional_information": "chebi id: 17992; cir; comptox id: DTXSID2021288|QC_LEVEL:1.0; pubchem id: 5988; srs id: 2568",
+        "mode": "name; name; name; name; name",
+        "service": "chebi; cir; comptox; pubchem; srs",
+        "number_of_crosschecks": 5,
+        "identifier": "Sucrose",
+        "found_molecules": [],
+        "pubchem_cid": 5988,
+        "formula": "C12H22O11",
+        "hill_formula": "C12H22O11",
+        "inchi": "InChI=1S/C12H22O11/c13-1-4-6(16)8(18)9(19)11(21-4)23-12(3-15)10(20)7(17)5(2-14)22-12/h4-11,13-20H,1-3H2/t4-,5-,6-,7-,8+,9-,10+,11-,12+/m1/s1",
+        "inchikey": "CZMRCDWAGMRECN-UGDNZRGBSA-N",
+        "iupac_name": "(2R,3R,4S,5S,6R)-2-[(2S,3S,4S,5R)-3,4-dihydroxy-2,5-bis(hydroxymethyl)oxolan-2-yl]oxy-6-(hydroxymethyl)oxane-3,4,5-triol"
+    },
+    "Sulfuric Acid": {
+        "SMILES": "O=S(=O)(O)O",
+        "synonyms": [
+            "Sulfuric Acid",
+            "Oil of vitriol",
+            "Sulphuric acid",
+            "bov",
+            "Dipping acid"
+        ],
+        "CAS": [
+            "7664-93-9"
+        ],
+        "additional_information": "cas_registry; chebi id: 26836; chemeo id: 24-837-6; cir; comptox id: DTXSID5029683|QC_LEVEL:1.0; nist id: C7664939; opsin; pubchem id: 1118; srs id: 152405",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Sulfuric Acid",
+        "found_molecules": [],
+        "pubchem_cid": 1118,
+        "formula": "H2O4S",
+        "hill_formula": "H2O4S",
+        "inchi": "InChI=1S/H2O4S/c1-5(2,3)4/h(H2,1,2,3,4)",
+        "inchikey": "QAOWNCQODCNURD-UHFFFAOYSA-N",
+        "iupac_name": "sulfuric acid"
+    },
+    "Tetrafluoroethylene": {
+        "SMILES": "FC(F)=C(F)F",
+        "synonyms": [
+            "Tetrafluoroethylene",
+            "tetrafluoro-Ethylene",
+            "1,1,2,2-tetrafluoro-Ethene",
+            "tetrafluoro-Ethene",
+            "Tetrafluoroethene"
+        ],
+        "CAS": [
+            "116-14-3"
+        ],
+        "additional_information": "cas_registry; chemeo id: 10-149-5; cir; comptox id: DTXSID6021325|QC_LEVEL:1.0; nist id: C116143; opsin; pubchem id: 8301; srs id: 29397",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Tetrafluoroethylene",
+        "found_molecules": [],
+        "pubchem_cid": 8301,
+        "formula": "C2F4",
+        "hill_formula": "C2F4",
+        "inchi": "InChI=1S/C2F4/c3-1(4)2(5)6",
+        "inchikey": "BFKJFAAPBSQJPD-UHFFFAOYSA-N",
+        "iupac_name": "1,1,2,2-tetrafluoroethene"
+    },
+    "Tetrahydrocannabinol": {
+        "SMILES": "CCCCCc1cc(O)c2c(c1)OC(C)(C)[C@@H]1CCC(C)=C[C@@H]21",
+        "synonyms": [
+            "Tetrahydrocannabinol",
+            "Dronabinol",
+            "(6aR,10aR)-6,6,9-trimethyl-3-pentyl-6a,7,8,10a-tetrahydro-6H-benzo[c]chromen-1-ol",
+            "(-)-delta9-trans-Tetrahydrocannabinol",
+            "1-trans-delta-9-Tetrahydrocannabinol"
+        ],
+        "CAS": [
+            "1972-08-3"
+        ],
+        "additional_information": "chebi id: 66964; comptox id: DTXSID6021327|QC_LEVEL:1.0; pubchem id: 16078",
+        "mode": "name; name; name",
+        "service": "chebi; comptox; pubchem",
+        "number_of_crosschecks": 3,
+        "identifier": "Tetrahydrocannabinol",
+        "found_molecules": [],
+        "pubchem_cid": 16078,
+        "formula": "C21H30O2",
+        "hill_formula": "C21H30O2",
+        "inchi": "InChI=1S/C21H30O2/c1-5-6-7-8-15-12-18(22)20-16-11-14(2)9-10-17(16)21(3,4)23-19(20)13-15/h11-13,16-17,22H,5-10H2,1-4H3/t16-,17-/m1/s1",
+        "inchikey": "CYQFCXCEBYINGO-IAGOWNOFSA-N",
+        "iupac_name": "(6aR,10aR)-6,6,9-trimethyl-3-pentyl-6a,7,8,10a-tetrahydrobenzo[c]chromen-1-ol"
+    },
+    "Thymine": {
+        "SMILES": "Cc1c[nH]c(=O)[nH]c1=O",
+        "synonyms": [
+            "Thymine",
+            "5-methyl-2,4(1H,3H)-Pyrimidinedione",
+            "2,4-Dihydroxy-5-methylpyrimidine",
+            "5-Methyluracil",
+            "5-methylpyrimidine-2,4(1H,3H)-dione"
+        ],
+        "CAS": [
+            "65-71-4"
+        ],
+        "additional_information": "cas_registry; chebi id: 17821; chemeo id: 18-703-1; cir; comptox id: DTXSID4052342|QC_LEVEL:1.0; opsin; pubchem id: 1135; srs id: 4028",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Thymine",
+        "found_molecules": [],
+        "pubchem_cid": 1135,
+        "formula": "C5H6N2O2",
+        "hill_formula": "C5H6N2O2",
+        "inchi": "InChI=1S/C5H6N2O2/c1-3-2-6-5(9)7-4(3)8/h2H,1H3,(H2,6,7,8,9)",
+        "inchikey": "RWQNBRDOKXIBIV-UHFFFAOYSA-N",
+        "iupac_name": "5-methyl-1H-pyrimidine-2,4-dione"
+    },
+    "Trinitrotoluene": {
+        "SMILES": "Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]",
+        "synonyms": [
+            "Trinitrotoluene",
+            "2,4,6-Trinitrotoluene",
+            "2-Methyl-1,3,5-trinitrobenzene",
+            "2-methyl-1,3,5-trinitro-Benzene",
+            "2,4,6-trinitro-Toluene"
+        ],
+        "CAS": [
+            "118-96-7"
+        ],
+        "additional_information": "cas_registry; chebi id: 46053; chemeo id: 12-617-3; cir; comptox id: DTXSID7024372|QC_LEVEL:1.0; nist id: C118967; opsin; pubchem id: 8376; srs id: 30460",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Trinitrotoluene",
+        "found_molecules": [],
+        "pubchem_cid": 8376,
+        "formula": "C7H5N3O6",
+        "hill_formula": "C7H5N3O6",
+        "inchi": "InChI=1S/C7H5N3O6/c1-4-6(9(13)14)2-5(8(11)12)3-7(4)10(15)16/h2-3H,1H3",
+        "inchikey": "SPSSULHKWOKEEL-UHFFFAOYSA-N",
+        "iupac_name": "2-methyl-1,3,5-trinitrobenzene"
+    },
+    "Toluene": {
+        "SMILES": "Cc1ccccc1",
+        "synonyms": [
+            "Toluene",
+            "Methylbenzene",
+            "Methacide",
+            "methyl-Benzene",
+            "Toluol"
+        ],
+        "CAS": [
+            "108-88-3"
+        ],
+        "additional_information": "cas_registry; chebi id: 17578; chemeo id: 17-837-4; cir; comptox id: DTXSID7021360|QC_LEVEL:1.0; nist id: C1124181; opsin; pubchem id: 1140; srs id: 25452",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Toluene",
+        "found_molecules": [],
+        "pubchem_cid": 1140,
+        "formula": "C7H8",
+        "hill_formula": "C7H8",
+        "inchi": "InChI=1S/C7H8/c1-7-5-3-2-4-6-7/h2-6H,1H3",
+        "inchikey": "YXFVVABEGXRONW-UHFFFAOYSA-N",
+        "iupac_name": "methyl-benzene"
+    },
+    "Uracil": {
+        "SMILES": "O=c1cc[nH]c(=O)[nH]1",
+        "synonyms": [
+            "Uracil",
+            "2,4(1H,3H)-Pyrimidinedione",
+            "2,4-Dioxopyrimidine",
+            "2,4-Dihydroxypyrimidine",
+            "2,4-Pyrimidinediol"
+        ],
+        "CAS": [
+            "66-22-8"
+        ],
+        "additional_information": "cas_registry; chebi id: 17568; chemeo id: 31-883-7; cir; comptox id: DTXSID4021424|QC_LEVEL:1.0; opsin; pubchem id: 1174; srs id: 4069",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Uracil",
+        "found_molecules": [],
+        "pubchem_cid": 1174,
+        "formula": "C4H4N2O2",
+        "hill_formula": "C4H4N2O2",
+        "inchi": "InChI=1S/C4H4N2O2/c7-3-1-2-5-4(8)6-3/h1-2H,(H2,5,6,7,8)",
+        "inchikey": "ISAKRJDGNUQOIC-UHFFFAOYSA-N",
+        "iupac_name": "1H-pyrimidine-2,4-dione"
+    },
+    "Urea": {
+        "SMILES": "NC(N)=O",
+        "synonyms": [
+            "Urea",
+            "Carbamide",
+            "carbonyldiamide",
+            "Isourea",
+            "ur"
+        ],
+        "CAS": [
+            "57-13-6"
+        ],
+        "additional_information": "cas_registry; chebi id: 16199; chemeo id: 45-964-2; cir; comptox id: DTXSID4021426|QC_LEVEL:1.0; opsin; pubchem id: 1176; srs id: 2451",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Urea",
+        "found_molecules": [],
+        "pubchem_cid": 1176,
+        "formula": "CH4N2O",
+        "hill_formula": "CH4N2O",
+        "inchi": "InChI=1S/CH4N2O/c2-1(3)4/h(H4,2,3,4)",
+        "inchikey": "XSQUKJJJFZCRTK-UHFFFAOYSA-N",
+        "iupac_name": "urea"
+    },
+    "Vanillin": {
+        "SMILES": "COc1cc(C=O)ccc1O",
+        "synonyms": [
+            "Vanillin",
+            "4-Hydroxy-3-methoxybenzaldehyde",
+            "4-hydroxy-3-methoxy-Benzaldehyde",
+            "3-Methoxy-4-hydroxybenzaldehyde",
+            "Vanillic aldehyde"
+        ],
+        "CAS": [
+            "121-33-5"
+        ],
+        "additional_information": "cas_registry; chebi id: 18346; cir; comptox id: DTXSID0021969|QC_LEVEL:1.0; opsin; pubchem id: 1183; srs id: 31666",
+        "mode": "name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; cir; comptox; opsin; pubchem; srs",
+        "number_of_crosschecks": 7,
+        "identifier": "Vanillin",
+        "found_molecules": [],
+        "pubchem_cid": 1183,
+        "formula": "C8H8O3",
+        "hill_formula": "C8H8O3",
+        "inchi": "InChI=1S/C8H8O3/c1-11-8-4-6(5-9)2-3-7(8)10/h2-5,10H,1H3",
+        "inchikey": "MWOOGOJBHIARFG-UHFFFAOYSA-N",
+        "iupac_name": "4-hydroxy-3-methoxybenzaldehyde"
+    },
+    "Vinyl Chloride": {
+        "SMILES": "C=CCl",
+        "synonyms": [
+            "Vinyl Chloride",
+            "Chloroethene",
+            "Chloroethylene",
+            "chloro-Ethene",
+            "chloro-Ethylene"
+        ],
+        "CAS": [
+            "75-01-4"
+        ],
+        "additional_information": "cas_registry; chemeo id: 63-522-2; cir; comptox id: DTXSID8021434|QC_LEVEL:1.0; nist id: C75014; opsin; pubchem id: 6338; srs id: 5231",
+        "mode": "name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 8,
+        "identifier": "Vinyl Chloride",
+        "found_molecules": [],
+        "pubchem_cid": 6338,
+        "formula": "C2H3Cl",
+        "hill_formula": "C2H3Cl",
+        "inchi": "InChI=1S/C2H3Cl/c1-2-3/h2H,1H2",
+        "inchikey": "BZHJMEDXRYGGRV-UHFFFAOYSA-N",
+        "iupac_name": "chloroethene"
+    },
+    "Water": {
+        "SMILES": "O",
+        "synonyms": [
+            "Water",
+            "Distilled water",
+            "h2o",
+            "oxidane",
+            "dihydrogen oxide"
+        ],
+        "CAS": [
+            "7732-18-5"
+        ],
+        "additional_information": "cas_registry; chebi id: 15377; chemeo id: 69-886-3; cir; comptox id: DTXSID6026296|QC_LEVEL:1.0; nist id: B6010117; opsin; pubchem id: 962; srs id: 153171",
+        "mode": "name; name; name; name; name; name; name; name; name",
+        "service": "cas_registry; chebi; chemeo; cir; comptox; nist; opsin; pubchem; srs",
+        "number_of_crosschecks": 9,
+        "identifier": "Water",
+        "found_molecules": [],
+        "pubchem_cid": 962,
+        "formula": "H2O",
+        "hill_formula": "H2O",
+        "inchi": "InChI=1S/H2O/h1H2",
+        "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+        "iupac_name": "oxidane"
+    },
+    "Xylene": {
+        "SMILES": "Cc1ccccc1C",
+        "synonyms": [
+            "Xylene",
+            "1,2-xylene",
+            "o-xylene",
+            "1,2-dimethyl-Benzene",
+            "1,2-Dimethylbenzene"
+        ],
+        "CAS": [
+            "95-47-6"
+        ],
+        "additional_information": "pubchem id: 7237; srs id: 84970",
+        "mode": "name; name",
+        "service": "pubchem; srs",
+        "number_of_crosschecks": 2,
+        "identifier": "Xylene",
+        "found_molecules": [],
+        "pubchem_cid": 7237,
+        "formula": "C8H10",
+        "hill_formula": "C8H10",
+        "inchi": "InChI=1S/C8H10/c1-7-5-3-4-6-8(7)2/h3-6H,1-2H3",
+        "inchikey": "CTQNGGLPUBDAKN-UHFFFAOYSA-N",
+        "iupac_name": "1,2-xylene"
+    }
+}
