@@ -71,7 +71,7 @@ class MoleculeResolver:
         "cas_registry": ["name", "smiles", "inchi", "cas"],
         "chebi": ["name", "cas", "formula", "smiles", "inchi", "inchikey"],
         "chemeo": ["name", "smiles", "inchi", "inchikey"],
-        "cir": ["formula", "name", "smiles", "inchi", "inchikey"],
+        "cir": ["formula", "name", "cas", "smiles", "inchi", "inchikey"],
         "comptox": ["name", "cas", "inchikey"],
         "cts": ["name", "cas", "smiles"],
         "nist": ["formula", "name", "cas", "smiles"],
@@ -157,11 +157,14 @@ class MoleculeResolver:
             )
         return self
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+
+        error_ocurred = (exc_type is not None or exc_value is not None or exc_traceback is not None)
+
         self._disabling_rdkit_logger.__exit__()
         self.molecule_cache.__exit__()
         self._disabling_rdkit_logger.__exit__()
-        if self._OPSIN_tempfolder:
+        if self._OPSIN_tempfolder and not error_ocurred:
             self._OPSIN_tempfolder.cleanup()
 
     @contextmanager
@@ -3581,6 +3584,8 @@ class MoleculeResolver:
                     ("≤", "<="),
                     ("·", "."),
                     ("#", "no. "),
+                    ("«", ""),
+                    ("»", ""),
                 ]
 
                 for greek_letter, spelled_out_version in zip(
@@ -3588,6 +3593,8 @@ class MoleculeResolver:
                 ):
                     map_to_replace.append((greek_letter, spelled_out_version))
 
+                old = identifier
+                identifier = html.unescape(identifier)
                 for old, new in map_to_replace:
                     identifier = identifier.replace(old, new)
 
@@ -3665,7 +3672,7 @@ class MoleculeResolver:
 
             request_id = None
             n_try = 0
-            while request_id is None or n_try < 5:
+            while request_id is None and n_try < 5:
                 request_text = self._resilient_request(
                     PUBCHEM_URL,
                     {
@@ -4730,6 +4737,7 @@ class MoleculeResolver:
                     "smiles": ("smiles",),
                     "inchi": ("stdinchi",),
                     "inchikey": ("stdinchikey",),
+                    "cas": ("cas_number",),
                 }
 
                 SMILES = self._get_info_from_CIR(
