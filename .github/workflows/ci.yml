@@ -36,7 +36,7 @@ jobs:
         retention-days: 1
 
 
-	# Run pytest using built package
+  # Run pytest using built package
   test:
     needs: build
     runs-on: ubuntu-latest
