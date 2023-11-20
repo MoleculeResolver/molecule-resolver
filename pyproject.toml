@@ -11,7 +11,7 @@ readme = "README.md"
 packages = [{ include = "moleculeresolver" }]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.9,<3.12"
 prompt-toolkit = "^3.0.39"
 regex = "^2023.10.3"
 rdkit = "^2023.3.3"
