@@ -1,0 +1,151 @@
+on:
+  push:
+  pull_request:
+    branches:
+      # Branches from forks have the form 'user:branch-name' so we only run
+      # this job on pull_request events for branches that look like fork
+      # branches. Without this we would end up running this job twice for non
+      # forked PRs, once for the push and then once for opening the PR.
+    - '**:**'
+
+jobs:
+  # Build the package
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install poetry
+      uses: Gr1N/setup-poetry@v8
+
+    - name: Build package
+      run: poetry build
+
+    - name: Save built package
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/
+        retention-days: 1
+
+
+	# Run pytest using built package
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.8", "3.9", "3.10"]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python }}
+        cache: 'pip'
+        cache-dependency-path: "poetry.lock"
+
+    - name: Download built package
+      uses: actions/download-artifact@v3
+      with:
+        name: dist
+    
+    - name: Install package and pytest
+      shell: bash
+      run: |
+        WHL_NAME=$(ls summit-*.whl)
+        pip install ${WHL_NAME} pytest
+
+    - name: Run tests
+      shell: bash
+      run: pytest
+
+
+  # Publish the package to pypi
+  publish:
+      needs: test
+      runs-on: ubuntu-latest
+
+      steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Download built package
+        uses: actions/download-artifact@v3
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install poetry
+        uses: Gr1N/setup-poetry@v8
+
+      - name: Determine the version for this release from the build
+        id: current
+        run: |
+          BUILD_VER="$(ls dist/molecule_resolver-*.tar.gz)"
+          echo "Path: $BUILD_VER"
+          if [[ $BUILD_VER =~ (molecule_resolver-)([^,][0-9.]{4}) ]]; then
+              echo "::set-output name=version::${BASH_REMATCH[2]}"
+              echo "Version of build: ${BASH_REMATCH[2]}"
+          else
+              echo "No version found found"
+          fi
+          
+      - name: Install coveo-pypi-cli
+        run: pip install coveo-pypi-cli
+
+      - name: Get latest published version
+        id: published
+        run: |
+          PUB_VER="$(pypi current-version molecule-resolver)"
+          echo "::set-output name=version::$PUB_VER"
+          echo "Latest published version: $PUB_VER"
+      
+      - name: Publish to pypi if new version
+        if: (steps.current.outputs.version != steps.published.outputs.version)
+        shell: bash
+        run: |
+          if [[ '${{ github.ref_name }}' == 'main' ]]; then
+            poetry publish 
+          else
+            echo "Dry run of publishing the package"
+            poetry publish --dry-run
+          fi
+
+      - name: Tag repository
+        shell: bash
+        id: get-next-tag
+        if: (steps.current.outputs.version != steps.published.outputs.version)
+        run: |
+          TAG_NAME=${{ steps.current.outputs.version }}
+          echo "::set-output name=tag-name::$TAG_NAME"
+          echo "This release will be tagged as $TAG_NAME"
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git tag --annotate --message="Automated tagging system" $TAG_NAME ${{ github.sha }}
+
+      - name: Push the tag
+        if: (steps.current.outputs.version != steps.published.outputs.version)
+        env:
+          TAG_NAME: ${{ steps.current.outputs.version }}
+        run: |
+          if [[ ${{ github.ref_name }} == 'main' ]]; then
+            git push origin $TAG_NAME
+          else
+            echo "If this was the main branch, I would push a new tag named $TAG_NAME"
+          fi
