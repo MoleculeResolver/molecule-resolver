@@ -1,9 +1,13 @@
 import pytest
 from moleculeresolver import MoleculeResolver
 import json
+import os 
+from pathlib import Path
+
 
 # IUPAC names
-with open("benchmark_component_molecules_iupac.json", "r") as f:
+dir_path = Path(os.path.dirname(os.path.realpath(__file__)))
+with open(dir_path / "benchmark_component_molecules_iupac.json", "r") as f:
     benchmark = json.load(f)
 
 
@@ -21,4 +25,5 @@ def test_opsin(data):
 
 
 if __name__ == "__main__":
-    test_opsin()
+    for d in benchmark.values():
+        test_opsin(d)
