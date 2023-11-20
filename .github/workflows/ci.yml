@@ -63,7 +63,7 @@ jobs:
     - name: Install package and pytest
       shell: bash
       run: |
-        WHL_NAME=$(ls summit-*.whl)
+        WHL_NAME=$(ls molecule_resolver-*.whl)
         pip install ${WHL_NAME} pytest
 
     - name: Run tests
