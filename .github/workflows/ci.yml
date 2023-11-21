@@ -118,14 +118,17 @@ jobs:
       
       - name: Publish to pypi if new version
         if: (steps.current.outputs.version != steps.published.outputs.version)
-        shell: bash
-        run: |
-          if [[ '${{ github.ref_name }}' == 'main' ]]; then
-            poetry publish 
-          else
-            echo "Dry run of publishing the package"
-            poetry publish --dry-run
-          fi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+        # shell: bash
+        # run: |
+        #   if [[ '${{ github.ref_name }}' == 'main' ]]; then
+        #     poetry publish 
+        #   else
+        #     echo "Dry run of publishing the package"
+        #     poetry publish --dry-run
+        #   fi
 
       - name: Tag repository
         shell: bash
