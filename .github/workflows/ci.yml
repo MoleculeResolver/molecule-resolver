@@ -124,25 +124,25 @@ jobs:
         with:
           packages-dir: dist/
           
-      - name: Tag repository
-        shell: bash
-        id: get-next-tag
-        if: (steps.current.outputs.version != steps.published.outputs.version)
-        run: |
-          TAG_NAME=${{ steps.current.outputs.version }}
-          echo "::set-output name=tag-name::$TAG_NAME"
-          echo "This release will be tagged as $TAG_NAME"
-          git config user.name "github-actions"
-          git config user.email "actions@users.noreply.github.com"
-          git tag --annotate --message="Automated tagging system" $TAG_NAME ${{ github.sha }}
+      # - name: Tag repository
+      #   shell: bash
+      #   id: get-next-tag
+      #   if: (steps.current.outputs.version != steps.published.outputs.version)
+      #   run: |
+      #     TAG_NAME=${{ steps.current.outputs.version }}
+      #     echo "::set-output name=tag-name::$TAG_NAME"
+      #     echo "This release will be tagged as $TAG_NAME"
+      #     git config user.name "github-actions"
+      #     git config user.email "actions@users.noreply.github.com"
+      #     git tag --annotate --message="Automated tagging system" $TAG_NAME ${{ github.sha }}
 
-      - name: Push the tag
-        if: (steps.current.outputs.version != steps.published.outputs.version)
-        env:
-          TAG_NAME: ${{ steps.current.outputs.version }}
-        run: |
-          if [[ ${{ github.ref_name }} == 'main' ]]; then
-            git push origin $TAG_NAME
-          else
-            echo "If this was the main branch, I would push a new tag named $TAG_NAME"
-          fi
+      # - name: Push the tag
+      #   if: (steps.current.outputs.version != steps.published.outputs.version)
+      #   env:
+      #     TAG_NAME: ${{ steps.current.outputs.version }}
+      #   run: |
+      #     if [[ ${{ github.ref_name }} == 'main' ]]; then
+      #       git push origin $TAG_NAME
+      #     else
+      #       echo "If this was the main branch, I would push a new tag named $TAG_NAME"
+      #     fi
