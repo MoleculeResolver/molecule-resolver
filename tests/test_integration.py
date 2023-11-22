@@ -24,6 +24,16 @@ def test_opsin(data):
             raise ValueError("Expected " + data["SMILES"] + " but got " + res.SMILES)
 
 
+def test_opsin_batchmode():
+    names = [d["iupac_name"] for d in benchmark.values()]
+    smiles = [d["SMILES"] for d in benchmark.values()]
+    with MoleculeResolver() as mr:
+        res = mr.get_molecule_from_OPSIN_batchmode(names)
+    for i, r in enumerate(res):
+        if r[0].SMILES == smiles[i]:
+            continue
+        else:
+            raise ValueError("Expected " + smiles[i] + " but got " + r.SMILES)
+
 if __name__ == "__main__":
-    for d in benchmark.values():
-        test_opsin(d)
+    test_opsin_batchmode()
