@@ -75,6 +75,11 @@ jobs:
   publish:
       needs: test
       runs-on: ubuntu-latest
+      environment:
+        name: pypi
+        url: https://pypi.org/p/molecule-resolver/
+      permissions:
+        id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
       steps:
       - name: Checkout repository
@@ -117,19 +122,11 @@ jobs:
           echo "Latest published version: $PUB_VER"
       
       - name: Publish to pypi if new version
-        if: (steps.current.outputs.version != steps.published.outputs.version)
+        if: (steps.current.outputs.version != steps.published.outputs.version) && (github.ref_name == 'main')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-        # shell: bash
-        # run: |
-        #   if [[ '${{ github.ref_name }}' == 'main' ]]; then
-        #     poetry publish 
-        #   else
-        #     echo "Dry run of publishing the package"
-        #     poetry publish --dry-run
-        #   fi
-
+          
       - name: Tag repository
         shell: bash
         id: get-next-tag
