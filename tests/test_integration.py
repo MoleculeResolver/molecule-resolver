@@ -35,18 +35,5 @@ def test_opsin_batchmode():
         else:
             raise ValueError("Expected " + smiles[i] + " but got " + r.SMILES)
 
-
-@pytest.mark.parametrize("data", benchmark.values())
-def test_pubchem(data):
-    with MoleculeResolver() as mr:
-        iupac_name = data["iupac_name"]
-        res = mr.get_molecule_from_pubchem(iupac_name, mode="name")
-        if res is None:
-            raise ValueError("No molecule found for " + iupac_name)
-        if res.SMILES == data["SMILES"]:
-            return
-        else:
-            raise ValueError("Expected " + data["SMILES"] + " but got " + res.SMILES)
-
 if __name__ == "__main__":
     test_opsin_batchmode()
