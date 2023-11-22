@@ -75,9 +75,9 @@ jobs:
   publish:
       needs: test
       runs-on: ubuntu-latest
-      environment:
-        name: pypi
-        url: https://pypi.org/p/molecule-resolver/
+      # environment:
+      #   name: pypi
+      #   url: https://pypi.org/p/molecule-resolver/
       permissions:
         id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
