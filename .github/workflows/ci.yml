@@ -70,10 +70,83 @@ jobs:
       shell: bash
       run: pytest
 
+  # Tag and release the package
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Download built package
+      uses: actions/download-artifact@v3
+      with:
+        name: dist
+        path: dist/
+
+    - name: Determine the version for this release from the build
+      id: current
+      run: |
+        BUILD_VER="$(ls dist/molecule_resolver-*.tar.gz)"
+        echo "Path: $BUILD_VER"
+        if [[ $BUILD_VER =~ (molecule_resolver-)([^,][0-9.]{4}) ]]; then
+            echo "version=${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
+            echo "Version of build: ${BASH_REMATCH[2]}"
+        else
+            echo "No version found found"
+        fi
+
+    - name: Install coveo-pypi-cli
+      run: pip install coveo-pypi-cli
+
+    - name: Get latest published version
+      id: published
+      run: |
+        PUB_VER="$(pypi current-version molecule-resolver)"
+        echo "version=$PUB_VER" >> $GITHUB_OUTPUT
+        echo "Latest published version: $PUB_VER"
+
+    - name: Tag repository
+      shell: bash
+      id: get-next-tag
+      if: (steps.current.outputs.version != steps.published.outputs.version)
+      run: |
+        TAG_NAME=${{ steps.current.outputs.version }}
+        echo "tag-name=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "This release will be tagged as $TAG_NAME"
+        git config user.name "github-actions"
+        git config user.email "actions@users.noreply.github.com"
+        git tag --annotate --message="Automated tagging system" $TAG_NAME ${{ github.sha }}
+
+    - name: Push the tag
+      if: (steps.current.outputs.version != steps.published.outputs.version)
+      env:
+        TAG_NAME: ${{ steps.current.outputs.version }}
+      run: |
+        if [[ ${{ github.ref_name }} == 'main' ]]; then
+          git push origin $TAG_NAME
+        else
+          echo "If this was the main branch, I would push a new tag named $TAG_NAME"
+        fi
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
+
+    outputs:
+      should_publish: ${{ startsWith(github.ref, 'refs/tags/') }}
 
   # Publish the package to pypi
   publish:
-      needs: test
+      needs: release
       runs-on: ubuntu-latest
       # environment:
       #   name: pypi
@@ -82,67 +155,16 @@ jobs:
         id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
       steps:
-      - name: Install python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
       - name: Download built package
         uses: actions/download-artifact@v3
         with:
           name: dist
           path: dist/
 
-      - name: Install poetry
-        uses: Gr1N/setup-poetry@v8
-
-      - name: Determine the version for this release from the build
-        id: current
-        run: |
-          BUILD_VER="$(ls dist/molecule_resolver-*.tar.gz)"
-          echo "Path: $BUILD_VER"
-          if [[ $BUILD_VER =~ (molecule_resolver-)([^,][0-9.]{4}) ]]; then
-              echo "::set-output name=version::${BASH_REMATCH[2]}"
-              echo "Version of build: ${BASH_REMATCH[2]}"
-          else
-              echo "No version found found"
-          fi
-          
-      - name: Install coveo-pypi-cli
-        run: pip install coveo-pypi-cli
-
-      - name: Get latest published version
-        id: published
-        run: |
-          PUB_VER="$(pypi current-version molecule-resolver)"
-          echo "::set-output name=version::$PUB_VER"
-          echo "Latest published version: $PUB_VER"
-      
       - name: Publish to pypi if new version
-        if: (steps.current.outputs.version != steps.published.outputs.version) && (github.ref_name == 'main')
+        env:
+          should_publish: ${{ needs.release.outputs.should_publish }}
+        if: ${{ env.should_publish == 'true' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/
-          
-      # - name: Tag repository
-      #   shell: bash
-      #   id: get-next-tag
-      #   if: (steps.current.outputs.version != steps.published.outputs.version)
-      #   run: |
-      #     TAG_NAME=${{ steps.current.outputs.version }}
-      #     echo "::set-output name=tag-name::$TAG_NAME"
-      #     echo "This release will be tagged as $TAG_NAME"
-      #     git config user.name "github-actions"
-      #     git config user.email "actions@users.noreply.github.com"
-      #     git tag --annotate --message="Automated tagging system" $TAG_NAME ${{ github.sha }}
-
-      # - name: Push the tag
-      #   if: (steps.current.outputs.version != steps.published.outputs.version)
-      #   env:
-      #     TAG_NAME: ${{ steps.current.outputs.version }}
-      #   run: |
-      #     if [[ ${{ github.ref_name }} == 'main' ]]; then
-      #       git push origin $TAG_NAME
-      #     else
-      #       echo "If this was the main branch, I would push a new tag named $TAG_NAME"
-      #     fi
+          packages-dir: dist/ 
