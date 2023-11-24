@@ -142,7 +142,7 @@ jobs:
         files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
 
     outputs:
-      should_publish: ${{ steps.current.outputs.version != steps.published.outputs.version }}
+      should_publish: ${{ startsWith(github.ref, 'refs/tags/') }}
 
   # Publish the package to pypi
   publish:
