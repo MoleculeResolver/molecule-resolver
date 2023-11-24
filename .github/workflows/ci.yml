@@ -96,7 +96,7 @@ jobs:
         BUILD_VER="$(ls dist/molecule_resolver-*.tar.gz)"
         echo "Path: $BUILD_VER"
         if [[ $BUILD_VER =~ (molecule_resolver-)([^,][0-9.]{4}) ]]; then
-            echo "name=version::${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
             echo "Version of build: ${BASH_REMATCH[2]}"
         else
             echo "No version found found"
@@ -109,7 +109,7 @@ jobs:
       id: published
       run: |
         PUB_VER="$(pypi current-version molecule-resolver)"
-        echo "name=version::$PUB_VER" >> $GITHUB_OUTPUT
+        echo "version=$PUB_VER" >> $GITHUB_OUTPUT
         echo "Latest published version: $PUB_VER"
 
     - name: Tag repository
@@ -118,7 +118,7 @@ jobs:
       if: (steps.current.outputs.version != steps.published.outputs.version)
       run: |
         TAG_NAME=${{ steps.current.outputs.version }}
-        echo "name=tag-name::$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "tag-name=$TAG_NAME" >> $GITHUB_OUTPUT
         echo "This release will be tagged as $TAG_NAME"
         git config user.name "github-actions"
         git config user.email "actions@users.noreply.github.com"
