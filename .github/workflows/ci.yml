@@ -8,6 +8,7 @@ on:
       # forked PRs, once for the push and then once for opening the PR.
     - '**:**'
 
+
 jobs:
   # Build the package
   build:
@@ -74,6 +75,8 @@ jobs:
   release:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout repository
