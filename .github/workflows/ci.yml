@@ -73,7 +73,7 @@ jobs:
 
   # Tag and release the package
   release:
-    # needs: test
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
