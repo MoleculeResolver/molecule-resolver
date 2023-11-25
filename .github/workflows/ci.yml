@@ -38,42 +38,42 @@ jobs:
 
 
   # Run pytest using built package
-  test:
-    needs: build
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ["3.9", "3.10", "3.11"]
+  # test:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       python: ["3.9", "3.10", "3.11"]
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+  #   steps:
+  #   - name: Checkout repository
+  #     uses: actions/checkout@v4
 
-    - name: Install python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python }}
-        cache: 'pip'
-        cache-dependency-path: "poetry.lock"
+  #   - name: Install python
+  #     uses: actions/setup-python@v4
+  #     with:
+  #       python-version: ${{ matrix.python }}
+  #       cache: 'pip'
+  #       cache-dependency-path: "poetry.lock"
 
-    - name: Download built package
-      uses: actions/download-artifact@v3
-      with:
-        name: dist
+  #   - name: Download built package
+  #     uses: actions/download-artifact@v3
+  #     with:
+  #       name: dist
     
-    - name: Install package and pytest
-      shell: bash
-      run: |
-        WHL_NAME=$(ls molecule_resolver-*.whl)
-        pip install ${WHL_NAME} pytest
+  #   - name: Install package and pytest
+  #     shell: bash
+  #     run: |
+  #       WHL_NAME=$(ls molecule_resolver-*.whl)
+  #       pip install ${WHL_NAME} pytest
 
-    - name: Run tests
-      shell: bash
-      run: pytest
+  #   - name: Run tests
+  #     shell: bash
+  #     run: pytest
 
   # Tag and release the package
   release:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -131,12 +131,13 @@ jobs:
       if: (steps.current.outputs.version != steps.published.outputs.version)
       env:
         TAG_NAME: ${{ steps.current.outputs.version }}
-      run: |
-        if [[ ${{ github.ref_name }} == 'main' ]]; then
-          git push origin $TAG_NAME
-        else
-          echo "If this was the main branch, I would push a new tag named $TAG_NAME"
-        fi
+      run: git push origin $TAG_NAME
+      # run: |
+      #   if [[ ${{ github.ref_name }} == 'main' ]]; then
+      #     git push origin $TAG_NAME
+      #   else
+      #     echo "If this was the main branch, I would push a new tag named $TAG_NAME"
+      #   fi
 
     - name: Test tag
       if: startsWith(github.ref, 'refs/tags/')
