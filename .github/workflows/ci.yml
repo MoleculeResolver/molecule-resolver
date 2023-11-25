@@ -138,36 +138,48 @@ jobs:
           echo "If this was the main branch, I would push a new tag named $TAG_NAME"
         fi
 
-    - name: Release
-      uses: softprops/action-gh-release@v1
+    - name: Test tag
       if: startsWith(github.ref, 'refs/tags/')
-      with:
-        files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
+      run: |
+        echo "This is a tag"
+        echo "Tag name: ${{ github.ref_name }}"
+        echo "Tag SHA: ${{ github.sha }}"
+        echo "Tagged by: ${{ github.actor }}"
+        echo "Tag message: ${{ github.event.head_commit.message }}"
+        echo "Tag date: ${{ github.event.head_commit.timestamp }}"
+        echo "Tag URL: ${{ github.event.head_commit.url }}"
+        echo "Tag author: ${{ github.event.head_commit.author.name }}"
 
-    outputs:
-      should_publish: ${{ startsWith(github.ref, 'refs/tags/') }}
+    # - name: Release
+    #   uses: softprops/action-gh-release@v1
+    #   if: startsWith(github.ref, 'refs/tags/')
+    #   with:
+    #     files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
+
+    # outputs:
+    #   should_publish: ${{ startsWith(github.ref, 'refs/tags/') }}
 
   # Publish the package to pypi
-  publish:
-      needs: release
-      runs-on: ubuntu-latest
-      # environment:
-      #   name: pypi
-      #   url: https://pypi.org/p/molecule-resolver/
-      permissions:
-        id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+  # publish:
+  #     needs: release
+  #     runs-on: ubuntu-latest
+  #     # environment:
+  #     #   name: pypi
+  #     #   url: https://pypi.org/p/molecule-resolver/
+  #     permissions:
+  #       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
-      steps:
-      - name: Download built package
-        uses: actions/download-artifact@v3
-        with:
-          name: dist
-          path: dist/
+  #     steps:
+  #     - name: Download built package
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: dist
+  #         path: dist/
 
-      - name: Publish to pypi if new version
-        env:
-          should_publish: ${{ needs.release.outputs.should_publish }}
-        if: ${{ env.should_publish == 'true' }}
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/ 
+  #     - name: Publish to pypi if new version
+  #       env:
+  #         should_publish: ${{ needs.release.outputs.should_publish }}
+  #       if: ${{ env.should_publish == 'true' }}
+  #       uses: pypa/gh-action-pypi-publish@release/v1
+  #       with:
+  #         packages-dir: dist/ 
