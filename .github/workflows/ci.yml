@@ -139,8 +139,7 @@ jobs:
       #     echo "If this was the main branch, I would push a new tag named $TAG_NAME"
       #   fi
 
-    - name: Test tag
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Test tags
       run: |
         echo "This is a tag"
         echo "Tag name: ${{ github.ref_name }}"
