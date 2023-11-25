@@ -38,38 +38,38 @@ jobs:
 
 
   # Run pytest using built package
-  # test:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       python: ["3.9", "3.10", "3.11"]
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.10", "3.11"]
 
-  #   steps:
-  #   - name: Checkout repository
-  #     uses: actions/checkout@v4
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-  #   - name: Install python
-  #     uses: actions/setup-python@v4
-  #     with:
-  #       python-version: ${{ matrix.python }}
-  #       cache: 'pip'
-  #       cache-dependency-path: "poetry.lock"
+    - name: Install python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python }}
+        cache: 'pip'
+        cache-dependency-path: "poetry.lock"
 
-  #   - name: Download built package
-  #     uses: actions/download-artifact@v3
-  #     with:
-  #       name: dist
+    - name: Download built package
+      uses: actions/download-artifact@v3
+      with:
+        name: dist
     
-  #   - name: Install package and pytest
-  #     shell: bash
-  #     run: |
-  #       WHL_NAME=$(ls molecule_resolver-*.whl)
-  #       pip install ${WHL_NAME} pytest
+    - name: Install package and pytest
+      shell: bash
+      run: |
+        WHL_NAME=$(ls molecule_resolver-*.whl)
+        pip install ${WHL_NAME} pytest
 
-  #   - name: Run tests
-  #     shell: bash
-  #     run: pytest
+    - name: Run tests
+      shell: bash
+      run: pytest
 
   # Tag and release the package
   release:
@@ -129,55 +129,56 @@ jobs:
 
     - name: Push the tag
       if: (steps.current.outputs.version != steps.published.outputs.version)
+      id: push_tag
       env:
         TAG_NAME: ${{ steps.current.outputs.version }}
-      run: git push origin $TAG_NAME
-      # run: |
-      #   if [[ ${{ github.ref_name }} == 'main' ]]; then
-      #     git push origin $TAG_NAME
-      #   else
-      #     echo "If this was the main branch, I would push a new tag named $TAG_NAME"
-      #   fi
-
-    - name: Check if Commit is Tagged
       run: |
-        TAGGED=$(git describe --exact-match --tags $(git log -n1 --pretty='%h'))
-        if [ -z "$TAGGED" ]; then
-          echo "This commit is not tagged."
+        if [[ ${{ github.ref_name }} == 'main' ]]; then
+          git push origin $TAG_NAME
+          echo "should_release=true" >> $GITHUB_OUTPUT
         else
-          echo "This commit is tagged with $TAGGED."
+          echo "If this was the main branch, I would push a new tag named $TAG_NAME"
+          echo "should_release=false" >> $GITHUB_OUTPUT
         fi
 
-    # - name: Release
-    #   uses: softprops/action-gh-release@v1
-    #   if: startsWith(github.ref, 'refs/tags/')
-    #   with:
-    #     files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: ${{ steps.push_tag.outputs.should_release == 'true' }}
+      with:
+        files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
 
-    # outputs:
-    #   should_publish: ${{ startsWith(github.ref, 'refs/tags/') }}
+    outputs:
+      publish_pypi: steps.push_tag.outputs.should_release
+      publish_test_pypi: ${{ (steps.current.outputs.version != steps.published.outputs.version) && github.ref_name != 'main' }}
 
   # Publish the package to pypi
-  # publish:
-  #     needs: release
-  #     runs-on: ubuntu-latest
-  #     # environment:
-  #     #   name: pypi
-  #     #   url: https://pypi.org/p/molecule-resolver/
-  #     permissions:
-  #       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+  publish:
+      needs: release
+      runs-on: ubuntu-latest
+      permissions:
+        id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
-  #     steps:
-  #     - name: Download built package
-  #       uses: actions/download-artifact@v3
-  #       with:
-  #         name: dist
-  #         path: dist/
+      steps:
+      - name: Download built package
+        uses: actions/download-artifact@v3
+        with:
+          name: dist
+          path: dist/
 
-  #     - name: Publish to pypi if new version
-  #       env:
-  #         should_publish: ${{ needs.release.outputs.should_publish }}
-  #       if: ${{ env.should_publish == 'true' }}
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         packages-dir: dist/ 
+      - name: Publish to pypi if new version
+        env:
+          should_publish: ${{ needs.release.outputs.publish_pypi }}
+        if: ${{ env.should_publish == 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/ 
+
+      - name: Publish to test pypi if new version not on main
+        env:
+          should_publish: ${{ needs.release.outputs.publish_test_pypi }}
+        if: ${{ env.should_publish == 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
