@@ -139,16 +139,14 @@ jobs:
       #     echo "If this was the main branch, I would push a new tag named $TAG_NAME"
       #   fi
 
-    - name: Test tags
+    - name: Check if Commit is Tagged
       run: |
-        echo "This is a tag"
-        echo "Tag name: ${{ github.ref_name }}"
-        echo "Tag SHA: ${{ github.sha }}"
-        echo "Tagged by: ${{ github.actor }}"
-        echo "Tag message: ${{ github.event.head_commit.message }}"
-        echo "Tag date: ${{ github.event.head_commit.timestamp }}"
-        echo "Tag URL: ${{ github.event.head_commit.url }}"
-        echo "Tag author: ${{ github.event.head_commit.author.name }}"
+        TAGGED=$(git describe --exact-match --tags $(git log -n1 --pretty='%h'))
+        if [ -z "$TAGGED" ]; then
+          echo "This commit is not tagged."
+        else
+          echo "This commit is tagged with $TAGGED."
+        fi
 
     # - name: Release
     #   uses: softprops/action-gh-release@v1
