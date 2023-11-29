@@ -28,10 +28,8 @@ SMILES = "SMILES"
 #             return self.json_data[url]
 
 
-
-@pytest.mark.parametrize("data", benchmark.values())     
+@pytest.mark.parametrize("data", benchmark.values())
 class TestServices:
-
     @staticmethod
     def _test_service(
         call_method: Callable,
@@ -47,7 +45,7 @@ class TestServices:
         ----------
         call_method : Callable
             The method to call
-        input_identifier : str  
+        input_identifier : str
             The input identifier
         output_identifier_type : str
             The type of the output identifier
@@ -55,8 +53,8 @@ class TestServices:
             The expected output identifier
         kwargs : Optional[Dict], optional
             Additional keyword arguments to pass to the call method, by default None
-        
-        
+
+
         """
         if kwargs is None:
             kwargs = {}
@@ -90,7 +88,7 @@ class TestServices:
                 data["SMILES"],
                 {"mode": "name"},
             )
-    
+
     def test_comptox(self, data):
         with MoleculeResolver() as mr:
             iupac_name = data["iupac_name"]
@@ -101,6 +99,69 @@ class TestServices:
                 data["SMILES"],
                 {"mode": "name"},
             )
+
+    def test_cts(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CTS,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_chemeo(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_Chemeo,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_cas(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CAS_registryx,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_cir(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CIR,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_nist(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_NIST,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_chebi(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_ChEBI, iupac_name, "chebi_id", data["chebi_id"]
+            )
+
 
 # def test_opsin_batchmode():
 #     names = [d["iupac_name"] for d in benchmark.values()]
