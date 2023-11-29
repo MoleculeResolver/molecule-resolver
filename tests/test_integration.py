@@ -90,7 +90,17 @@ class TestServices:
                 data["SMILES"],
                 {"mode": "name"},
             )
-
+    
+    def test_comptox(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CompTox,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
 
 # def test_opsin_batchmode():
 #     names = [d["iupac_name"] for d in benchmark.values()]
