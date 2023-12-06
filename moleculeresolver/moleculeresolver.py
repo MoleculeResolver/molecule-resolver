@@ -2353,7 +2353,7 @@ class MoleculeResolver:
         )
 
     def get_molecule_from_OPSIN_batchmode(
-        self, names: list[str], standardize: bool = True
+        self, names: list[str], standardize: bool = True, allow_uninterpretable_stereo: bool = False
     ) -> list[Optional[Molecule]]:
         MoleculeResolver._check_parameters(
             identifiers=names,
@@ -2387,15 +2387,20 @@ class MoleculeResolver:
                 f.write("\n".join(names))
 
             # in the future adding the parameter -s would allow getting more structures if the stereo information opsin cannot interpret can be ignored
-            _ = subprocess.run(
-                [
+            cmd = [
                     self._java_path,
                     "-jar",
                     "opsin.jar",
                     "-osmi",
                     f"input_{unique_id}.txt",
                     f"output_{unique_id}.txt",
-                ],
+            ]
+
+            if allow_uninterpretable_stereo:
+                cmd.insert(4, '--allowUninterpretableStereo')
+
+            _ = subprocess.run(
+                cmd,
                 capture_output=True,
                 cwd=tempfolder,
             )
@@ -2450,6 +2455,7 @@ class MoleculeResolver:
                             mode="name",
                             service="opsin",
                             identifier=name,
+                            additional_information='allow_uninterpretable_stereo' if allow_uninterpretable_stereo else '',
                         )
                     ]
 
@@ -2847,9 +2853,10 @@ class MoleculeResolver:
 
                             QC_LEVEL_str = ""
                             if "qcLevel" in temp_substance:
-                                QC_LEVEL_str = (
-                                    f'|QC_LEVEL:{float(temp_substance["qcLevel"])}'
-                                )
+                                if temp_substance["qcLevel"]:
+                                    QC_LEVEL_str = (
+                                        f'|QC_LEVEL:{float(temp_substance["qcLevel"])}'
+                                    )
                             temp_synonyms = MoleculeResolver.filter_and_sort_synonyms(
                                 temp_synonyms
                             )
@@ -5331,7 +5338,7 @@ class MoleculeResolver:
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
-                                additional_information = cmp.service
+                                additional_information = cmp.additional_information
                                 mode_used = mode
                                 identifier_used = cmp.identifier
                                 break
@@ -5834,6 +5841,9 @@ class MoleculeResolver:
                 if len(group_molecules) == maximum_number_of_crosschecks_found:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
 
+        if not SMILES_with_highest_number_of_crosschecks:
+            return None
+        
         if try_to_choose_best_structure:
             SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
             if len(SMILES_with_highest_number_of_crosschecks) > 1:
