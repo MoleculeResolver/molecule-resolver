@@ -296,7 +296,7 @@ class MoleculeResolver:
         allow_redirects: bool = False,
         json: Any = None,
         return_response: bool = False,
-    ) -> Optional[requests.Response]:
+    ) -> Optional[str]:
         if not kwargs:
             kwargs = {}
 
@@ -346,7 +346,7 @@ class MoleculeResolver:
                     if response_text != response.text:
                         if response_text.count(r"\u") + response_text.count(r"\x") > 0:
                             raise UnicodeEncodeError(
-                                "Wrong charachter encoding was used."
+                                "Wrong character encoding was used."
                             )
                     return response_text
                 elif response.status_code in rejected_status_codes:
