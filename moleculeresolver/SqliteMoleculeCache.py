@@ -274,7 +274,7 @@ class SqliteMoleculeCache:
                             SMILES,
                             synonyms,
                             cas_numbers,
-                            additional_information,
+                            additional_information if additional_information else '',
                             identifier_mode_,
                             service_,
                             1,

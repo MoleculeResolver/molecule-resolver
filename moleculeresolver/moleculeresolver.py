@@ -2328,7 +2328,8 @@ class MoleculeResolver:
                                 SMILES = MoleculeResolver.standardize_SMILES(
                                     SMILES_from_InChI, standardize
                                 )
-
+                        
+                        additional_information = ''
                         if "warnings" in temp:
                             additional_information = "WARNINGS: " + ", ".join(
                                 temp["warnings"]
