@@ -3885,8 +3885,9 @@ class MoleculeResolver:
                             cleaned_unique_identifier
                         ].append(None)
 
-                    if "#" in cleaned_unique_identifier:
-                        results_with_name_errors.append(cleaned_unique_identifier)
+                    if mode == 'name':
+                        if "#" in cleaned_unique_identifier:
+                            results_with_name_errors.append(cleaned_unique_identifier)
 
                 if results_with_name_errors:
                     temp = {}
@@ -4299,8 +4300,8 @@ class MoleculeResolver:
                         standardize,
                     )
                     if cmp is not None:
-                        cmp.mode = "inchi calculated from smiles"
-                    molecules.append(cmp)
+                        cmp.mode = mode
+                        molecules.append(cmp)
 
         return MoleculeResolver.filter_and_combine_molecules(
             molecules,
@@ -4820,7 +4821,6 @@ class MoleculeResolver:
                     identifier = MoleculeResolver.SMILES_to_InChI(
                         identifier, standardize
                     )
-                    mode_used = "inchi calculated from smiles"
 
                 response_text = self._resilient_request(
                     f'https://webbook.nist.gov/cgi/cbook.cgi?{urllib.parse.quote(nist_modes[mode])}={urllib.parse.quote(identifier, safe="")}'
