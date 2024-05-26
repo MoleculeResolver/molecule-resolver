@@ -8,7 +8,7 @@ A python package allowing to use several web services to find molecule structure
 The package is available on [pypi](https://pypi.org/project/molecule-resolver/).
 
 ```
-pip intall molecule-resolver
+pip install molecule-resolver
 ```
 
 ## Usage
