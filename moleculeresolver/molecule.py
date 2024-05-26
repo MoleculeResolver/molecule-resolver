@@ -13,3 +13,10 @@ class Molecule:
     number_of_crosschecks: int = 1
     identifier: str = ""
     found_molecules: list = field(default_factory=list)
+
+    def to_dict(self, exlude_found_molecules: bool = True) -> dict:
+        d = self.__dict__
+        if exlude_found_molecules:
+            if "found_molecules" in d:
+                d.pop("found_molecules")
+        return d
