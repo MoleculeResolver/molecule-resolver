@@ -158,8 +158,9 @@ class MoleculeResolver:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-
-        error_ocurred = (exc_type is not None or exc_value is not None or exc_traceback is not None)
+        error_ocurred = (
+            exc_type is not None or exc_value is not None or exc_traceback is not None
+        )
 
         self._disabling_rdkit_logger.__exit__()
         self.molecule_cache.__exit__()
@@ -215,7 +216,7 @@ class MoleculeResolver:
         identifiers_to_search = []
         indices_of_identifiers_to_search = []
         for (molecule_index, molecule), identifier in zip(
-            enumerate(results), identifiers
+            enumerate(results), identifiers, strict=True
         ):
             if molecule is None:
                 identifiers_to_search.append(identifier)
@@ -225,7 +226,7 @@ class MoleculeResolver:
         identifiers_to_save = []
         molecules_to_save = []
         for molecule_index, identifier in zip(
-            indices_of_identifiers_to_search, identifiers_to_search
+            indices_of_identifiers_to_search, identifiers_to_search, strict=True
         ):
             molecules = results[molecule_index]
             if molecules:
@@ -565,7 +566,7 @@ class MoleculeResolver:
 
         flattened_identifiers = []
         flattened_modes = []
-        for identifier, mode in zip(identifiers, modes):
+        for identifier, mode in zip(identifiers, modes, strict=True):
             if all([not isinstance(identifier, t) for t in [int, str, list, tuple]]):
                 raise TypeError("An identifier can only be an int, str, list or tuple.")
 
@@ -580,7 +581,9 @@ class MoleculeResolver:
         synonyms = []
         CAS = set()
         given_SMILES = []
-        for identifier, mode in zip(flattened_identifiers, flattened_modes):
+        for identifier, mode in zip(
+            flattened_identifiers, flattened_modes, strict=True
+        ):
             if mode == "name":
                 synonyms.append(identifier)
             elif mode == "cas":
@@ -999,6 +1002,7 @@ class MoleculeResolver:
                 [r"(.*)(\((?:Z|E)\)-)(.*)", r"\2\1\3"],
                 [r"«|»", r""],
                 [r"- -", "-"],
+                ["flouro", "fluoro"],
             ]
 
         new_name = name
@@ -1341,6 +1345,7 @@ class MoleculeResolver:
         # in my experience the CAS with the lowest first number is mostly the correct one.
         if all([v == 1 for v in counter.values()]):
             CAS_rns = sorted(CAS_rns, key=lambda CAS: int(CAS.split("-")[0]))
+            return [CAS_rns[0]]
 
         return [counter.most_common()[0][0]]
 
@@ -1800,6 +1805,10 @@ class MoleculeResolver:
     def are_SMILES_equal(
         smiles1: str, smiles2: str, standardize: bool = True, isomeric: bool = True
     ) -> bool:
+        
+        if smiles1 == smiles2:
+            return True
+        
         if standardize:
             smiles1 = MoleculeResolver.standardize_SMILES(smiles1, True)
             smiles2 = MoleculeResolver.standardize_SMILES(smiles2, True)
@@ -1826,6 +1835,158 @@ class MoleculeResolver:
             return [SMILES]
 
         return [Chem.MolToSmiles(mol_) for mol_ in resonance_mols if mol_]
+
+    @staticmethod
+    @cache
+    def clean_chemical_name(chemical_name: str, normalize:bool = True, unescape_html:bool = True, spell_out_greek_characters: bool = False, for_filename:bool = False) -> str:
+        greek_letters = [
+            "α",
+            "β",
+            "γ",
+            "δ",
+            "ε",
+            "ϵ",
+            "ζ",
+            "η",
+            "θ",
+            "ι",
+            "κ",
+            "λ",
+            "μ",
+            "ν",
+            "ξ",
+            "ο",
+            "π",
+            "ρ",
+            "σ",
+            "τ",
+            "υ",
+            "φ",
+            "χ",
+            "ψ",
+            "ω",
+            "Α",
+            "Β",
+            "Γ",
+            "Δ",
+            "Ε",
+            "Ζ",
+            "Η",
+            "Θ",
+            "Ι",
+            "Κ",
+            "Λ",
+            "Μ",
+            "Ν",
+            "Ξ",
+            "Ο",
+            "Π",
+            "Ρ",
+            "Σ",
+            "Τ",
+            "Υ",
+            "Φ",
+            "Χ",
+            "Ψ",
+            "Ω",
+            "µ",
+            "∆",
+        ]
+        spelled_out_versions = [
+            "alpha",
+            "beta",
+            "gamma",
+            "delta",
+            "epsilon",
+            "epsilon",
+            "zeta",
+            "eta",
+            "theta",
+            "iota",
+            "kappa",
+            "lambda",
+            "mu",
+            "nu",
+            "xi",
+            "omicron",
+            "pi",
+            "rho",
+            "sigma",
+            "tau",
+            "upsilon",
+            "phi",
+            "chi",
+            "psi",
+            "omega",
+            "alpha",
+            "beta",
+            "gamma",
+            "delta",
+            "epsilon",
+            "zeta",
+            "eta",
+            "theta",
+            "iota",
+            "kappa",
+            "lambda",
+            "mu",
+            "nu",
+            "xi",
+            "omicron",
+            "pi",
+            "rho",
+            "sigma",
+            "tau",
+            "upsilon",
+            "phi",
+            "chi",
+            "psi",
+            "omega",
+            "mu",
+            "delta",
+        ]
+
+        map_to_replace = [
+            ("’", "'"),
+            ("′", "'"),
+            ("±", "+-"),
+            ("→", "-->"),
+            ("≥", ">="),
+            ("≤", "<="),
+            ("·", "."),
+            ("#", "no. "),
+            ("«", ""),
+            ("»", ""),
+        ]
+
+        if spell_out_greek_characters:
+            for greek_letter, spelled_out_version in zip(
+                greek_letters, spelled_out_versions, strict=True
+            ):
+                map_to_replace.append((greek_letter, spelled_out_version))
+
+        chemical_name = chemical_name.strip()
+
+        if unescape_html:
+            chemical_name = html.unescape(chemical_name)
+
+        for old, new in map_to_replace:
+            chemical_name = chemical_name.replace(old, new)
+
+        if normalize:
+            nfkd_form = unicodedata.normalize("NFKD", chemical_name)
+            chemical_name = "".join(
+                [c for c in nfkd_form if not unicodedata.combining(c)]
+            )
+
+        chemical_name = regex.sub(r'\s+', ' ', chemical_name)
+
+        if for_filename:
+            chemical_name = regex.sub(r'[^\w\s]', '', chemical_name.lower())
+            chemical_name = chemical_name.encode('ascii', 'ignore').decode('ascii')
+            chemical_name = regex.sub(r'\s+', '', chemical_name)
+
+        return chemical_name.strip()
 
     @staticmethod
     def are_equal(
@@ -2328,8 +2489,8 @@ class MoleculeResolver:
                                 SMILES = MoleculeResolver.standardize_SMILES(
                                     SMILES_from_InChI, standardize
                                 )
-                        
-                        additional_information = ''
+
+                        additional_information = ""
                         if "warnings" in temp:
                             additional_information = "WARNINGS: " + ", ".join(
                                 temp["warnings"]
@@ -2354,7 +2515,10 @@ class MoleculeResolver:
         )
 
     def get_molecule_from_OPSIN_batchmode(
-        self, names: list[str], standardize: bool = True, allow_uninterpretable_stereo: bool = False
+        self,
+        names: list[str],
+        standardize: bool = True,
+        allow_uninterpretable_stereo: bool = False,
     ) -> list[Optional[Molecule]]:
         MoleculeResolver._check_parameters(
             identifiers=names,
@@ -2389,16 +2553,16 @@ class MoleculeResolver:
 
             # in the future adding the parameter -s would allow getting more structures if the stereo information opsin cannot interpret can be ignored
             cmd = [
-                    self._java_path,
-                    "-jar",
-                    "opsin.jar",
-                    "-osmi",
-                    f"input_{unique_id}.txt",
-                    f"output_{unique_id}.txt",
+                self._java_path,
+                "-jar",
+                "opsin.jar",
+                "-osmi",
+                f"input_{unique_id}.txt",
+                f"output_{unique_id}.txt",
             ]
 
             if allow_uninterpretable_stereo:
-                cmd.insert(4, '--allowUninterpretableStereo')
+                cmd.insert(4, "--allowUninterpretableStereo")
 
             _ = subprocess.run(
                 cmd,
@@ -2446,6 +2610,7 @@ class MoleculeResolver:
                 indices_of_identifiers_to_search,
                 identifiers_to_search,
                 SMILES,
+                strict=True,
             ):
                 smi = MoleculeResolver.standardize_SMILES(smi, standardize)
                 if smi:
@@ -2456,7 +2621,9 @@ class MoleculeResolver:
                             mode="name",
                             service="opsin",
                             identifier=name,
-                            additional_information='allow_uninterpretable_stereo' if allow_uninterpretable_stereo else '',
+                            additional_information="allow_uninterpretable_stereo"
+                            if allow_uninterpretable_stereo
+                            else "",
                         )
                     ]
 
@@ -2675,7 +2842,7 @@ class MoleculeResolver:
             identifier_indices_sets[mode] = []
 
         for i_molecule, (i_molecule_identifiers, i_molecule_modes) in enumerate(
-            zip(identifiers, modes)
+            zip(identifiers, modes, strict=True)
         ):
             if len(i_molecule_identifiers) != len(i_molecule_modes):
                 raise ValueError(
@@ -2691,7 +2858,9 @@ class MoleculeResolver:
                 i_molecule_identifiers, i_molecule_modes
             )
             for identifier, mode in zip(
-                flattened_i_molecule_identifiers, flattened_i_molecule_modes
+                flattened_i_molecule_identifiers,
+                flattened_i_molecule_modes,
+                strict=True,
             ):
                 if mode in all_supported_modes:
                     identifier_sets[mode].append(identifier)
@@ -2706,7 +2875,8 @@ class MoleculeResolver:
 
             chunks = list(
                 MoleculeResolver.chunker(
-                    list(zip(_identifiers, _identifier_indices)), batch_size
+                    list(zip(_identifiers, _identifier_indices, strict=True)),
+                    batch_size,
                 )
             )
 
@@ -2741,7 +2911,7 @@ class MoleculeResolver:
                         )
 
                     for index, result in zip(
-                        identifier_indices_chunk, results_for_this_chunk
+                        identifier_indices_chunk, results_for_this_chunk, strict=True
                     ):
                         if index not in this_mode_results:
                             this_mode_results[index] = None
@@ -2946,7 +3116,7 @@ class MoleculeResolver:
                         f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier, safe="")}',
                         kwargs={"timeout": 5},
                         rejected_status_codes=[404, 500],
-                        max_retries = 2
+                        max_retries=2,
                     )
                 except requests.exceptions.ConnectionError:
                     # I don't know why, but somtimes CTS is offline. This would make the module much slower as
@@ -3251,7 +3421,9 @@ class MoleculeResolver:
                         parse_CompTox_result(row_values)
 
                     for molecule_index, identifier in zip(
-                        indices_of_identifiers_to_search, identifiers_to_search
+                        indices_of_identifiers_to_search,
+                        identifiers_to_search,
+                        strict=True,
                     ):
                         if identifier in temp_results_by_identifier:
                             temp_result = temp_results_by_identifier[identifier]
@@ -3441,6 +3613,15 @@ class MoleculeResolver:
                         if temp_SMILES is None:
                             raise ValueError("Structure could not be found.")
 
+                        # sometimes chemeo gives back substructure results when searching by SMILES,
+                        # this is to filter out most of them ensuring that at least
+                        # non-isomeric SMILES are the same:
+                        if mode == "smiles":
+                            if not MoleculeResolver.are_SMILES_equal(
+                                temp_SMILES, identifier, isomeric=False
+                            ):
+                                continue
+
                         molecules.append(
                             Molecule(
                                 temp_SMILES,
@@ -3476,140 +3657,7 @@ class MoleculeResolver:
 
         def clean_identifier(identifier):
             if mode == "name":
-                greek_letters = [
-                    "α",
-                    "β",
-                    "γ",
-                    "δ",
-                    "ε",
-                    "ϵ",
-                    "ζ",
-                    "η",
-                    "θ",
-                    "ι",
-                    "κ",
-                    "λ",
-                    "μ",
-                    "ν",
-                    "ξ",
-                    "ο",
-                    "π",
-                    "ρ",
-                    "σ",
-                    "τ",
-                    "υ",
-                    "φ",
-                    "χ",
-                    "ψ",
-                    "ω",
-                    "Α",
-                    "Β",
-                    "Γ",
-                    "Δ",
-                    "Ε",
-                    "Ζ",
-                    "Η",
-                    "Θ",
-                    "Ι",
-                    "Κ",
-                    "Λ",
-                    "Μ",
-                    "Ν",
-                    "Ξ",
-                    "Ο",
-                    "Π",
-                    "Ρ",
-                    "Σ",
-                    "Τ",
-                    "Υ",
-                    "Φ",
-                    "Χ",
-                    "Ψ",
-                    "Ω",
-                    "µ",
-                    "∆",
-                ]
-                spelled_out_versions = [
-                    "alpha",
-                    "beta",
-                    "gamma",
-                    "delta",
-                    "epsilon",
-                    "epsilon",
-                    "zeta",
-                    "eta",
-                    "theta",
-                    "iota",
-                    "kappa",
-                    "lambda",
-                    "mu",
-                    "nu",
-                    "xi",
-                    "omicron",
-                    "pi",
-                    "rho",
-                    "sigma",
-                    "tau",
-                    "upsilon",
-                    "phi",
-                    "chi",
-                    "psi",
-                    "omega",
-                    "alpha",
-                    "beta",
-                    "gamma",
-                    "delta",
-                    "epsilon",
-                    "zeta",
-                    "eta",
-                    "theta",
-                    "iota",
-                    "kappa",
-                    "lambda",
-                    "mu",
-                    "nu",
-                    "xi",
-                    "omicron",
-                    "pi",
-                    "rho",
-                    "sigma",
-                    "tau",
-                    "upsilon",
-                    "phi",
-                    "chi",
-                    "psi",
-                    "omega",
-                    "mu",
-                    "delta",
-                ]
-
-                map_to_replace = [
-                    ("’", "'"),
-                    ("′", "'"),
-                    ("±", "+-"),
-                    ("→", "-->"),
-                    ("≥", ">="),
-                    ("≤", "<="),
-                    ("·", "."),
-                    ("#", "no. "),
-                    ("«", ""),
-                    ("»", ""),
-                ]
-
-                for greek_letter, spelled_out_version in zip(
-                    greek_letters, spelled_out_versions
-                ):
-                    map_to_replace.append((greek_letter, spelled_out_version))
-
-                old = identifier
-                identifier = html.unescape(identifier)
-                for old, new in map_to_replace:
-                    identifier = identifier.replace(old, new)
-
-                nfkd_form = unicodedata.normalize("NFKD", identifier)
-                identifier = "".join(
-                    [c for c in nfkd_form if not unicodedata.combining(c)]
-                )
+                identifier = MoleculeResolver.clean_chemical_name(identifier, spell_out_greek_characters=True)
 
                 if identifier.endswith(", (+-)-"):
                     identifier = "".join(identifier.split(", (+-)-")[:-1])
@@ -3885,7 +3933,7 @@ class MoleculeResolver:
                             cleaned_unique_identifier
                         ].append(None)
 
-                    if mode == 'name':
+                    if mode == "name":
                         if "#" in cleaned_unique_identifier:
                             results_with_name_errors.append(cleaned_unique_identifier)
 
@@ -3906,7 +3954,7 @@ class MoleculeResolver:
 
                 if len(found_results_by_cid_identifier) > 0:
                     for original_identifier, cleaned_identifier in zip(
-                        original_identifiers, cleaned_identifiers
+                        original_identifiers_to_search, cleaned_identifiers, strict=True
                     ):
                         if cleaned_identifier in found_results_by_cid_identifier:
                             cids = found_results_by_cid_identifier[cleaned_identifier]
@@ -3968,6 +4016,7 @@ class MoleculeResolver:
                 for molecule_index, original_identifier in zip(
                     indices_of_identifiers_to_search,
                     original_identifiers_to_search,
+                    strict=True,
                 ):
                     cid = (
                         found_results_by_identifier[original_identifier]
@@ -4243,6 +4292,15 @@ class MoleculeResolver:
                                 SMILES, standardize
                             )
 
+                            # sometimes the cas registry gives back wrong aromaticity results 
+                            # when searching by SMILES, this is to filter out most of them
+                            # ensuring that at least non-isomeric SMILES are the same:
+                            if mode == "smiles":
+                                if not MoleculeResolver.are_SMILES_equal(
+                                    SMILES, identifier, isomeric=False
+                                ):
+                                    continue
+
                             inchi = details["inchi"]
 
                             if MoleculeResolver.check_SMILES(
@@ -4300,8 +4358,11 @@ class MoleculeResolver:
                         standardize,
                     )
                     if cmp is not None:
-                        cmp.mode = mode
-                        molecules.append(cmp)
+                        if  MoleculeResolver.are_SMILES_equal(
+                            cmp.SMILES, identifier, isomeric=False
+                        ):
+                            cmp.mode = mode
+                            molecules.append(cmp)
 
         return MoleculeResolver.filter_and_combine_molecules(
             molecules,
@@ -4514,7 +4575,7 @@ class MoleculeResolver:
             this_chunk_identifiers = []
             this_chunk_identifier_indices = []
             for identifier_index, identifier in zip(
-                indices_of_identifiers_to_search, identifiers_to_search
+                indices_of_identifiers_to_search, identifiers_to_search, strict=True
             ):
                 this_chunk_identifiers.append(identifier)
                 this_chunk_identifier_indices.append(identifier_index)
@@ -4534,7 +4595,7 @@ class MoleculeResolver:
                 chunks_identifer_indices.append(this_chunk_identifier_indices)
 
             for chunk_identifier_indices, chunk_identifiers in zip(
-                chunks_identifer_indices, chunks_identifiers
+                chunks_identifer_indices, chunks_identifiers, strict=True
             ):
                 search_response_text = self._resilient_request(
                     f'{SRS_URL}/{mode}?{mode}List={urllib.parse.quote("|".join(chunk_identifiers))}&qualifier=exact',
@@ -4551,7 +4612,7 @@ class MoleculeResolver:
                     )
 
                     for molecule_index, identifier in zip(
-                        chunk_identifier_indices, chunk_identifiers
+                        chunk_identifier_indices, chunk_identifiers, strict=True
                     ):
                         if identifier in infos_by_identifier:
                             this_molecules = []
@@ -5257,7 +5318,9 @@ class MoleculeResolver:
             for service in services_to_use:
                 current_service = service
                 if service == "cas_registry":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5281,7 +5344,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "pubchem":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5305,7 +5370,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "cir":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5325,7 +5392,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "opsin":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5344,7 +5413,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "chebi":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5368,7 +5439,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "srs":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5392,7 +5465,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "comptox":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5416,7 +5491,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "chemeo":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5440,7 +5517,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "cts":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5462,7 +5541,9 @@ class MoleculeResolver:
                                 identifier_used = cmp.identifier
                                 break
                 elif service == "nist":
-                    for identifier, mode in zip(flattened_identifiers, flattened_modes):
+                    for identifier, mode in zip(
+                        flattened_identifiers, flattened_modes, strict=True
+                    ):
                         if (
                             mode
                             in MoleculeResolver._supported_modes_by_services[service]
@@ -5509,7 +5590,7 @@ class MoleculeResolver:
                     # search for salts in pubchem and extract the single ions, take the one found most often
                     if required_charge != "zero" and required_charge != 0:
                         for identifier, mode in zip(
-                            flattened_identifiers, flattened_modes
+                            flattened_identifiers, flattened_modes, strict=True
                         ):
                             molecules = (
                                 self.get_molecule_for_ion_from_partial_pubchem_search(
@@ -5637,7 +5718,9 @@ class MoleculeResolver:
             charge = " | charge: " + str(required_charge)
         print(f"Searching for molecule {formula} {charge}")
         print("with the following identifiers:")
-        for identifier, mode in zip(flattened_identifiers, flattened_modes):
+        for identifier, mode in zip(
+            flattened_identifiers, flattened_modes, strict=True
+        ):
             print(mode + ":", identifier)
         print("")
 
@@ -5844,7 +5927,7 @@ class MoleculeResolver:
 
         if not SMILES_with_highest_number_of_crosschecks:
             return None
-        
+
         if try_to_choose_best_structure:
             SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
             if len(SMILES_with_highest_number_of_crosschecks) > 1:
@@ -5893,7 +5976,7 @@ class MoleculeResolver:
                         for (
                             original_SMILES_found,
                             molecule_found_by_opsin_from_synonym,
-                        ) in zip(SMILES_map, opsin_results):
+                        ) in zip(SMILES_map, opsin_results, strict=True):
                             if molecule_found_by_opsin_from_synonym:
                                 if (
                                     original_SMILES_found
@@ -6048,6 +6131,7 @@ class MoleculeResolver:
             required_formulas,
             required_charges,
             required_structure_types,
+            strict=True,
         ):
             if minimum_number_of_cross_checks is None:
                 args.append(
