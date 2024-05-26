@@ -22,13 +22,16 @@ class SqliteMoleculeCache:
         self.delete_expired()
         return self
 
-    def __exit__(self, *args, **kwargs):
-        # close all other connections except the main one
+    def close_chid_connections(self):
         for thread_id, thread_connection in self._connections.items():
             if thread_id != self._main_thread_id:
                 if thread_connection:
                     thread_connection.close()
                     self._connections[thread_id] = None
+
+    def __exit__(self, *args, **kwargs):
+
+        self.close_chid_connections()
 
         # close the connection from the main thread
         this_thread_id = threading.get_ident()
@@ -333,7 +336,6 @@ class SqliteMoleculeCache:
                     CREATE TEMPORARY TABLE {this_transaction_unique_temp_table_name} (
                         search_index INTEGER NOT NULL,
                         service TEXT NOT NULL,
-                        identifier_mode TEXT NOT NULL,
                         identifier TEXT NOT NULL
                     )
                 """
@@ -341,14 +343,13 @@ class SqliteMoleculeCache:
 
                 this_thread_connection.executemany(
                     f"""
-                    INSERT INTO {this_transaction_unique_temp_table_name} (search_index, service, identifier_mode, identifier)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO {this_transaction_unique_temp_table_name} (search_index, service, identifier)
+                    VALUES (?, ?, ?)
                 """,
                     list(
                         zip(
                             range(len(service)),
                             service,
-                            identifier_mode,
                             identifier,
                         )
                     ),
@@ -370,10 +371,13 @@ class SqliteMoleculeCache:
                 if all_one_service:
                     molecule_join_on_service = f"'{service[0]}'"
 
-                molecule_join_on_identifier_mode = "t.identifier_mode"
                 all_one_identifier_mode = len(set(identifier_mode)) == 1
-                if all_one_identifier_mode:
-                    molecule_join_on_identifier_mode = f"'{identifier_mode[0]}'"
+                if not all_one_identifier_mode:
+                    raise ValueError('This class expects all identifier modes to be the same.')
+                
+                collation = ''
+                if identifier_mode[0] == 'name':
+                    collation = 'COLLATE NOCASE'
 
                 cursor = this_thread_connection.execute(
                     f"""
@@ -381,13 +385,13 @@ class SqliteMoleculeCache:
                         m.id{optional_columns}
                         FROM {this_transaction_unique_temp_table_name} AS t
                         INNER JOIN molecules AS m
-                            ON m.identifier_mode = {molecule_join_on_identifier_mode}
+                            ON m.identifier_mode = '{identifier_mode[0]}'
                             AND m.service = {molecule_join_on_service}
                         LEFT JOIN synonyms AS s
                             ON m.id = s.molecule_id
                         LEFT JOIN cas_numbers AS c
                             ON m.id = c.molecule_id
-                    WHERE m.identifier = t.identifier COLLATE NOCASE
+                    WHERE m.identifier = t.identifier {collation}
                     GROUP BY search_index, m.id
                 """
                 )
