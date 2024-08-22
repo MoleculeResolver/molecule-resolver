@@ -70,7 +70,7 @@ class MoleculeResolver:
     _supported_modes_by_services = {
         "cas_registry": ["name", "smiles", "inchi", "cas"],
         "chebi": ["name", "cas", "formula", "smiles", "inchi", "inchikey"],
-        "chemeo": ["name", "smiles", "inchi", "inchikey"],
+        "chemeo": ["name", "cas", "smiles", "inchi", "inchikey"],
         "cir": ["formula", "name", "cas", "smiles", "inchi", "inchikey"],
         "comptox": ["name", "cas", "inchikey"],
         "cts": ["name", "cas", "smiles"],
@@ -314,9 +314,9 @@ class MoleculeResolver:
             user_agent_is_set = "user-agent" in [key.lower() for key in headers.keys()]
 
         if user_agent_is_set is False:
-            headers[
-                "user-agent"
-            ] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
+            headers["user-agent"] = (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
+            )
 
         kwargs["headers"] = headers
 
@@ -944,11 +944,14 @@ class MoleculeResolver:
         if len(name_parts) > 1:
             n_parts_ending_in_hyphen = 0
             for i, part in enumerate(name_parts):
-                if i == 0:
-                    continue
-                if part.endswith("-"):
+                if i == 0 and part.endswith("-"):
+                    break
+                elif part.endswith("-"):
                     n_parts_ending_in_hyphen += 1
-            if n_parts_ending_in_hyphen == len(name_parts) - 1:
+            if n_parts_ending_in_hyphen == 0:
+                name_parts.reverse()
+                names.append(" ".join(name_parts))
+            elif n_parts_ending_in_hyphen == len(name_parts) - 1:
                 name_parts.reverse()
                 names.append("".join(name_parts))
 
@@ -967,6 +970,7 @@ class MoleculeResolver:
                 "\(<\+\->\)\-",
                 "\(2H\d+\)",
                 "\[2H\d+\]",
+                "[Nn]-",
             ]
 
         if suffixes_to_delete is None:
@@ -1003,6 +1007,8 @@ class MoleculeResolver:
                 [r"«|»", r""],
                 [r"- -", "-"],
                 ["flouro", "fluoro"],
+                ["-[Nn]-", "-"],
+                ["([A-Za-z]{2,}),([A-Za-z]{2,})", r"\1, \2"],
             ]
 
         new_name = name
@@ -1805,10 +1811,10 @@ class MoleculeResolver:
     def are_SMILES_equal(
         smiles1: str, smiles2: str, standardize: bool = True, isomeric: bool = True
     ) -> bool:
-        
+
         if smiles1 == smiles2:
             return True
-        
+
         if standardize:
             smiles1 = MoleculeResolver.standardize_SMILES(smiles1, True)
             smiles2 = MoleculeResolver.standardize_SMILES(smiles2, True)
@@ -1825,6 +1831,7 @@ class MoleculeResolver:
     def get_resonance_SMILES(SMILES):
         mol = MoleculeResolver.get_from_SMILES(SMILES)
         rms = Chem.ResonanceMolSupplier(mol)
+        # the following line is a workaroung for https://github.com/rdkit/rdkit/issues/6704
         rms.SetProgressCallback(EmptyResonanceMolSupplierCallback())
         resonance_mols = list(rms)
 
@@ -1838,7 +1845,13 @@ class MoleculeResolver:
 
     @staticmethod
     @cache
-    def clean_chemical_name(chemical_name: str, normalize:bool = True, unescape_html:bool = True, spell_out_greek_characters: bool = False, for_filename:bool = False) -> str:
+    def clean_chemical_name(
+        chemical_name: str,
+        normalize: bool = True,
+        unescape_html: bool = True,
+        spell_out_greek_characters: bool = False,
+        for_filename: bool = False,
+    ) -> str:
         greek_letters = [
             "α",
             "β",
@@ -1979,12 +1992,12 @@ class MoleculeResolver:
                 [c for c in nfkd_form if not unicodedata.combining(c)]
             )
 
-        chemical_name = regex.sub(r'\s+', ' ', chemical_name)
+        chemical_name = regex.sub(r"\s+", " ", chemical_name)
 
         if for_filename:
-            chemical_name = regex.sub(r'[^\w\s]', '', chemical_name.lower())
-            chemical_name = chemical_name.encode('ascii', 'ignore').decode('ascii')
-            chemical_name = regex.sub(r'\s+', '', chemical_name)
+            chemical_name = regex.sub(r"[^\w\s]", "", chemical_name.lower())
+            chemical_name = chemical_name.encode("ascii", "ignore").decode("ascii")
+            chemical_name = regex.sub(r"\s+", "", chemical_name)
 
         return chemical_name.strip()
 
@@ -2007,55 +2020,63 @@ class MoleculeResolver:
         SMILES1 = Chem.MolToSmiles(mol1, isomericSmiles=isomeric)
         SMILES2 = Chem.MolToSmiles(mol2, isomericSmiles=isomeric)
 
+        if SMILES1 == SMILES2:
+            return True
+
+        SMILES1_structure_type = MoleculeResolver.get_structure_type_from_SMILES(
+            SMILES1
+        )
+        SMILES2_structure_type = MoleculeResolver.get_structure_type_from_SMILES(
+            SMILES2
+        )
+        if SMILES1_structure_type != SMILES2_structure_type:
+            return False
+
         if check_for_resonance_structures is None:
-            SMILES1_structure_type = MoleculeResolver.get_structure_type_from_SMILES(
-                SMILES1
-            )
-            SMILES2_structure_type = MoleculeResolver.get_structure_type_from_SMILES(
-                SMILES2
-            )
-            if SMILES1_structure_type != SMILES2_structure_type:
-                return False
             check_for_resonance_structures = SMILES1_structure_type in [
                 "ion",
                 "salt",
             ] or SMILES2_structure_type in ["ion", "salt"]
 
-        if method == 1:
-            if SMILES1 == SMILES2:
-                return True
+        def do_resonance_structures_overlap(SMILES1, SMILES2):
+            unique_partial_SMILES1 = set(SMILES1.split("."))
+            unique_partial_SMILES2 = set(SMILES2.split("."))
 
-            if check_for_resonance_structures:
-                unique_partial_SMILES1 = set(SMILES1.split("."))
-                unique_partial_SMILES2 = set(SMILES2.split("."))
+            if len(unique_partial_SMILES1) != len(unique_partial_SMILES2):
+                return False
 
-                if len(unique_partial_SMILES1) != len(unique_partial_SMILES2):
-                    return False
-
-                matching_unique_partial_SMILES2_found = []
-                for unique_partial_SMILES1_ in unique_partial_SMILES1:
-                    resonance_SMILES1 = MoleculeResolver.get_resonance_SMILES(
-                        unique_partial_SMILES1_
-                    )
-                    unique_partial_SMILES2 = unique_partial_SMILES2 - set(
-                        matching_unique_partial_SMILES2_found
-                    )
-                    for unique_partial_SMILES2_ in unique_partial_SMILES2:
-                        resonance_SMILES2 = MoleculeResolver.get_resonance_SMILES(
-                            unique_partial_SMILES2_
-                        )
-                        if set(resonance_SMILES1) == set(resonance_SMILES2):
-                            matching_unique_partial_SMILES2_found.append(
-                                unique_partial_SMILES2_
-                            )
-                            break
-
-                return len(unique_partial_SMILES1) == len(
+            matching_unique_partial_SMILES2_found = []
+            for unique_partial_SMILES1_ in unique_partial_SMILES1:
+                resonance_SMILES1 = MoleculeResolver.get_resonance_SMILES(
+                    unique_partial_SMILES1_
+                )
+                unique_partial_SMILES2 = unique_partial_SMILES2 - set(
                     matching_unique_partial_SMILES2_found
                 )
-                # https://github.com/rdkit/rdkit/discussions/4719
-                # return rdMolHash.MolHash(standardized_molecule1, rdMolHash.HashFunction.HetAtomTautomer) == rdMolHash.MolHash(standardized_molecule1, rdMolHash.HashFunction.HetAtomTautomer)
+                for unique_partial_SMILES2_ in unique_partial_SMILES2:
+                    resonance_SMILES2 = MoleculeResolver.get_resonance_SMILES(
+                        unique_partial_SMILES2_
+                    )
+                    # one would expect the resonance structures to be equal
+                    # but to a bug sometimes you do not get all of them: https://github.com/rdkit/rdkit/issues/4491
+                    # this will not be a workaround for all situations
+                    # but is still better than just looking at equality
+                    if set(resonance_SMILES1).intersection(set(resonance_SMILES2)):
+                        matching_unique_partial_SMILES2_found.append(
+                            unique_partial_SMILES2_
+                        )
+                        break
 
+            return len(unique_partial_SMILES1) == len(
+                matching_unique_partial_SMILES2_found
+            )
+            # https://github.com/rdkit/rdkit/discussions/4719
+            # return rdMolHash.MolHash(standardized_molecule1, rdMolHash.HashFunction.HetAtomTautomer) == rdMolHash.MolHash(standardized_molecule1, rdMolHash.HashFunction.HetAtomTautomer)
+
+
+        if method == 1:
+            if check_for_resonance_structures:
+                return do_resonance_structures_overlap(SMILES1, SMILES2)
             return False
 
         if method == 2:  # using the RDKit RegistrationHash
@@ -2074,33 +2095,7 @@ class MoleculeResolver:
             mol2_hash = get_mol_hash(mol2, hashscheme)
 
             if mol1_hash != mol2_hash and check_for_resonance_structures:
-                unique_partial_SMILES1 = set(SMILES1.split("."))
-                unique_partial_SMILES2 = set(SMILES2.split("."))
-
-                if len(unique_partial_SMILES1) != len(unique_partial_SMILES2):
-                    return False
-
-                matching_unique_partial_SMILES2_found = []
-                for unique_partial_SMILES1_ in unique_partial_SMILES1:
-                    unique_partial_SMILES2 = unique_partial_SMILES2 - set(
-                        matching_unique_partial_SMILES2_found
-                    )
-                    for unique_partial_SMILES2_ in unique_partial_SMILES2:
-                        resonance_SMILES1 = MoleculeResolver.get_resonance_SMILES(
-                            unique_partial_SMILES1_
-                        )
-                        resonance_SMILES2 = MoleculeResolver.get_resonance_SMILES(
-                            unique_partial_SMILES2_
-                        )
-                        if set(resonance_SMILES1) == set(resonance_SMILES2):
-                            matching_unique_partial_SMILES2_found.append(
-                                unique_partial_SMILES2_
-                            )
-                            break
-
-                return len(unique_partial_SMILES1) == len(
-                    matching_unique_partial_SMILES2_found
-                )
+                return do_resonance_structures_overlap(SMILES1, SMILES2)
 
             return mol1_hash == mol2_hash
 
@@ -2621,9 +2616,11 @@ class MoleculeResolver:
                             mode="name",
                             service="opsin",
                             identifier=name,
-                            additional_information="allow_uninterpretable_stereo"
-                            if allow_uninterpretable_stereo
-                            else "",
+                            additional_information=(
+                                "allow_uninterpretable_stereo"
+                                if allow_uninterpretable_stereo
+                                else ""
+                            ),
                         )
                     ]
 
@@ -3262,7 +3259,7 @@ class MoleculeResolver:
                 "identifierTypes": [comptox_modes[mode]],
                 "inputType": "IDENTIFIER",
                 "massError": 0,
-                "searchItems": "\n".join(identifiers_to_search)
+                "searchItems": "\n".join(identifiers_to_search),
                 #'qc_level', 'expocast', 'data_sources', 'toxvaldata', 'assays', 'number_of_pubmed_articles', 'number_of_pubchem_data_sources', 'number_of_cpdat_sources', 'in_iris_list', 'in_pprtv_list', 'in_wikipedia_list', 'qsar_ready_smiles', 'ms_ready_smiles', 'synonym_identifier'
             }
 
@@ -3454,9 +3451,9 @@ class MoleculeResolver:
                                             )
                                         )
 
-                                    temp_results_by_identifier[
-                                        identifier
-                                    ] = best_results
+                                    temp_results_by_identifier[identifier] = (
+                                        best_results
+                                    )
                                 results[molecule_index] = []
 
                                 for (
@@ -3547,12 +3544,12 @@ class MoleculeResolver:
                 CHEMEO_URL = "https://www.chemeo.com/api/v1/"
                 API_bearer_headers = {}
                 API_bearer_headers["Accept"] = "application/json"
-                API_bearer_headers[
-                    "Authorization"
-                ] = f'Bearer {self.available_service_API_keys["chemeo"]}'
-
+                API_bearer_headers["Authorization"] = (
+                    f'Bearer {self.available_service_API_keys["chemeo"]}'
+                )
+                temp_mode = mode if mode != "cas" else "name"
                 request_text = self._resilient_request(
-                    f'{CHEMEO_URL}convert/{mode}/{urllib.parse.quote(identifier, safe="")}',
+                    f'{CHEMEO_URL}convert/{temp_mode}/{urllib.parse.quote(identifier, safe="")}',
                     kwargs={"headers": API_bearer_headers},
                     rejected_status_codes=[403, 404],
                 )
@@ -3657,7 +3654,9 @@ class MoleculeResolver:
 
         def clean_identifier(identifier):
             if mode == "name":
-                identifier = MoleculeResolver.clean_chemical_name(identifier, spell_out_greek_characters=True)
+                identifier = MoleculeResolver.clean_chemical_name(
+                    identifier, spell_out_greek_characters=True
+                )
 
                 if identifier.endswith(", (+-)-"):
                     identifier = "".join(identifier.split(", (+-)-")[:-1])
@@ -4292,7 +4291,7 @@ class MoleculeResolver:
                                 SMILES, standardize
                             )
 
-                            # sometimes the cas registry gives back wrong aromaticity results 
+                            # sometimes the cas registry gives back wrong aromaticity results
                             # when searching by SMILES, this is to filter out most of them
                             # ensuring that at least non-isomeric SMILES are the same:
                             if mode == "smiles":
@@ -4358,7 +4357,7 @@ class MoleculeResolver:
                         standardize,
                     )
                     if cmp is not None:
-                        if  MoleculeResolver.are_SMILES_equal(
+                        if MoleculeResolver.are_SMILES_equal(
                             cmp.SMILES, identifier, isomeric=False
                         ):
                             cmp.mode = mode
@@ -4749,6 +4748,7 @@ class MoleculeResolver:
                 f"{CIR_URL}{urllib.parse.quote(structure_identifier)}/{representation}{resolver_info}",
                 rejected_status_codes=[404, 500],
             )
+            time.sleep(1)
             if not response_text:
                 return None
             response_values = response_text.split("\n")
@@ -4759,7 +4759,18 @@ class MoleculeResolver:
                             "More than one iupac_name was found. This was unexpected."
                         )
                 return response_values
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as e:
+            # CIR closes the connection sometimes, so we reset the session and continue
+            if "ConnectionResetError" in str(e):
+                self._init_session()
+                time.sleep(5)
+                return self._get_info_from_CIR(
+                    structure_identifier,
+                    representation,
+                    resolvers_to_use,
+                    expected_number_of_results,
+                )
+
             # I don't know why, but somtimes CIR is offline. This would make the module much slower as
             # it tries to connect multiple times anyway. Instead we give a warning and skip CIR.
             if "CIR_is_down" not in self._message_slugs_shown:
@@ -4807,7 +4818,7 @@ class MoleculeResolver:
                     "smiles": ("smiles",),
                     "inchi": ("stdinchi",),
                     "inchikey": ("stdinchikey",),
-                    "cas": ("cas_number",),
+                    "cas": ("cas_number", "name_by_cir"),
                 }
 
                 SMILES = self._get_info_from_CIR(

@@ -298,7 +298,7 @@ class SqliteMoleculeCache:
                     identifier_mode_clause = ""
                     values = (service, identifier)
                 if identifier_mode == "cas":
-                    identifier_clause = "cas_numbers.cas_number = ?"
+                    identifier_clause = "identifier = ? " #"cas_numbers.cas_number = ?"
                     identifier_mode_clause = ""
                     values = (service, identifier)
 
