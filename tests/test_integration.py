@@ -1,9 +1,10 @@
+from datetime import datetime
 import pytest
 from moleculeresolver import MoleculeResolver
 import json
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 
 # IUPAC names
@@ -27,11 +28,77 @@ SMILES = "SMILES"
 #         elif self.patch_state == "LOAD":
 #             return self.json_data[url]
 
+# Add ability to call TestServices with a patch of resilient request that saves response
+# Use Mock that wraps _resilient_request and has a side effect that saves the json response.
 
 
-@pytest.mark.parametrize("data", benchmark.values())     
+class MoleculeResolverSaver(MoleculeResolver):
+    def __init__(
+        self,
+        save_path: Optional[str] = None,
+        available_service_API_keys: Optional[dict[str, Optional[str]]] = None,
+        molecule_cache_db_path: Optional[str] = None,
+        molecule_cache_expiration: Optional[datetime] = None,
+        differentiate_isotopes: bool = False,
+    ):
+        super().__init__(
+            available_service_API_keys,
+            molecule_cache_db_path,
+            molecule_cache_expiration,
+            differentiate_isotopes,
+        )
+        self.save_path = save_path
+        if self.save_path is not None:
+            self.save_path = Path(self.save_path)
+
+        if self.save_path is not None and self.save_path.exists():
+            with open(self.save_path, "r") as f:
+                self.json_data = json.load(f)
+        else:
+            self.json_data = {}
+        
+    def _resilient_request(
+        self,
+        url: str,
+        kwargs: Optional[dict[str, Any]] = None,
+        request_type: str = "get",
+        accepted_status_codes: list[int] = [200],
+        rejected_status_codes: list[int] = [404],
+        max_retries: int = 10,
+        sleep_time: Union[int, float] = 2,
+        allow_redirects: bool = False,
+        json: Any = None,
+        return_response: bool = False,
+    ) -> Optional[str]:
+        res =  super()._resilient_request(
+            url,
+            kwargs,
+            request_type,
+            accepted_status_codes,
+            rejected_status_codes,
+            max_retries,
+            sleep_time,
+            allow_redirects,
+            json,
+            return_response,
+        )
+        if self.save_path is not None:
+            self.json_data[url] = res
+        return res
+
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        if self.save_path is not None:
+            with open(self.save_path, "w") as f:
+                json.dump(self.json_data, f)
+        return super().__exit__(exc_type, exc_value, exc_traceback)
+    
+
+
+
+
+@pytest.mark.parametrize("data", benchmark.values())
 class TestServices:
-
     @staticmethod
     def _test_service(
         call_method: Callable,
@@ -47,7 +114,7 @@ class TestServices:
         ----------
         call_method : Callable
             The method to call
-        input_identifier : str  
+        input_identifier : str
             The input identifier
         output_identifier_type : str
             The type of the output identifier
@@ -55,8 +122,8 @@ class TestServices:
             The expected output identifier
         kwargs : Optional[Dict], optional
             Additional keyword arguments to pass to the call method, by default None
-        
-        
+
+
         """
         if kwargs is None:
             kwargs = {}
@@ -71,7 +138,7 @@ class TestServices:
             raise ValueError(f"Expected {output_identifier} but got {res_txt}")
 
     def test_opsin(self, data):
-        with MoleculeResolver() as mr:
+        with MoleculeResolverSaver(save_path="test.json") as mr:
             iupac_name = data["iupac_name"]
             self._test_service(
                 mr.get_molecule_from_OPSIN,
@@ -80,6 +147,90 @@ class TestServices:
                 data["SMILES"],
             )
 
+    def test_pubchem(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_pubchem,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_comptox(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CompTox,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_cts(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CTS,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    # Need API key
+    # def test_chemeo(self, data):
+    #     with MoleculeResolver() as mr:
+    #         iupac_name = data["iupac_name"]
+    #         self._test_service(
+    #             mr.get_molecule_from_Chemeo,
+    #             iupac_name,
+    #             SMILES,
+    #             data["SMILES"],
+    #             {"mode": "name"},
+    #         )
+
+    def test_cas(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CAS_registryx,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_cir(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CIR,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_nist(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_NIST,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_chebi(self, data):
+        with MoleculeResolver() as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_ChEBI, iupac_name, "chebi_id", data["chebi_id"]
+            )
 
 
 # def test_opsin_batchmode():
