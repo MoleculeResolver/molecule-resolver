@@ -1,7 +1,7 @@
 from datetime import datetime
 import os
 import sqlite3
-from typing import Optional, Sequence, Union
+from typing import Optional, Union
 import threading
 import uuid
 
@@ -9,31 +9,71 @@ from moleculeresolver.molecule import Molecule
 
 
 class SqliteMoleculeCache:
+    """
+    A class for caching molecule information using SQLite.
+
+    This class provides methods to initialize, manage, and query a SQLite database
+    for storing molecule information. It supports multi-threading and implements
+    context management for proper resource handling.
+
+    Attributes:
+        db_path (str): Path to the SQLite database file. Defaults to ":memory:".
+
+        expiration_datetime (Optional[datetime]): Expiration date for cached entries.
+
+        _connections (dict): Thread-specific database connections.
+
+        _main_thread_id (int): ID of the main thread.
+    """
+
     def __init__(
-        self, db_path: str = ":memory:", expiration_datetime: Optional[datetime] = None
+        self, db_path: Optional[str] = ":memory:", expiration_datetime: Optional[datetime] = None
     ):
+        """
+        Initialize a new SqliteMoleculeCache instance.
+
+        Args:
+            db_path (Optional[str]): Path to the SQLite database file. Defaults to ":memory:".
+
+            expiration_datetime (Optional[datetime]): Expiration date for cached entries.
+        """
         self.db_path = db_path
         self.expiration_datetime = expiration_datetime
         self._connections = {}
         self._main_thread_id = threading.get_ident()
 
-    def __enter__(self):
+    def __enter__(self) -> 'SqliteMoleculeCache':
+        """
+        Enter the runtime context related to this object.
+
+        Creates tables and deletes expired entries.
+
+        Returns:
+            SqliteMoleculeCache: The instance of the class.
+        """
         self._create_tables()
         self.delete_expired()
         return self
 
-    def close_chid_connections(self):
+    def close_child_connections(self) -> None:
+        """
+        Close all child thread database connections.
+        """
         for thread_id, thread_connection in self._connections.items():
             if thread_id != self._main_thread_id:
                 if thread_connection:
                     thread_connection.close()
                     self._connections[thread_id] = None
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        """
+        Exit the runtime context and close all database connections.
 
-        self.close_chid_connections()
+        Closes all child thread connections and optimizes the main thread's connection before closing.
+        """
+        self.close_child_connections()
 
-        # close the connection from the main thread
+        # Close the connection from the main thread
         this_thread_id = threading.get_ident()
         if this_thread_id == self._main_thread_id:
             if self._main_thread_id in self._connections:
@@ -43,7 +83,13 @@ class SqliteMoleculeCache:
                 main_thread_connection.close()
                 self._connections.clear()
 
-    def get_connection(self):
+    def get_connection(self) -> sqlite3.Connection:
+        """
+        Get or create a thread-specific database connection.
+
+        Returns:
+            sqlite3.Connection: A SQLite database connection for the current thread.
+        """
         thread_id = threading.get_ident()
         if thread_id not in self._connections:
             self._connections[thread_id] = sqlite3.connect(
@@ -56,7 +102,10 @@ class SqliteMoleculeCache:
 
         return self._connections[thread_id]
 
-    def _create_tables(self):
+    def _create_tables(self) -> None:
+        """
+        Create the necessary tables in the SQLite database if they don't exist.
+        """
         this_thread_connection = self.get_connection()
         with this_thread_connection:
             this_thread_connection.execute(
@@ -119,11 +168,28 @@ class SqliteMoleculeCache:
 
     def save(
         self,
-        service: Union[str, Sequence[str]],
-        identifier_mode: Union[str, Sequence[str]],
-        identifier: Union[str, Sequence[str]],
-        molecules: Union[Molecule, Sequence[Molecule]],
+        service: Union[str, list[str]],
+        identifier_mode: Union[str, list[str]],
+        identifier: Union[str, list[str]],
+        molecules: Union[Molecule, list[Molecule]],
     ) -> None:
+        """
+        Save molecule information to the database.
+
+        Saves one or multiple Molecule objects to the database, along with their associated service, identifier_mode, and identifier.
+
+        Args:
+            service (Union[str, list[str]]): The service(s) associated with the molecule(s).
+
+            identifier_mode (Union[str, list[str]]): The identifier mode(s) for the molecule(s).
+
+            identifier (Union[str, list[str]]): The identifier(s) for the molecule(s).
+
+            molecules (Union[Molecule, list[Molecule]]): The molecule(s) to be saved.
+
+        Raises:
+            ValueError: If a molecule's synonyms contain a pipe symbol or if molecule properties don't match the input values.
+        """
         if isinstance(molecules, Molecule) or molecules is None:
             molecules = [molecules]
 
@@ -168,9 +234,11 @@ class SqliteMoleculeCache:
                         molecule.mode.strip(),
                         i,
                         molecule.SMILES.strip(),
-                        str(molecule.additional_information).strip()
-                        if molecule.additional_information
-                        else None,
+                        (
+                            str(molecule.additional_information).strip()
+                            if molecule.additional_information
+                            else None
+                        ),
                     )
 
                 cursor = this_thread_connection.execute(
@@ -218,11 +286,40 @@ class SqliteMoleculeCache:
 
     def _search(
         self,
-        service: Union[str, Sequence[str]],
-        identifier_mode: Union[str, Sequence[str]],
-        identifier: Union[str, Sequence[str]],
-        only_check_for_existance: bool = False,
-    ) -> Union[Optional[list[Molecule]], list[Optional[list[Molecule]]], bool, list[bool]]:
+        service: Union[str, list[str]],
+        identifier_mode: Union[str, list[str]],
+        identifier: Union[str, list[str]],
+        only_check_for_existence: Optional[bool] = False,
+    ) -> Union[
+        Optional[list[Molecule]], list[Optional[list[Molecule]]], bool, list[bool]
+    ]:
+        """
+        Search for molecules in the database based on the provided criteria.
+
+        Supports single and multiple molecule searches. It can either return the full molecule information or just check for existence.
+
+        Args:
+            service (Union[str, list[str]]): The service(s) to search in.
+
+            identifier_mode (Union[str, list[str]]): The mode(s) of identification (e.g., 'name', 'cas').
+
+            identifier (Union[str, list[str]]): The identifier(s) to search for.
+
+            only_check_for_existence (Optional[bool]): If True, only check if the molecule exists. Defaults to False.
+
+        Returns:
+
+            Union[Optional[list[Molecule]], list[Optional[list[Molecule]]], bool, list[bool]]:
+            - If searching for a single molecule:
+                - If only_check_for_existence is False: returns Optional[list[Molecule]]
+                - If only_check_for_existence is True: returns bool
+            - If searching for multiple molecules:
+                - If only_check_for_existence is False: returns list[Optional[list[Molecule]]]
+                - If only_check_for_existence is True: returns list[bool]
+
+        Raises:
+            ValueError: If the input parameters are inconsistent or invalid for multiple searches.
+        """
         if not isinstance(identifier, str):
             search_mode = "multiple"
             if not (isinstance(identifier_mode, str) and isinstance(service, str)):
@@ -233,13 +330,13 @@ class SqliteMoleculeCache:
                     or len(identifier_mode) != len(identifier)
                 ):
                     raise ValueError(
-                        "When searching for multiple molecules, service, mode and identifier, all must be provided as str or same sized lists."
+                        "When searching for multiple molecules, service, mode and identifier all must be provided as str or same sized lists."
                     )
         else:
             search_mode = "single"
-            if not (isinstance(identifier_mode, str) and isinstance(identifier, str)):
+            if not (isinstance(identifier_mode, str) and isinstance(service, str)):
                 raise ValueError(
-                    "When searching for a single molecule, service, mode and identifier, all must be provided as string."
+                    "When searching for a single molecule, service, mode and identifier all must be provided as strings."
                 )
 
         def rows_to_molecules(service_, identifier_mode_, identifier_, rows):
@@ -250,10 +347,10 @@ class SqliteMoleculeCache:
                     synonyms = []
                     cas_numbers = []
 
-                    # this workaround is needed as GROUP_CONCAT does not preserve order of the values
+                    # Workaround as GROUP_CONCAT does not preserve order of the values
                     if temp_synonyms:
                         temp_synonyms = {
-                            k: v
+                            int(k): v
                             for k, v in (
                                 kv.split("|") for kv in temp_synonyms.split("||")
                             )
@@ -263,7 +360,7 @@ class SqliteMoleculeCache:
                         ]
                     if temp_cas_numbers:
                         temp_cas_numbers = {
-                            k: v
+                            int(k): v
                             for k, v in (
                                 kv.split("|") for kv in temp_cas_numbers.split("||")
                             )
@@ -277,7 +374,7 @@ class SqliteMoleculeCache:
                             SMILES,
                             synonyms,
                             cas_numbers,
-                            additional_information if additional_information else '',
+                            additional_information if additional_information else "",
                             identifier_mode_,
                             service_,
                             1,
@@ -298,7 +395,9 @@ class SqliteMoleculeCache:
                     identifier_mode_clause = ""
                     values = (service, identifier)
                 if identifier_mode == "cas":
-                    identifier_clause = "identifier = ? " #"cas_numbers.cas_number = ?"
+                    identifier_clause = (
+                        "identifier = ? "  # "cas_numbers.cas_number = ?"
+                    )
                     identifier_mode_clause = ""
                     values = (service, identifier)
 
@@ -318,7 +417,7 @@ class SqliteMoleculeCache:
 
                 molecule_rows = [row[1:] for row in cursor if row[0]]
 
-                if only_check_for_existance:
+                if only_check_for_existence:
                     return len(molecule_rows) != 0
 
                 if not molecule_rows:
@@ -355,7 +454,7 @@ class SqliteMoleculeCache:
                     ),
                 )
 
-                if only_check_for_existance:
+                if only_check_for_existence:
                     optional_columns = ""
                 else:
                     optional_columns = """,
@@ -365,7 +464,7 @@ class SqliteMoleculeCache:
                             GROUP_CONCAT(cas_number_index || '|' || cas_number, '||')
                     """
 
-                # this distinction makes queries run much faster
+                # Distinction makes queries run much faster
                 all_one_service = len(set(service)) == 1
                 molecule_join_on_service = "t.service"
                 if all_one_service:
@@ -373,11 +472,13 @@ class SqliteMoleculeCache:
 
                 all_one_identifier_mode = len(set(identifier_mode)) == 1
                 if not all_one_identifier_mode:
-                    raise ValueError('This class expects all identifier modes to be the same.')
-                
-                collation = ''
-                if identifier_mode[0] == 'name':
-                    collation = 'COLLATE NOCASE'
+                    raise ValueError(
+                        "This class expects all identifier modes to be the same."
+                    )
+
+                collation = ""
+                if identifier_mode[0] == "name":
+                    collation = "COLLATE NOCASE"
 
                 cursor = this_thread_connection.execute(
                     f"""
@@ -395,10 +496,10 @@ class SqliteMoleculeCache:
                     GROUP BY search_index, m.id
                 """
                 )
-                # TODO search also the synonyms and cas_numbers tables
+                # TODO: search also the synonyms and cas_numbers tables
                 results = [None] * len(service)
                 rows = cursor.fetchall()
-                if only_check_for_existance:
+                if only_check_for_existence:
                     for row in rows:
                         search_index, molecule_id = row
                         results[search_index] = molecule_id is not None
@@ -441,36 +542,101 @@ class SqliteMoleculeCache:
 
     def exists(
         self,
-        service: Union[str,  Sequence[str]],
-        identifier_mode: Union[str,  Sequence[str]],
-        identifier: Union[str,  Sequence[str]],
-    ) -> Union[bool,  list[bool]]:
+        service: Union[str, list[str]],
+        identifier_mode: Union[str, list[str]],
+        identifier: Union[str, list[str]],
+    ) -> Union[bool, list[bool]]:
+        """
+        Check if molecule(s) exist in the database based on the provided criteria.
+
+        Supports both single and multiple molecule existence checks.
+
+        Args:
+            service (Union[str, list[str]]): The service(s) to search in.
+            Can be a single string or a sequence of strings for multiple checks.
+
+            identifier_mode (Union[str, list[str]]): The mode(s) of identification (e.g., 'name', 'cas').
+            Can be a single string or a sequence of strings for multiple checks.
+
+            identifier (Union[str, list[str]]): The identifier(s) to search for.
+            Can be a single string or a sequence of strings for multiple checks.
+
+        Returns:
+
+            Union[bool, list[bool]]:
+                
+                - For a single check: A boolean indicating whether the molecule exists.
+                - For multiple checks: A list of booleans, each indicating whether the corresponding molecule exists.
+
+        Note:
+            This method uses the internal _search method with the 'only_check_for_existence' flag set to True.
+        """
         return self._search(
-            service, identifier_mode, identifier, only_check_for_existance=True
+            service, identifier_mode, identifier, only_check_for_existence=True
         )
 
     def search(
         self,
-        service: Union[str,  Sequence[str]],
-        identifier_mode: Union[str,  Sequence[str]],
-        identifier: Union[str,  Sequence[str]],
-    ) -> Union[Optional[list[Molecule]],  list[Optional[list[Molecule]]]]:
+        service: Union[str, list[str]],
+        identifier_mode: Union[str, list[str]],
+        identifier: Union[str, list[str]],
+    ) -> Union[Optional[list[Molecule]], list[Optional[list[Molecule]]]]:
+        """
+        Search for molecules based on the given parameters.
+
+        Searches for molecules using the specified service, identifier mode, and identifier.
+        Supports both single and multiple searches.
+
+        Args:
+            service (Union[str, list[str]]): The service(s) to use for the search.
+            Can be a single string or a sequence of strings.
+            
+            identifier_mode (Union[str, list[str]]): The identifier mode(s) to use.
+            Can be a single string or a sequence of strings.
+
+            identifier (Union[str, list[str]]): The identifier(s) to search for.
+            Can be a single string or a sequence of strings.
+
+        Returns:
+
+            Union[Optional[list[Molecule]], list[Optional[list[Molecule]]]]:
+
+                - If a single search is performed, returns either None or a list of Molecule objects.
+                - If multiple searches are performed, returns a list of results, where each result
+                  is either None or a list of Molecule objects.
+
+        Note:
+            This method internally calls the _search method to perform the actual search operation.
+        """
         return self._search(service, identifier_mode, identifier)
 
     def delete_expired(self) -> None:
+        """
+        Delete expired molecules from the cache.
+
+        Removes all molecules from the database that were added before the expiration datetime, if set.
+
+        Note:
+            This method only performs the deletion if 'self.expiration_datetime' is set.
+        """
         if self.expiration_datetime:
             this_thread_connection = self.get_connection()
             with this_thread_connection:
-                if self.expiration_datetime:
-                    this_thread_connection.execute(
-                        """
-                        DELETE FROM molecules
-                        WHERE datetime_added < ?
-                    """,
-                        (self.expiration_datetime,),
-                    )
+                this_thread_connection.execute(
+                    """
+                    DELETE FROM molecules
+                    WHERE datetime_added < ?
+                """,
+                    (self.expiration_datetime,),
+                )
 
-    def delete_service(self, service: str) -> None:
+    def delete_by_service(self, service: str) -> None:
+        """
+        Delete all molecules associated with a specific service from the cache.
+
+        Args:
+            service (str): The name of the service whose molecules should be deleted.
+        """
         this_thread_connection = self.get_connection()
         with this_thread_connection:
             this_thread_connection.execute(
@@ -482,6 +648,16 @@ class SqliteMoleculeCache:
             )
 
     def recreate_all_tables(self) -> None:
+        """
+        Recreate all tables in the database.
+
+        Closes any existing connections, deletes the database files,
+        and then recreates the tables. Use with caution, as it will
+        result in data loss.
+
+        Raises:
+            RuntimeError: If called in a multi-threaded environment (more than one connection).
+        """
         if len(self._connections) > 1:
             raise RuntimeError(
                 "Cannot delete cache files in a multi-threaded environment."
@@ -499,7 +675,16 @@ class SqliteMoleculeCache:
 
         self._create_tables()
 
-    def count(self, service: str = None):
+    def count(self, service: Optional[str] = None) -> int:
+        """
+        Count the number of molecules in the database, optionally filtered by service.
+
+        Args:
+            service (Optional[str]): The service to filter by. If None, counts all molecules.
+
+        Returns:
+            int: The number of molecules matching the criteria.
+        """
         this_thread_connection = self.get_connection()
         with this_thread_connection:
             if service:

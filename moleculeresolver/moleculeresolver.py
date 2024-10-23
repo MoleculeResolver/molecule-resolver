@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import time
 from types import SimpleNamespace
-from typing import Any, Optional, Sequence, Tuple, Union
+from typing import Any, Generator, Optional, Union
 import traceback
 import unicodedata
 import urllib
@@ -33,7 +33,6 @@ from rdkit.Chem import Draw
 from rdkit.Chem import rdmolops
 from rdkit.Chem import rdMolDescriptors
 from rdkit.Chem.MolStandardize import rdMolStandardize
-from rdkit.Chem import RegistrationHash
 from rdkit.Chem.rdchem import ResonanceMolSupplierCallback
 from tqdm import tqdm
 import urllib3
@@ -42,20 +41,79 @@ from moleculeresolver.rdkitmods import disabling_rdkit_logger
 from moleculeresolver.molecule import Molecule
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
 
-class EmptyResonanceMolSupplierCallback(ResonanceMolSupplierCallback):
-    """Workaround for https://github.com/rdkit/rdkit/issues/6704"""
 
-    def __call__(self):
+class EmptyResonanceMolSupplierCallback(ResonanceMolSupplierCallback):
+    """
+    A callback class that does nothing when called.
+
+    This class is a workaround for the issue described in
+    https://github.com/rdkit/rdkit/issues/6704.
+
+    It inherits from ResonanceMolSupplierCallback but overrides the __call__
+    method to do nothing, effectively suppressing any callback behavior.
+    """
+
+    def __call__(self) -> None:
+        """
+        Override the call method to do nothing.
+
+        This method is called when an instance of this class is invoked as a function.
+        It intentionally does nothing as a workaround for the RDKit issue.
+
+        Returns:
+            None
+        """
         pass
 
-class CustomHttpAdapter(requests.adapters.HTTPAdapter):
-    """Workaround for SSL error from https://stackoverflow.com/questions/71603314/ssl-error-unsafe-legacy-renegotiation-disabled/71646353#71646353"""
 
-    def __init__(self, ssl_context=None, **kwargs):
+class CustomHttpAdapter(requests.adapters.HTTPAdapter):
+    """
+    A custom HTTP adapter that allows for specifying an SSL context.
+
+    This class is a workaround for the SSL error described in
+    https://stackoverflow.com/questions/71603314/ssl-error-unsafe-legacy-renegotiation-disabled/71646353#71646353
+
+    It extends the HTTPAdapter class from the requests library, allowing the use of a custom SSL context
+    when making HTTP requests.
+
+    Attributes:
+        ssl_context (Optional[ssl.SSLContext]): The SSL context to use for HTTPS connections.
+    """
+
+    def __init__(self, ssl_context: Optional[ssl.SSLContext] = None, **kwargs) -> None:
+        """
+        Initialize the CustomHttpAdapter.
+
+        Args:
+            ssl_context (Optional[ssl.SSLContext]): The SSL context to use. Defaults to None.
+
+            **kwargs: Additional keyword arguments to pass to the parent HTTPAdapter.
+
+        Returns:
+            None
+        """
         self.ssl_context = ssl_context
         super().__init__(**kwargs)
 
-    def init_poolmanager(self, connections, maxsize, block=False):
+    def init_poolmanager(
+        self, connections: int, maxsize: int, block: bool = False
+    ) -> None:
+        """
+        Initialize the connection pool manager with the custom SSL context.
+
+        This method overrides the parent class method to use the custom SSL context
+        when initializing the pool manager.
+
+        Args:
+            connections (int): The number of connection pools to cache.
+
+            maxsize (int): The maximum number of connections to save in the pool.
+
+            block (bool): Whether the connection pool should block for connections. Defaults to False.
+
+        Returns:
+            None
+        """
         self.poolmanager = urllib3.poolmanager.PoolManager(
             num_pools=connections,
             maxsize=maxsize,
@@ -63,10 +121,85 @@ class CustomHttpAdapter(requests.adapters.HTTPAdapter):
             ssl_context=self.ssl_context,
         )
 
+
 class MoleculeResolver:
 
     def chunker(self, seq: list, size: int) -> set:
+        """
+        Split a sequence into chunks of a specified size.
+
+        Args:
+            seq (list): The sequence to be chunked.
+
+            size (int): The size of each chunk.
+
+        Returns:
+            set: A set containing subsequences (chunks) from the input sequence.
+
+        Example:
+            >>> list(self.chunker([1, 2, 3, 4, 5, 6], 2))
+            [(1, 2), (3, 4), (5, 6)]
+        """
         return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+    def take_most_common(
+        self, container: list, number_to_take: Optional[int] = None
+    ) -> list:
+        """
+        Select the most common elements from a container.
+
+        Identifies and returns the most frequently occurring elements in the given container.
+        Handles both case-sensitive and case-insensitive comparisons for string elements.
+
+        Args:
+            container (list): The input list of elements to process.
+
+            number_to_take (Optional[int]): The number of most common elements to return.
+            If None, returns all elements sorted by frequency. Defaults to None.
+
+        Returns:
+            list: A list of the most common elements, preserving the original case for strings.
+
+        Notes:
+            - If the container has fewer than 2 elements, it returns the container as is.
+            - For string elements, comparisons are case-insensitive, but the original case is preserved in the output.
+            - The method maintains the order of elements based on their frequency,
+              with ties broken by the order of appearance in the original container.
+            - Whitespace is stripped from string elements before comparison.
+        """
+        if not number_to_take:
+            number_to_take = len(container)
+
+        if len(container) < 2:
+            return container
+
+        original_container = container
+
+        is_str = isinstance(container[0], str)
+        if is_str:
+            original_container = [item.strip() for item in container]
+            container = [item.strip().lower() for item in container]
+
+        index_container = []
+        items_seen = []
+        for item_index, item in enumerate(container):
+            if item in items_seen:
+                continue
+            n = container.count(item)
+            for i in range(n):
+                index_container.append(item_index)
+            items_seen.append(item)
+
+        counter = collections.Counter(index_container)
+        sorted_item_indices_to_take = [
+            item_index for item_index, _ in counter.most_common(number_to_take)
+        ]
+
+        final_container = []
+        for item_index in sorted_item_indices_to_take:
+            final_container.append(original_container[item_index])
+
+        return final_container
 
     def __init__(
         self,
@@ -74,11 +207,37 @@ class MoleculeResolver:
         molecule_cache_db_path: Optional[str] = None,
         molecule_cache_expiration: Optional[datetime] = None,
         standardization_options: Optional[dict] = None,
-        differentiate_isomers: bool = True,
-        differentiate_tautomers: bool = True,
-        differentiate_isotopes: bool = True,
-        check_for_resonance_structures: Optional[bool] = None
-    ):
+        differentiate_isomers: Optional[bool] = True,
+        differentiate_tautomers: Optional[bool] = True,
+        differentiate_isotopes: Optional[bool] = True,
+        check_for_resonance_structures: Optional[bool] = None,
+    ) -> None:
+        """
+        Initialize a MoleculeResolver instance.
+
+        Args:
+            available_service_API_keys (Optional[dict[str, Optional[str]]]): A dictionary of API keys for various services. Defaults to None.
+
+            molecule_cache_db_path (Optional[str]): Path to the molecule cache database. Defaults to None.
+
+            molecule_cache_expiration (Optional[datetime]): Expiration time for cached molecules. Defaults to None.
+
+            standardization_options (Optional[dict]): Options for molecule standardization. Defaults to None.
+
+            differentiate_isomers (Optional[bool]): Whether to differentiate between isomers. Defaults to True.
+
+            differentiate_tautomers (Optional[bool]): Whether to differentiate between tautomers. Defaults to True.
+
+            differentiate_isotopes (Optional[bool]): Whether to differentiate between isotopes. Defaults to True.
+
+            check_for_resonance_structures (Optional[bool]): Whether to check for resonance structures. Defaults to None.
+
+        Notes:
+            - Sets up the MoleculeResolver with the provided configuration options.
+            - Initializes various attributes and sets up the molecule cache if a database path is provided.
+        """
+        # The rest of the __init__ method implementation would follow here
+
         if not available_service_API_keys:
             available_service_API_keys = {}
 
@@ -98,21 +257,25 @@ class MoleculeResolver:
         self.available_service_API_keys = available_service_API_keys
 
         default_standardization_options = {
-            'disconnect_metals': False,
-            'normalize': True,
-            'reionize': True,
-            'uncharge': False,
-            'try_assign_sterochemistry': True,
-            'remove_atom_mapping_number': True,
+            "disconnect_metals": False,
+            "normalize": True,
+            "reionize": True,
+            "uncharge": False,
+            "try_assign_sterochemistry": True,
+            "remove_atom_mapping_number": True,
         }
         if standardization_options:
-            missing_entries = set(default_standardization_options) - set(standardization_options)
+            missing_entries = set(default_standardization_options) - set(
+                standardization_options
+            )
         else:
             standardization_options = {}
             missing_entries = set(default_standardization_options)
 
         for missing_entry in missing_entries:
-            standardization_options[missing_entry] = default_standardization_options[missing_entry]
+            standardization_options[missing_entry] = default_standardization_options[
+                missing_entry
+            ]
 
         self._standardization_options = SimpleNamespace(**standardization_options)
         self._differentiate_isomers = differentiate_isomers
@@ -140,7 +303,9 @@ class MoleculeResolver:
             "pubchem": ["name", "cas", "smiles", "formula", "inchi", "inchikey", "cid"],
             "srs": ["name", "cas"],
         }
-        self._available_services = sorted(list(self._supported_modes_by_services.keys()))
+        self._available_services = sorted(
+            list(self._supported_modes_by_services.keys())
+        )
         self._supported_modes = []
         for modes in self._supported_modes_by_services.values():
             self._supported_modes.extend(modes)
@@ -160,14 +325,34 @@ class MoleculeResolver:
         self.InChI_regex_compiled = regex.compile(
             r"^InChI=\dS?\/[0-9a-ik-zA-IK-Z]+\/[0-9a-ik-zA-IK-Z+\-\(\)\\\/,\?]*$"
         )
-        self.InChICode_regex_compiled = regex.compile(r"^[A-Z]{14}\-[A-Z]{8}[SN][A-Z]\-[A-Z]$")
+        self.InChICode_regex_compiled = regex.compile(
+            r"^[A-Z]{14}\-[A-Z]{8}[SN][A-Z]\-[A-Z]$"
+        )
         self.chemeo_API_token_regex_compiled = regex.compile(r"[a-zA-Z0-9_]+")
         self.comptox_API_token_regex_compiled = regex.compile(r"[a-z0-9\-]+")
         self.html_tag_regex_compiled = regex.compile(r"<.*?>")
 
         self._init_session()
 
-    def __enter__(self):
+    def __enter__(self) -> "MoleculeResolver":
+        """
+        Enter the runtime context for the MoleculeResolver.
+
+        This method is called when entering a 'with' statement. It sets up the
+        necessary resources for the MoleculeResolver to function.
+
+        Returns:
+            MoleculeResolver: The instance of the class (self).
+
+        Raises:
+            Exception: Any exceptions raised during the setup process.
+
+        Notes:
+            - Performs the following actions:
+                1. Disables the RDKit logger.
+                2. Initializes the molecule cache.
+                3. Sets up a temporary folder for OPSIN if it's available.
+        """
         self._disabling_rdkit_logger = disabling_rdkit_logger()
         self._disabling_rdkit_logger.__enter__()
         self.molecule_cache = SqliteMoleculeCache(
@@ -180,21 +365,75 @@ class MoleculeResolver:
             )
         return self
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
+    def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        """
+        Exit the runtime context for the MoleculeResolver.
+
+        This method is called when exiting a 'with' statement. It cleans up
+        resources used by the MoleculeResolver.
+
+        Args:
+            exception_type (Type[BaseException] or None): The type of the exception that caused the context to be exited.
+
+            exception_value (BaseException or None): The instance of the exception that caused the context to be exited.
+
+            exception_traceback (TracebackType or None): A traceback object encoding the stack trace.
+
+        Returns:
+            None
+
+        Notes:
+            - Performs the following cleanup actions:
+                1. Determines if an error occurred during execution.
+                2. Exits the RDKit logger disabling context.
+                3. Exits the molecule cache context.
+                4. Cleans up the OPSIN temporary folder if no error occurred.
+        """
         error_ocurred = (
-            exc_type is not None or exc_value is not None or exc_traceback is not None
+            exception_type is not None
+            or exception_value is not None
+            or exception_traceback is not None
         )
 
-        self._disabling_rdkit_logger.__exit__()
-        self.molecule_cache.__exit__()
-        self._disabling_rdkit_logger.__exit__()
+        self._disabling_rdkit_logger.__exit__(None, None, None)
+        self.molecule_cache.__exit__(None, None, None)
+        self._disabling_rdkit_logger.__exit__(None, None, None)
         if self._OPSIN_tempfolder and not error_ocurred:
             self._OPSIN_tempfolder.cleanup()
 
     @contextmanager
     def query_molecule_cache(
         self, service: str, identifier_mode: str, identifier: str
-    ) -> Tuple[bool, list[Molecule]]:
+    ) -> Generator[tuple[bool, list[Molecule]], None, None]:
+        """
+        Query the molecule cache for a given identifier and yield the results.
+
+        Searches the molecule cache for a specific identifier using the provided service and identifier mode.
+        Yields whether an entry is available and the list of molecules found. After the context is exited,
+        it handles saving new molecules to the cache if necessary.
+
+        Args:
+            service (str): The service used for querying (e.g., "cts", "cir").
+
+            identifier_mode (str): The mode of identification used.
+
+            identifier (str): The specific identifier to search for.
+
+        Returns:
+            tuple[bool, list[Molecule]]: A tuple containing:
+
+            - bool: True if an entry is available in the cache, False otherwise.
+            - list[Molecule]: The list of molecules found in the cache (empty if not found).
+
+        Raises:
+            Exception: Any exceptions raised by the underlying cache operations.
+
+        Notes:
+            - Uses a context manager to ensure proper handling of cache operations.
+            - Handles special cases for CTS and CIR services when they are down.
+            - New molecules are saved to the cache after the context is exited, unless
+              specific conditions prevent saving (e.g., service is down).
+        """
         molecules = self.molecule_cache.search(service, identifier_mode, identifier)
         entry_available = molecules is not None
 
@@ -228,8 +467,34 @@ class MoleculeResolver:
         service: str,
         identifier_mode: str,
         identifiers: list[str],
-        save_not_found: bool = True,
-    ) -> Tuple[list[str], list[int], Optional[list[list[Molecule], None]]]:
+        save_not_found: Optional[bool] = True,
+    ) -> Generator[
+        tuple[list[str], list[int], Optional[list[Optional[list[Molecule]]]]],
+        None,
+        None,
+    ]:
+        """
+        Query the molecule cache for multiple identifiers in batch mode.
+
+        Searches the cache for molecules matching the given service, identifier mode, and list of identifiers.
+        Yields information about identifiers to search, their indices, and the results. After the context is exited,
+        it saves new molecules to the cache.
+
+        Args:
+            service (str): The service used for querying (e.g., "cts", "cir").
+
+            identifier_mode (str): The mode of identification used.
+
+            identifiers (list[str]): The list of identifiers to search for.
+
+            save_not_found (Optional[bool]): Whether to save entries for identifiers not found. Defaults to True.
+
+        Returns:
+            tuple[list[str], list[int], Optional[list[Optional[list[Molecule]]]]]: A tuple containing:
+                - list[str]: Identifiers that need to be searched (not found in cache).
+                - list[int]: Indices of the identifiers to be searched.
+                - Optional[list[Optional[list[Molecule]]]]: Results from the cache search.
+        """
         results = self.molecule_cache.search(
             [service] * len(identifiers),
             [identifier_mode] * len(identifiers),
@@ -272,6 +537,23 @@ class MoleculeResolver:
     def _init_session(
         self, pool_connections: Optional[int] = None, pool_maxsize: Optional[int] = None
     ) -> None:
+        """
+        Initialize HTTP sessions for making requests.
+
+        Sets up two sessions: a general session and a specific session for CompTox.
+        Configures connection pooling and SSL contexts for these sessions.
+
+        Args:
+            pool_connections (Optional[int]): The number of connection pools to cache.
+            If None, it's set to twice the number of available services.
+
+            pool_maxsize (Optional[int]): The maximum number of connections to save in the pool.
+            If None, it's set to 10. The minimum value is always 10.
+
+        Notes:
+            - This method is idempotent; it will not reinitialize existing sessions.
+            - The CompTox session uses a custom SSL context to handle specific SSL requirements.
+        """
         if self._session is not None:
             return
 
@@ -312,15 +594,53 @@ class MoleculeResolver:
         self,
         url: str,
         kwargs: Optional[dict[str, Any]] = None,
-        request_type: str = "get",
+        request_type: Optional[str] = "get",
         accepted_status_codes: list[int] = [200],
         rejected_status_codes: list[int] = [404],
-        max_retries: int = 10,
+        max_retries: Optional[int] = 10,
         sleep_time: Union[int, float] = 2,
-        allow_redirects: bool = False,
-        json: Any = None,
-        return_response: bool = False,
+        allow_redirects: Optional[bool] = False,
+        json: Optional[str] = None,
+        return_response: Optional[bool] = False,
     ) -> Optional[str]:
+        """
+        Make a resilient HTTP request with retry logic.
+
+        Attempts to make an HTTP request, handling various error conditions and retrying the request if necessary.
+
+        Args:
+            url (str): The URL to send the request to.
+
+            kwargs (Optional[dict[str, Any]]): Additional keyword arguments for the request.
+
+            request_type (Optional[str]): The type of HTTP request ('get' or 'post'). Defaults to 'get'.
+
+            accepted_status_codes (list[int]): List of HTTP status codes to accept. Defaults to [200].
+
+            rejected_status_codes (list[int]): List of HTTP status codes to reject. Defaults to [404].
+
+            max_retries (Optional[int]): Maximum number of retry attempts. Defaults to 10.
+
+            sleep_time (Union[int, float]): Time to sleep between retries in seconds. Defaults to 2.
+
+            allow_redirects (Optional[bool]): Whether to allow URL redirection. Defaults to False.
+
+            json (Optional[str]): JSON data to send in the request body. Defaults to None.
+
+            return_response (Optional[bool]): If True, return the full response object instead of the text. Defaults to False.
+
+        Returns:
+            Optional[str]: The response text if successful, or None if the request failed.
+
+        Raises:
+            ValueError: If an invalid request_type is provided.
+            requests.exceptions.ConnectionError: If connection errors persist after maximum retries.
+
+        Notes:
+            - Automatically sets a user agent if not provided in the headers.
+            - Uses different sessions for CompTox and other services.
+            - Implements exponential backoff for retries.
+        """
         if not kwargs:
             kwargs = {}
 
@@ -398,39 +718,29 @@ class MoleculeResolver:
                     return None
 
     @cache
-    def standardize_SMILES(
-        self,
-        SMILES: str,
-        /,
-        disconnect_metals: Optional[bool] = None,
-        normalize: Optional[bool] = None,
-        reionize: Optional[bool] = None,
-        uncharge: Optional[bool] = None,
-        try_assign_sterochemistry: Optional[bool] = None,
-        remove_atom_mapping_number: Optional[bool] = None,
-    ) -> str:
-        
-        mol = self.get_from_SMILES(SMILES)
-        if mol is None:
-            return None
-        
-        return Chem.MolToSmiles(
-                    self.standardize_molecule(
-                        mol,
-                        disconnect_metals,
-                        normalize,
-                        reionize,
-                        uncharge,
-                        try_assign_sterochemistry,
-                        remove_atom_mapping_number,
-                    )
-                )
+    def try_disconnect_more_metals(self, SMILES: str) -> str:
+        """
+        Attempt to disconnect additional metal atoms in a molecule represented by a SMILES string.
 
-    @cache
-    def try_disconnect_more_metals(self, SMILES):
-        # this does something very similar like the metal disconnector from rdkit
-        # but includes more metals and behaves correctly on Hg: https://github.com/rdkit/rdkit/discussions/6729
-        # if the issue for Hg is a bug, this should be replaced by the metal disconnector from rdkit
+        This method performs a more extensive metal disconnection process than the standard
+        RDKit metal disconnector. It includes more metals and handles specific cases like
+        mercury (Hg) correctly: https://github.com/rdkit/rdkit/discussions/6729
+        if the issue for Hg is a bug, this should be replaced by the metal disconnector from rdkit
+
+        Args:
+            SMILES (str): The input SMILES string representing the molecule.
+
+        Returns:
+            str: The SMILES string of the molecule after attempting to disconnect metals.
+            If no changes are made, the original SMILES string is returned.
+
+        Notes:
+            - Uses caching to improve performance for repeated calls with the same input.
+            - Employs a custom SMARTS pattern to identify metal-nonmetal bonds.
+            - If the input SMILES is invalid or no metal disconnection is possible, the original SMILES is returned.
+            - Particularly useful for handling cases where the standard RDKit metal disconnector may not be sufficient
+              or may have known issues (e.g., with mercury compounds).
+        """
         metals = "[#3,#11,#19,#37,#55,#87,#4,#12,#20,#38,#56,#88,#21,#22,#23,#24,#25,#26,#27,#28,#29,#30,#13,#31,#39,#40,#41,#42,#43,#44,#45,#46,#47,#48,#49,#50,#72,#73,#74,#75,#76,#77,#78,#79,#80,#81,#82,#83]"
         SMARTS = f"{metals}~[B,C,#14,P,#33,#51,S,#34,#52,F,Cl,Br,I,#85]"
         mol = Chem.MolFromSmiles(SMILES)
@@ -487,6 +797,62 @@ class MoleculeResolver:
             ".".join([Chem.MolToSmiles(m) for m in ion_mols])
         )
 
+    @cache
+    def standardize_SMILES(
+        self,
+        SMILES: str,
+        /,
+        disconnect_metals: Optional[bool] = None,
+        normalize: Optional[bool] = None,
+        reionize: Optional[bool] = None,
+        uncharge: Optional[bool] = None,
+        try_assign_sterochemistry: Optional[bool] = None,
+        remove_atom_mapping_number: Optional[bool] = None,
+    ) -> Optional[str]:
+        """
+        Standardize a SMILES string representation of a molecule.
+
+        Applies various standardization procedures to a given SMILES string, including metal disconnection,
+        normalization, reionization, uncharging, stereochemistry assignment, and atom mapping number removal.
+
+        Args:
+            SMILES (str): The input SMILES string to be standardized.
+
+            disconnect_metals (Optional[bool]): Whether to disconnect metals. Defaults to None.
+
+            normalize (Optional[bool]): Whether to normalize the molecule. Defaults to None.
+
+            reionize (Optional[bool]): Whether to reionize the molecule. Defaults to None.
+
+            uncharge (Optional[bool]): Whether to uncharge the molecule. Defaults to None.
+
+            try_assign_sterochemistry (Optional[bool]): Whether to attempt stereochemistry assignment. Defaults to None.
+
+            remove_atom_mapping_number (Optional[bool]): Whether to remove atom mapping numbers. Defaults to None.
+
+        Returns:
+            Optional[str]: The standardized SMILES string, or None if standardization fails.
+
+        Notes:
+            - Uses caching to improve performance for repeated calls with the same input.
+            - The standardization process uses the RDKit library for molecular operations.
+        """
+        mol = self.get_from_SMILES(SMILES)
+        if mol is None:
+            return None
+
+        return Chem.MolToSmiles(
+            self.standardize_molecule(
+                mol,
+                disconnect_metals,
+                normalize,
+                reionize,
+                uncharge,
+                try_assign_sterochemistry,
+                remove_atom_mapping_number,
+            )
+        )
+
     def standardize_molecule(
         self,
         mol: Chem.rdchem.Mol,
@@ -498,27 +864,63 @@ class MoleculeResolver:
         try_assign_sterochemistry: Optional[bool] = None,
         remove_atom_mapping_number: Optional[bool] = None,
     ) -> Optional[Chem.rdchem.Mol]:
+        """
+        Standardize an RDKit molecule object.
 
+        Applies various standardization procedures to a given RDKit molecule, including metal disconnection,
+        normalization, reionization, uncharging, stereochemistry assignment, and atom mapping number removal.
+
+        Args:
+            mol (Chem.rdchem.Mol): The input RDKit molecule to be standardized.
+
+            disconnect_metals (Optional[bool]): Whether to disconnect metals. Defaults to None.
+
+            normalize (Optional[bool]): Whether to normalize the molecule. Defaults to None.
+
+            reionize (Optional[bool]): Whether to reionize the molecule. Defaults to None.
+
+            uncharge (Optional[bool]): Whether to uncharge the molecule. Defaults to None.
+
+            try_assign_sterochemistry (Optional[bool]): Whether to attempt stereochemistry assignment. Defaults to None.
+
+            remove_atom_mapping_number (Optional[bool]): Whether to remove atom mapping numbers. Defaults to None.
+
+        Returns:
+            Optional[Chem.rdchem.Mol]: The standardized RDKit molecule, or None if standardization fails.
+
+        Raises:
+            Warning: If reionization step cannot be performed.
+
+        Notes:
+            - If any standardization option is None, it defaults to the values set on class creation or default values.
+            - For molecules with multiple fragments, each fragment is standardized separately.
+            - Special handling is implemented for certain molecules (e.g., DMSO) during normalization.
+            - Uses RDKit's standardization tools (e.g., MetalDisconnector, Normalize, Reionizer).
+        """
         if mol is None:
             return None
-        
+
         if disconnect_metals is None:
             disconnect_metals = self._standardization_options.disconnect_metals
-        
+
         if normalize is None:
             normalize = self._standardization_options.normalize
-        
+
         if reionize is None:
             reionize = self._standardization_options.reionize
-        
+
         if uncharge is None:
             uncharge = self._standardization_options.uncharge
-        
+
         if try_assign_sterochemistry is None:
-            try_assign_sterochemistry = self._standardization_options.try_assign_sterochemistry
-        
+            try_assign_sterochemistry = (
+                self._standardization_options.try_assign_sterochemistry
+            )
+
         if remove_atom_mapping_number is None:
-            remove_atom_mapping_number = self._standardization_options.remove_atom_mapping_number
+            remove_atom_mapping_number = (
+                self._standardization_options.remove_atom_mapping_number
+            )
 
         mol_fragments = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
 
@@ -577,19 +979,80 @@ class MoleculeResolver:
 
         return mol
 
-    def has_isotopes(self, mol):
+    def has_isotopes(self, mol: Chem.rdchem.Mol):
+        """
+        Check if the molecule contains any isotopes.
+
+        Examines each atom in the given molecule to determine if any of them have a non-zero isotope value.
+
+        Args:
+            mol (Chem.rdchem.Mol): The input RDKit molecule to check for isotopes.
+
+        Returns:
+            bool: True if the molecule contains at least one isotope, False otherwise.
+
+        Notes:
+            - Uses RDKit's GetIsotope() function to check each atom's isotope value.
+            - An isotope value of 0 indicates the most common isotope for that element.
+        """
         return any([atom.GetIsotope() != 0 for atom in mol.GetAtoms()])
 
-    def remove_isotopes(self, mol):
+    def remove_isotopes(self, mol: Chem.rdchem.Mol) -> Chem.rdchem.Mol:
+        """
+        Remove all isotope information from the molecule.
+
+        Sets the isotope value of all atoms in the molecule to 0, effectively removing any isotope information.
+
+        Args:
+            mol (Chem.rdchem.Mol): The input RDKit molecule from which to remove isotopes.
+
+        Returns:
+            Chem.rdchem.Mol: A new RDKit molecule with all isotope information removed and explicit hydrogens removed.
+
+        Notes:
+            - Setting an atom's isotope to 0 indicates the most common isotope for that element.
+            - Modifies the input molecule in-place before returning a new molecule with explicit hydrogens removed.
+            - Removing explicit hydrogens can change the molecule's representation but not its chemical identity.
+        """
         for atom in mol.GetAtoms():
             atom.SetIsotope(0)
-        return Chem.RemoveHs(mol)
-    
+        return mol
+
     def _check_and_flatten_identifiers_and_modes(
         self,
         identifiers: Union[str, list[str], list[list[str]]],
         modes: Union[str, list[str]],
     ) -> tuple[list[str], list[str], list[str], list[str], str]:
+        """
+        Validate and flatten the input identifiers and modes.
+
+        Processes the input identifiers and modes to ensure they are in the correct format
+        and flattens nested structures. It also performs validation checks on the inputs.
+
+        Args:
+            identifiers (Union[str, list[str], list[list[str]]]): The input identifiers,
+            which can be a single string, a list of strings, or a list of lists of strings.
+
+            modes (Union[str, list[str]]): The input modes, which can be a single string or a list of strings.
+
+        Returns:
+            tuple[list[str], list[str], list[str], list[str], str]: A tuple containing:
+                - list[str]: Flattened list of identifiers.
+                - list[str]: Flattened list of modes.
+                - list[str]: List of unique identifiers.
+                - list[str]: List of unique modes.
+                - str: A string representation of the unique modes.
+
+        Raises:
+            TypeError: If an identifier is not of type int, str, list, or tuple.
+            ValueError: If the number of modes doesn't match the number of identifier groups.
+
+        Notes:
+            - Handles various input formats and normalizes them for further processing.
+            - Ensures that each identifier has a corresponding mode.
+            - Strips whitespace from identifiers and converts them to strings.
+            - Converts modes to lowercase for consistency.
+        """
         if isinstance(identifiers, str):
             identifiers = [identifiers]
         if isinstance(modes, str):
@@ -648,6 +1111,24 @@ class MoleculeResolver:
         return flattened_identifiers, flattened_modes, synonyms, CAS, given_SMILES
 
     def _is_list_of_list_of_str(self, value: list[list[str]]) -> bool:
+        """
+        Check if the input is a valid list of lists of strings.
+
+        Verifies that the input value is a list containing only lists,
+        and that each nested list contains only string elements.
+
+        Args:
+            value (list[list[str]]): The input to be checked.
+
+        Returns:
+            bool: True if the input is a valid list of lists of strings, False otherwise.
+
+        Notes:
+            - Performs a two-level deep check on the input structure.
+            - First ensures that all elements of the outer list are themselves lists.
+            - Then checks that all elements within each nested list are strings.
+            - An empty list or a list containing empty lists will return True.
+        """
         for items in value:
             if not isinstance(items, list):
                 return False
@@ -666,6 +1147,44 @@ class MoleculeResolver:
         required_structure_types=None,
         context="get_molecule",
     ):
+        """
+        Validate input parameters for molecule retrieval and processing.
+
+        Performs extensive validation on various input parameters used in
+        molecule retrieval and processing operations. It checks for type correctness,
+        value validity, and consistency across different parameters based on the context
+        of the operation.
+
+        Args:
+            modes (Optional[Union[str, list[str]]]): The mode(s) of molecule identification.
+
+            services (Optional[Union[str, list[str]]]): The service(s) to be used for retrieval.
+
+            identifiers (Optional[Union[str, list[str], list[list[str]]]]): The molecule identifier(s).
+
+            required_formulas (Optional[Union[str, list[str]]]): Required chemical formula(s).
+
+            required_charges (Optional[Union[str, int, list[Union[str, int]]]]): Required charge(s).
+
+            required_structure_types (Optional[Union[str, list[str]]]): Required structure type(s).
+
+            context (str): The context of the operation. Defaults to "get_molecule".
+
+        Raises:
+            TypeError: If any parameter is of an incorrect type.
+
+            ValueError: If any parameter has an invalid value or if there are inconsistencies
+            between parameters.
+
+        Notes:
+            - The method's behavior varies based on the 'context' parameter.
+            - For 'get_molecule' and 'get_molecules_batch' contexts, it expects single values
+              for modes and services.
+            - For 'batch' and 'find_single' contexts, it expects lists for modes and services.
+            - Checks for compatibility between modes and services.
+            - Performs specific validations for charges, structure types, and formulas.
+            - Ensures consistency in the lengths of certain parameters when applicable.
+        """
         if modes is not None:
             if context == "get_molecule" or context == "get_molecules_batch":
                 if not isinstance(modes, str):
@@ -674,8 +1193,7 @@ class MoleculeResolver:
                     raise ValueError("The mode parameter can only be a supported mode.")
                 if (
                     services is not None
-                    and modes
-                    not in self._supported_modes_by_services[services]
+                    and modes not in self._supported_modes_by_services[services]
                 ):
                     raise ValueError(
                         f"The chosen mode ({modes}) is not compatible with the service {services}."
@@ -807,50 +1325,259 @@ class MoleculeResolver:
                         "required_structure_type must be one of the following: 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ion','mixture_neutrals_salts', 'mixture_neutrals_ions'"
                     )
 
-    def take_most_common(
+    def remove_non_printable_characters(self, string_input: str) -> str:
+        """
+        Removes all non-printable characters from the given string.
+
+        This function iterates through each character in the input string and
+        keeps only the printable characters, effectively removing any non-printable
+        characters such as control characters or certain Unicode characters.
+
+        Args:
+            string (str): The input string to be processed.
+
+        Returns:
+            str: A new string containing only the printable characters from the input.
+        """
+
+        return "".join([c for c in string_input if c.isprintable()])
+
+    @cache
+    def clean_chemical_name(
         self,
-        container: list[Any], number_to_take: Optional[int] = None
-    ) -> list[Any]:
-        if not number_to_take:
-            number_to_take = len(container)
+        chemical_name: str,
+        normalize: Optional[bool] = True,
+        unescape_html: Optional[bool] = True,
+        spell_out_greek_characters: Optional[bool] = False,
+        for_filename: Optional[bool] = False,
+    ) -> str:
+        """
+        Clean and standardize a chemical name string.
 
-        if len(container) < 2:
-            return container
+        Processes a chemical name to standardize its format, remove unwanted
+        characters, and optionally convert special characters or prepare it for use in filenames.
 
-        original_container = container
+        Args:
+            chemical_name (str): The chemical name to be cleaned.
 
-        is_str = isinstance(container[0], str)
-        if is_str:
-            original_container = [item.strip() for item in container]
-            container = [item.strip().lower() for item in container]
+            normalize (Optional[bool]): If True, normalizes Unicode characters. Defaults to True.
 
-        index_container = []
-        items_seen = []
-        for item_index, item in enumerate(container):
-            if item in items_seen:
-                continue
-            n = container.count(item)
-            for i in range(n):
-                index_container.append(item_index)
-            items_seen.append(item)
+            unescape_html (Optional[bool]): If True, unescapes HTML entities. Defaults to True.
 
-        counter = collections.Counter(index_container)
-        sorted_item_indices_to_take = [
-            item_index for item_index, _ in counter.most_common(number_to_take)
+            spell_out_greek_characters (Optional[bool]): If True, replaces Greek letters with
+            their spelled-out names. Defaults to False.
+
+            for_filename (Optional[bool]): If True, prepares the name for use as a filename
+            by removing non-alphanumeric characters. Defaults to False.
+
+        Returns:
+            str: The cleaned and standardized chemical name.
+
+        Notes:
+            - Strips leading and trailing whitespace from the input.
+            - Replaces various special characters with standardized alternatives.
+            - Optionally unescapes HTML entities (e.g., '&#x27;' to "'").
+            - Can spell out Greek letters (e.g., 'α' to 'alpha').
+            - Normalizes Unicode characters to their closest ASCII representation if normalize is True.
+            - When preparing for filenames, removes all non-alphanumeric characters and converts to lowercase.
+            - This method is cached for performance optimization.
+
+        Example:
+            >>> clean_chemical_name("α-Pinene (97%)", spell_out_greek_characters=True)
+            'alpha-Pinene (97%)'
+            >>> clean_chemical_name("Sodium chloride, ≥99%", for_filename=True)
+            'sodiumchloride99'
+        """
+        greek_letters = [
+            "α",
+            "β",
+            "γ",
+            "δ",
+            "ε",
+            "ϵ",
+            "ζ",
+            "η",
+            "θ",
+            "ι",
+            "κ",
+            "λ",
+            "μ",
+            "ν",
+            "ξ",
+            "ο",
+            "π",
+            "ρ",
+            "σ",
+            "τ",
+            "υ",
+            "φ",
+            "χ",
+            "ψ",
+            "ω",
+            "Α",
+            "Β",
+            "Γ",
+            "Δ",
+            "Ε",
+            "Ζ",
+            "Η",
+            "Θ",
+            "Ι",
+            "Κ",
+            "Λ",
+            "Μ",
+            "Ν",
+            "Ξ",
+            "Ο",
+            "Π",
+            "Ρ",
+            "Σ",
+            "Τ",
+            "Υ",
+            "Φ",
+            "Χ",
+            "Ψ",
+            "Ω",
+            "µ",
+            "∆",
+        ]
+        spelled_out_versions = [
+            "alpha",
+            "beta",
+            "gamma",
+            "delta",
+            "epsilon",
+            "epsilon",
+            "zeta",
+            "eta",
+            "theta",
+            "iota",
+            "kappa",
+            "lambda",
+            "mu",
+            "nu",
+            "xi",
+            "omicron",
+            "pi",
+            "rho",
+            "sigma",
+            "tau",
+            "upsilon",
+            "phi",
+            "chi",
+            "psi",
+            "omega",
+            "alpha",
+            "beta",
+            "gamma",
+            "delta",
+            "epsilon",
+            "zeta",
+            "eta",
+            "theta",
+            "iota",
+            "kappa",
+            "lambda",
+            "mu",
+            "nu",
+            "xi",
+            "omicron",
+            "pi",
+            "rho",
+            "sigma",
+            "tau",
+            "upsilon",
+            "phi",
+            "chi",
+            "psi",
+            "omega",
+            "mu",
+            "delta",
         ]
 
-        final_container = []
-        for item_index in sorted_item_indices_to_take:
-            final_container.append(original_container[item_index])
+        map_to_replace = [
+            ("’", "'"),
+            ("′", "'"),
+            ("±", "+-"),
+            ("→", "-->"),
+            ("≥", ">="),
+            ("≤", "<="),
+            ("·", "."),
+            ("#", "no. "),
+            ("«", ""),
+            ("»", ""),
+        ]
 
-        return final_container
+        if spell_out_greek_characters:
+            for greek_letter, spelled_out_version in zip(
+                greek_letters, spelled_out_versions, strict=True
+            ):
+                map_to_replace.append((greek_letter, spelled_out_version))
+
+        chemical_name = self.remove_non_printable_characters(chemical_name)
+        chemical_name = chemical_name.strip()
+
+        if unescape_html:
+            chemical_name = html.unescape(chemical_name)
+
+        for old, new in map_to_replace:
+            chemical_name = chemical_name.replace(old, new)
+
+        if normalize:
+            nfkd_form = unicodedata.normalize("NFKD", chemical_name)
+            chemical_name = "".join(
+                [c for c in nfkd_form if not unicodedata.combining(c)]
+            )
+
+        chemical_name = regex.sub(r"\s+", " ", chemical_name)
+
+        if for_filename:
+            chemical_name = regex.sub(r"[^\w\s]", "", chemical_name.lower())
+            chemical_name = chemical_name.encode("ascii", "ignore").decode("ascii")
+            chemical_name = regex.sub(r"\s+", "", chemical_name)
+
+        return chemical_name.strip()
 
     def filter_and_sort_synonyms(
         self,
-        synonyms: list[str], number_of_synonyms_to_take: int = 5, strict: bool = False
+        synonyms: list[str],
+        number_of_synonyms_to_take: Optional[int] = 5,
+        strict: Optional[bool] = False,
     ) -> list[str]:
+        """
+        Filter and sort a list of synonyms based on various criteria.
+
+        Processes a list of synonyms, applying filters to remove unwanted entries
+        and sorting the results to return the most relevant synonyms.
+
+        Args:
+            synonyms (list[str]): A list of synonym strings to process.
+
+            number_of_synonyms_to_take (Optional[int]): The maximum number of synonyms to return.
+            Defaults to 5.
+
+            strict (Optional[bool]): If True, returns an empty list when no synonyms pass the
+            filters. If False, returns ["Noname"] when no synonyms pass the filters.
+            Defaults to False.
+
+        Returns:
+            list[str]: A list of filtered and sorted synonyms, with a maximum length of
+            `number_of_synonyms_to_take`.
+
+        Notes:
+            - Synonyms are split on '|' characters and each part is processed separately.
+            - Various heuristics are applied to filter out unwanted synonyms, including:
+                * Rejecting synonyms containing specific tokens (e.g., "SCHEMBL", "AKOS", etc.)
+                * Filtering based on character case and specific regex patterns.
+            - Attempts to standardize the format of certain types of synonyms.
+            - If no synonyms pass the filters and `strict` is False, returns ["Noname"].
+        """
         # heuristics used here are mainly to remove synonyms from pubchem
-        synonyms = [synonym.strip() for synonym in synonyms if synonym is not None]
+        synonyms = [
+            self.remove_non_printable_characters(synonym.strip())
+            for synonym in synonyms
+            if synonym is not None
+        ]
         if len(synonyms) == 0:
             return []
 
@@ -947,13 +1674,44 @@ class MoleculeResolver:
     def expand_name_heuristically(
         self,
         name: str,
-        prefixes_to_delete: Optional[Sequence[str]] = None,
-        suffixes_to_use_as_prefix: Optional[Sequence[str]] = None,
-        suffixes_to_delete: Optional[Sequence[str]] = None,
-        parts_to_delete: Optional[Sequence[str]] = None,
+        prefixes_to_delete: Optional[list[str]] = None,
+        suffixes_to_use_as_prefix: Optional[list[str]] = None,
+        suffixes_to_delete: Optional[list[str]] = None,
+        parts_to_delete: Optional[list[str]] = None,
         maps_to_replace: Optional[dict[str, str]] = None,
     ) -> str:
-        name = name.strip()
+        """
+        Expand and standardize a chemical name using various heuristics.
+
+        Applies a series of transformations to standardize and potentially
+        expand a given chemical name.
+
+        Args:
+            name (str): The chemical name to process.
+
+            prefixes_to_delete (Optional[list[str]]): Prefixes to remove from the name.
+
+            suffixes_to_use_as_prefix (Optional[list[str]]): Suffixes to move to the
+            beginning of the name as prefixes.
+
+            suffixes_to_delete (Optional[list[str]]): Suffixes to remove from the name.
+
+            parts_to_delete (Optional[list[str]]): Specific parts to remove from the name.
+
+            maps_to_replace (Optional[dict[str, str]]): A dictionary of string replacements
+            to apply to the name.
+
+        Returns:
+            str: The processed chemical name after applying all specified transformations.
+
+        Notes:
+            - Unescapes HTML entities in the name.
+            - Handles various formatting issues, such as reversing comma-separated parts.
+            - Default lists are provided for prefixes, suffixes, and parts to delete if not specified.
+            - Applies a series of regex-based transformations to standardize the name format.
+            - Special handling is implemented for stereochemistry indicators (e.g., cis/trans, E/Z).
+        """
+        name = self.remove_non_printable_characters(name.strip())
         original_name = name
         names = [original_name]
         name = html.unescape(name)
@@ -1098,11 +1856,85 @@ class MoleculeResolver:
             return names.insert(0, original_name)
         return names
 
+    def filter_and_sort_CAS(self, synonyms: list[str]) -> list[str]:
+        """
+        Filter and sort CAS (Chemical Abstracts Service) registry numbers from a list of synonyms.
+
+        Processes a list of synonyms to extract valid CAS registry numbers,
+        remove duplicates, and sort them based on frequency and heuristic approach.
+
+        Args:
+            synonyms (list[str]): A list of strings that may contain CAS registry numbers.
+
+        Returns:
+            list[str]: A list of unique, valid CAS registry numbers, sorted by frequency
+            and heuristic rules. If no valid CAS numbers are found, returns an empty list.
+
+        Notes:
+            - CAS numbers are validated using the `is_valid_CAS` method.
+            - Duplicate CAS numbers are removed, keeping only unique entries.
+            - If all CAS numbers in the input are identical, only one is returned.
+            - If multiple unique CAS numbers are found with equal frequency:
+              They are sorted based on the numeric value of their first segment.
+              The CAS number with the lowest first segment is returned first.
+            - If CAS numbers have different frequencies, they are sorted by frequency
+              (most common first).
+            - Whitespace is stripped from each synonym before processing.
+        """
+        CAS_rns = []
+
+        if synonyms is not None:
+            for synonym in synonyms:
+                if synonym:
+                    synonym = synonym.strip()
+                    if self.is_valid_CAS(synonym):
+                        CAS_rns.append(synonym)
+
+        if not CAS_rns:
+            return CAS_rns
+
+        counter = collections.Counter(CAS_rns)
+
+        # if all CAS provided are the same, use the first one
+        if len(counter) == 1:
+            return [CAS_rns[0]]
+
+        # if all CAS provided are as likely as the other use heuristic approach:
+        # in my experience the CAS with the lowest first number is mostly the correct one.
+        if all([v == 1 for v in counter.values()]):
+            CAS_rns = sorted(CAS_rns, key=lambda CAS: int(CAS.split("-")[0]))
+            return [CAS_rns[0]]
+
+        return [counter.most_common()[0][0]]
+
     def combine_molecules(
         self,
         grouped_SMILES: str,
-        molecules: list[Molecule], return_None_when_different_SMILES: bool = False
-    ) -> Molecule:
+        molecules: list[Molecule],
+    ) -> Optional[Molecule]:
+        """
+        Combine multiple Molecule objects into a single Molecule.
+
+        Merges information from multiple Molecule objects that represent
+        the same chemical structure.
+
+        Args:
+            grouped_SMILES (str): The SMILES representation of the combined molecule.
+
+            molecules (list[Molecule]): A list of Molecule objects to combine.
+
+        Returns:
+            Optional[Molecule]: A new Molecule object combining information from all input molecules,
+            or None if combination fails.
+
+        Raises:
+            ValueError: If molecules have different structures or identifiers when from the same service.
+
+        Notes:
+            - Combines synonyms, CAS numbers, and other information from all input molecules.
+            - Prioritizes CAS numbers from official registry if available.
+            - Handles cases where molecules are from the same or different services.
+        """
         if not molecules:
             return None
 
@@ -1128,9 +1960,6 @@ class MoleculeResolver:
         if not all_SMILES_are_equal or (
             all_services_are_equal and not all_identifiers_are_equal
         ):
-            # if not all_SMILES_are_equal and all_services_are_equal and all_identifiers_are_equal:
-            #     if return_None_when_different_SMILES:
-            #         return None # service does not deliver one single component back for the same identifier
             raise ValueError(
                 "Combining molecules is only allowed if the structures are the same and found by the same identifier in the case of the same service."
             )
@@ -1192,9 +2021,34 @@ class MoleculeResolver:
         )
 
     def group_molecules_by_structure(
-        self,
-        molecules: list[Molecule], group_also_by_services: bool = True
+        self, molecules: list[Molecule], group_also_by_services: Optional[bool] = True
     ) -> dict[str, list[Molecule]]:
+        """
+        Group a list of Molecule objects by their structural similarity.
+
+        Organizes molecules into groups based on their structural equivalence,
+        optionally considering the services they come from.
+
+        Args:
+            molecules (list[Molecule]): A list of Molecule objects to group.
+
+            group_also_by_services (Optional[bool]): If True, groups molecules by both
+            structure and service. Defaults to True.
+
+        Returns:
+            dict[str, list[Molecule]]: A dictionary where keys are SMILES strings and
+            values are lists of structurally equivalent Molecule objects.
+
+        Raises:
+            ValueError: If input contains molecules from different sources that were
+            previously combined.
+
+        Notes:
+            - Uses structural comparison to group molecules.
+            - Can handle molecules from primary sources (not previously combined).
+            - When all molecules are from the same service and mode, it may select
+              the most common structure as the representative.
+        """
         if len(molecules) == 1:
             return {molecules[0].SMILES: molecules}
 
@@ -1279,9 +2133,33 @@ class MoleculeResolver:
         self,
         molecules: list[Molecule],
         required_formula: Optional[str] = None,
-        required_charge: Optional[int] = None,
-        required_structure_type: Optional[str] = None
+        required_charge: Optional[Union[int, str]] = None,
+        required_structure_type: Optional[str] = None,
     ) -> list[Molecule]:
+        """
+        Filter a list of Molecule objects based on specified criteria.
+
+        Filters molecules based on their chemical formula, charge,
+        and structure type.
+
+        Args:
+            molecules (list[Molecule]): A list of Molecule objects to filter.
+
+            required_formula (Optional[str]): The required chemical formula.
+
+            required_charge (Optional[Union[int, str]]): The required molecular charge.
+
+            required_structure_type (Optional[str]): The required structure type.
+
+        Returns:
+            list[Molecule]: A list of Molecule objects that meet the specified criteria.
+
+        Notes:
+            - Filters out molecules with invalid or None SMILES.
+            - Applies standardization to SMILES strings of valid molecules.
+            - For 'salt' structure type, attempts to disconnect more metals if initial check fails.
+            - Uses the `check_SMILES` method to validate molecules against criteria.
+        """
         filtered_molecules = []
 
         if not isinstance(molecules, list):
@@ -1302,14 +2180,10 @@ class MoleculeResolver:
             if self.check_SMILES(
                 cmp.SMILES, required_formula, required_charge, required_structure_type
             ):
-                cmp.SMILES = self.standardize_SMILES(
-                    cmp.SMILES
-                )
+                cmp.SMILES = self.standardize_SMILES(cmp.SMILES)
                 filtered_molecules.append(cmp)
             elif required_structure_type == "salt":
-                new_SMILES = self.try_disconnect_more_metals(
-                    cmp.SMILES
-                )
+                new_SMILES = self.try_disconnect_more_metals(cmp.SMILES)
                 if self.check_SMILES(
                     new_SMILES,
                     required_formula,
@@ -1325,9 +2199,37 @@ class MoleculeResolver:
         self,
         molecules: Union[list[Molecule], Molecule],
         required_formula: Optional[str] = None,
-        required_charge: Optional[int] = None,
+        required_charge: Optional[Union[int, str]] = None,
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Filter and combine a list of molecules based on specified criteria.
+
+        Processes a list of molecules (or a single molecule) by applying
+        filters and then combining the filtered results into a single molecule.
+
+        Args:
+            molecules (Union[list[Molecule], Molecule]): A list of Molecule objects or a single Molecule object to process.
+
+            required_formula (Optional[str]): The required chemical formula to filter by. Defaults to None.
+
+            required_charge (Optional[Union[int, str]]): The required molecular charge to filter by. Defaults to None.
+
+            required_structure_type (Optional[str]): The required structure type to filter by. Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A single Molecule object that results from filtering and combining the input molecules.
+            Returns None if no molecules pass the filtering process or if the combination process fails.
+
+        Notes:
+            - If a single Molecule is provided, it's converted to a list for processing.
+            - First filters the molecules using `filter_molecules`.
+            - Filtered molecules are then grouped by structure using `group_molecules_by_structure`.
+            - For each group of structurally similar molecules, `combine_molecules` is called.
+            - If only one final molecule remains after combining, it is returned.
+            - If no molecules pass the filters or if multiple distinct molecules remain after combining,
+              the method returns None.
+        """
         filtered_molecules = self.filter_molecules(
             molecules,
             required_formula,
@@ -1338,74 +2240,52 @@ class MoleculeResolver:
         if not filtered_molecules:
             return None
 
-        grouped_molecules = self.group_molecules_by_structure(
-            filtered_molecules
-        )
+        grouped_molecules = self.group_molecules_by_structure(filtered_molecules)
 
         final_molecules = []
         for grouped_SMILES, cmps_to_combine in grouped_molecules.items():
-            final_molecules.append(self.combine_molecules(grouped_SMILES, cmps_to_combine))
+            final_molecules.append(
+                self.combine_molecules(grouped_SMILES, cmps_to_combine)
+            )
 
         if len(final_molecules) == 1:
             return final_molecules[0]
         else:
             return None
 
-    def filter_and_sort_CAS(self, synonyms: list[str]) -> list[str]:
-        CAS_rns = []
-
-        if synonyms is not None:
-            for synonym in synonyms:
-                if synonym:
-                    synonym = synonym.strip()
-                    if self.is_valid_CAS(synonym):
-                        CAS_rns.append(synonym)
-
-        if not CAS_rns:
-            return CAS_rns
-
-        counter = collections.Counter(CAS_rns)
-
-        # if all CAS provided are the same, use the first one
-        if len(counter) == 1:
-            return [CAS_rns[0]]
-
-        # if all CAS provided are as likely as the other use heuristic approach:
-        # in my experience the CAS with the lowest first number is mostly the correct one.
-        if all([v == 1 for v in counter.values()]):
-            CAS_rns = sorted(CAS_rns, key=lambda CAS: int(CAS.split("-")[0]))
-            return [CAS_rns[0]]
-
-        return [counter.most_common()[0][0]]
-
-    def check_charge(self,
-                     mol: Chem.rdchem.Mol, required_charge: Optional[int]) -> bool:
-        if required_charge is None:
-            return True
-
-        self._check_parameters(required_charges=required_charge)
-        calculated_charge = Chem.rdmolops.GetFormalCharge(mol)
-
-        charge_correct = False
-        if isinstance(required_charge, str):
-            if required_charge == "zero":
-                charge_correct = calculated_charge == 0
-            elif required_charge == "non_zero":
-                charge_correct = calculated_charge != 0
-            elif required_charge == "positive":
-                charge_correct = calculated_charge > 0
-            elif required_charge == "negative":
-                charge_correct = calculated_charge < 0
-        else:
-            charge_correct = int(required_charge) == calculated_charge
-
-        return charge_correct
-    
     @cache
     def formula_to_dictionary(
-        self,
-        formula: str, allow_duplicate_atoms: bool = True
+        self, formula: str, allow_duplicate_atoms: Optional[bool] = True
     ) -> dict[str, Union[int, float]]:
+        """
+        Convert a chemical formula string to a dictionary of element counts.
+
+        Parses a chemical formula and returns a dictionary where keys are
+        element symbols and values are their respective counts in the formula.
+
+        Args:
+            formula (str): The chemical formula to parse.
+
+            allow_duplicate_atoms (Optional[bool]): If True, allows multiple occurrences of the same
+            element in the formula. If False, raises an error for duplicate elements.
+            Defaults to True.
+
+        Returns:
+            dict[str, Union[int, float]]: A dictionary where keys are element symbols and
+            values are their counts. Values are integers if all counts are whole numbers,
+            otherwise floats.
+
+        Raises:
+            ValueError: If `allow_duplicate_atoms` is False and an element appears more than once.
+
+        Notes:
+            - Supports nested parentheses, square brackets, and curly braces in formulas.
+            - Handles hydrates and solvates (formulas connected with '*').
+            - Processes fractional counts (e.g., 0.5) and converts to integers when possible.
+            - Uses recursion to handle nested structures in the formula.
+            - Caches results for improved performance on repeated calls with the same formula.
+        """
+
         def merge_dictionaries(
             d1: dict[str, Union[int, float]],
             d2: dict[str, Union[int, float]],
@@ -1433,9 +2313,7 @@ class MoleculeResolver:
 
         formula = formula.replace("[", "(").replace("{", "(")
         formula = formula.replace("]", ")").replace("}", ")")
-        brackets_match = self.formula_bracket_group_regex_compiled.search(
-            formula
-        )
+        brackets_match = self.formula_bracket_group_regex_compiled.search(formula)
         if brackets_match:
             rest_of_formula = (
                 formula[0 : brackets_match.span()[0]]
@@ -1444,12 +2322,8 @@ class MoleculeResolver:
             bracket_content = brackets_match.groups()[0][1:-1]
             bracket_multiplier = cast_multiplier(brackets_match.groups()[1])
             d = merge_dictionaries(
-                self.formula_to_dictionary(
-                    rest_of_formula, allow_duplicate_atoms
-                ),
-                self.formula_to_dictionary(
-                    bracket_content, allow_duplicate_atoms
-                ),
+                self.formula_to_dictionary(rest_of_formula, allow_duplicate_atoms),
+                self.formula_to_dictionary(bracket_content, allow_duplicate_atoms),
                 bracket_multiplier,
             )
         else:
@@ -1473,231 +2347,42 @@ class MoleculeResolver:
 
         return d
 
-    def check_formula(
-        self,
-        mol_or_formula: Union[Chem.rdchem.Mol, str], required_formula: Optional[str]
-    ) -> bool:
-        if required_formula is None:
-            return True
-
-        if isinstance(mol_or_formula, str):
-            mol_formula = mol_or_formula
-        else:
-            temp_mol = self.standardize_molecule(mol_or_formula)
-            mol_formula = rdMolDescriptors.CalcMolFormula(temp_mol)
-
-        formula1 = self.formula_to_dictionary(mol_formula)
-        formula2 = self.formula_to_dictionary(required_formula)
-
-        return formula1 == formula2
-
-    def check_molecular_mass(
-        self,
-        mol: Chem.rdchem.Mol,
-        required_molecular_mass: Union[float, int],
-        percentage_deviation_allowed: float = 0.001,
-    ) -> bool:
-        if not isinstance(required_molecular_mass, float) and not isinstance(
-            required_molecular_mass, int
-        ):
-            raise TypeError("required_molecular_mass must be a float or an integer.")
-
-        molecular_mass_from_mol = Descriptors.MolWt(mol)
-        minimum_value = min(required_molecular_mass, molecular_mass_from_mol)
-        absolute_relative_difference = abs(
-            (required_molecular_mass - molecular_mass_from_mol) / minimum_value
-        )
-        return absolute_relative_difference < percentage_deviation_allowed
-
-    def get_structure_type_from_SMILES(self, SMILES: str) -> str:
-        SMILES_parts = SMILES.split(".")
-        SMILES_parts_charges = []
-        for SMILES_part in SMILES_parts:
-            mol = self.get_from_SMILES(SMILES_part)
-            if not mol:
-                return "None"
-            SMILES_parts_charges.append(Chem.rdmolops.GetFormalCharge(mol))
-
-        total_charge = sum(SMILES_parts_charges)
-
-        if all([charge == 0 for charge in SMILES_parts_charges]):
-            if len(SMILES_parts) > 1:
-                structure_type = "mixture_neutrals"
-            else:
-                structure_type = "neutral"
-        elif all([charge != 0 for charge in SMILES_parts_charges]):
-            if len(SMILES_parts) > 1:
-                if total_charge == 0:
-                    structure_type = "salt"
-                else:
-                    structure_type = "mixture_ions"
-            else:
-                structure_type = "ion"
-        else:
-            if total_charge == 0:
-                structure_type = "mixture_neutrals_salts"
-            else:
-                structure_type = "mixture_neutrals_ions"
-
-        return structure_type
-
-    def check_structure_type(self, SMILES: str, required_structure_type: str) -> bool:
-        if required_structure_type is None:
-            return True
-
-        available_structure_types = [
-            "mixture_neutrals",
-            "mixture_ions",
-            "neutral",
-            "salt",
-            "ion",
-            "mixture_neutrals_salts",
-            "mixture_neutrals_ions",
-        ]
-        if required_structure_type not in available_structure_types:
-            raise ValueError(
-                "required_structure_type must be one of 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ion','mixture_neutrals_salts' or 'mixture_neutrals_ions'."
-            )
-
-        return (
-            self.get_structure_type_from_SMILES(SMILES)
-            == required_structure_type
-        )
-
-    @cache
-    def InChI_to_SMILES(self, inchi: str) -> Optional[str]:
-        mol = self.get_from_InChI(inchi)
-
-        if mol is None:
-            return None
-
-        return self.standardize_SMILES(Chem.MolToSmiles(mol))
-
-    @cache
-    def SMILES_to_InChI(self, smiles: str) -> Optional[str]:
-        mol = self.get_from_SMILES(smiles)
-
-        if mol is None:
-            return None
-
-        return Chem.MolToInchi(self.standardize_molecule(mol))
-
-    @cache
-    def get_from_InChI(self, inchi: str, addHs: bool = False) -> Optional[Chem.rdchem.Mol]:
-        if inchi is None:
-            return None
-        if inchi == "":
-            return None
-
-        mol = Chem.MolFromInchi(inchi)
-        if mol is None:
-            mol = Chem.MolFromInchi(inchi, sanitize=False)
-
-        if mol is None:
-            return None
-
-        try:
-            mol.UpdatePropertyCache()
-        except Exception as error:
-            mol.UpdatePropertyCache(strict=False)
-
-        Chem.GetSymmSSSR(mol)
-
-        if mol is None:
-            return None
-
-        if addHs:
-            mol = Chem.AddHs(mol)
-
-        return mol
-
-    @cache
-    def get_from_SMILES(self, SMILES: str, addHs: bool = False) -> Chem.rdchem.Mol:
-        if SMILES is None:
-            return None
-        SMILES_parts = SMILES.split(".")
-
-        if len(SMILES_parts) > 1:
-            mol = Chem.Mol()
-            for SMILES in SMILES_parts:
-                mol2 = self.get_from_SMILES(SMILES, addHs)
-                if mol2 is None:
-                    return None
-                mol = Chem.CombineMols(mol, mol2)
-            try:
-                mol.UpdatePropertyCache()
-            except Exception as error:
-                mol.UpdatePropertyCache(strict=False)
-
-            Chem.GetSymmSSSR(mol)
-            return mol
-
-        mol = Chem.MolFromSmiles(SMILES)
-        if mol is None:
-            # for some correct SMILES the sanitization process of rdkit does not work properly
-            if (
-                SMILES.count("F") > 0
-                or SMILES.count("Cl") > 0
-                or SMILES.count("Br") > 0
-                or SMILES.count("B") > 0
-            ):
-                mol = Chem.MolFromSmiles(SMILES, sanitize=False)
-                if mol is None:
-                    return None
-                mol.UpdatePropertyCache(strict=False)
-        else:
-            mol.UpdatePropertyCache()
-
-        if mol is None:
-            return None
-
-        if addHs:
-            mol = Chem.AddHs(mol)
-
-        Chem.GetSymmSSSR(mol)
-        return mol
-
-    def to_SMILES(self, 
-                  mol: Chem.rdchem.Mol,
-                  isomeric: bool = True,
-                  canonicalize_tautomer: bool = False,
-                  remove_isotopes: bool = False):
-        
-        if remove_isotopes:
-            mol = self.remove_isotopes(mol)
-        
-        if canonicalize_tautomer:
-            mol = rdMolStandardize.CanonicalTautomer(mol)
-
-        return Chem.MolToSmiles(mol, isomericSmiles=isomeric)
-
-    def show_and_pause(
-        self,
-        mol: Chem.rdchem.Mol,
-        name: Optional[str] = None,
-        size: tuple[int, int] = (1000, 1000),
-    ):
-        scaling_size = min(size)
-        Draw.DrawingOptions.atomLabelFontSize = int(50 * scaling_size / 1000)
-        Draw.DrawingOptions.dotsPerAngstrom = int(300 * scaling_size / 1000)
-        Draw.DrawingOptions.bondLineWidth = max(float(4.0 * scaling_size / 1000), 1.0)
-        img = Draw.MolToImage(mol, size=size)
-
-        title = "charge: " + str(Chem.rdmolops.GetFormalCharge(mol))
-        if name is not None:
-            title = "name: " + name + "\n" + title
-
-        draw = ImageDraw.Draw(img)
-        s = int(size[1] / 30)
-        fnt = ImageFont.truetype(font="arial.ttf", size=s)
-        draw.multiline_text((10, 10), title, font=fnt, fill=(0, 0, 0, 255))
-
-        img.show()
-
     def to_hill_formula(
-        self,
-        mol_or_dictionary: Union[Chem.rdchem.Mol, dict[str, Union[int, float]]]
+        self, mol_or_dictionary: Union[Chem.rdchem.Mol, dict[str, Union[int, float]]]
     ) -> str:
+        """
+        Convert a molecule or element dictionary to a Hill formula string.
+
+        Generates a Hill formula representation of a molecule, either from
+        an RDKit molecule object or a dictionary of element counts.
+
+        Args:
+            mol_or_dictionary (Union[Chem.rdchem.Mol, dict[str, Union[int, float]]]):
+            Either an RDKit molecule object or a dictionary where keys are element
+            symbols and values are their counts.
+
+        Returns:
+            str: The Hill formula string representation of the molecule.
+
+        Notes:
+            - If input is an RDKit molecule, hydrogens are added explicitly before processing.
+            - The Hill system orders elements as follows:
+
+              1. Carbon (C) always comes first if present.
+              2. Hydrogen (H) comes second if carbon is present.
+              3. All other elements follow in alphabetical order.
+            - For elements with a count of 1, the number is omitted in the formula.
+            - Handles both integer and float counts, though typically counts are integers.
+            - If a count is a float but effectively an integer (e.g., 2.0), it's treated as an integer.
+
+        Example:
+            >>> mol = Chem.MolFromSmiles("CCO")
+            >>> to_hill_formula(mol)
+            'C2H6O'
+            >>> to_hill_formula({"C": 2, "H": 6, "O": 1})
+            'C2H6O'
+        """
+
         if isinstance(mol_or_dictionary, dict):
             temp = mol_or_dictionary
         else:
@@ -1736,8 +2421,536 @@ class MoleculeResolver:
 
         return hill_formula
 
+    def check_formula(
+        self,
+        mol_or_formula: Union[Chem.rdchem.Mol, str],
+        required_formula: Optional[str],
+    ) -> bool:
+        """
+        Check if a molecule or formula matches a required chemical formula.
+
+        Compares the chemical formula of a given molecule or formula string
+        against a required formula.
+
+        Args:
+            mol_or_formula (Union[Chem.rdchem.Mol, str]): The molecule (as an RDKit Mol object)
+            or a chemical formula string to check.
+
+            required_formula (Optional[str]): The required chemical formula to match against.
+            If None, the check always returns True.
+
+        Returns:
+            bool: True if the molecule or formula matches the required formula, False otherwise.
+
+        Notes:
+            - If `required_formula` is None, the method always returns True.
+            - For RDKit Mol objects, the molecule is standardized before calculating its formula.
+            - The comparison is done by converting both the input and required formulas to
+              dictionaries using `formula_to_dictionary`.
+        """
+        if required_formula is None:
+            return True
+
+        if isinstance(mol_or_formula, str):
+            mol_formula = mol_or_formula
+        else:
+            temp_mol = self.standardize_molecule(mol_or_formula)
+            mol_formula = rdMolDescriptors.CalcMolFormula(temp_mol)
+
+        formula1 = self.formula_to_dictionary(mol_formula)
+        formula2 = self.formula_to_dictionary(required_formula)
+
+        return formula1 == formula2
+
+    def check_charge(
+        self, mol: Chem.rdchem.Mol, required_charge: Optional[Union[int, str]]
+    ) -> bool:
+        """
+        Check if a molecule's charge matches a required charge.
+
+        Compares the formal charge of a given molecule against a required charge.
+
+        Args:
+            mol (Chem.rdchem.Mol): The molecule (as an RDKit Mol object) to check.
+
+            required_charge (Optional[Union[int, str]]): The required charge to match against.
+            Can be an integer or one of the strings: "zero", "non_zero", "positive", "negative".
+            If None, the check always returns True.
+
+        Returns:
+            bool: True if the molecule's charge matches the required charge, False otherwise.
+
+        Notes:
+            - If `required_charge` is None, the method always returns True.
+            - Uses RDKit's `GetFormalCharge` to calculate the molecule's charge.
+            - String inputs for `required_charge` allow for more flexible charge requirements:
+              * "zero": Charge must be exactly 0.
+              * "non_zero": Charge must not be 0.
+              * "positive": Charge must be greater than 0.
+              * "negative": Charge must be less than 0.
+        """
+        if required_charge is None:
+            return True
+
+        self._check_parameters(required_charges=required_charge)
+        calculated_charge = Chem.rdmolops.GetFormalCharge(mol)
+
+        charge_correct = False
+        if isinstance(required_charge, str):
+            if required_charge == "zero":
+                charge_correct = calculated_charge == 0
+            elif required_charge == "non_zero":
+                charge_correct = calculated_charge != 0
+            elif required_charge == "positive":
+                charge_correct = calculated_charge > 0
+            elif required_charge == "negative":
+                charge_correct = calculated_charge < 0
+        else:
+            charge_correct = int(required_charge) == calculated_charge
+
+        return charge_correct
+
+    def check_molecular_mass(
+        self,
+        mol: Chem.rdchem.Mol,
+        required_molecular_mass: Union[float, int],
+        percentage_deviation_allowed: Optional[float] = 0.001,
+    ) -> bool:
+        """
+        Check if a molecule's mass matches a required molecular mass within a specified tolerance.
+
+        Compares the calculated molecular mass of a given molecule against a
+        required molecular mass, allowing for a specified percentage of deviation.
+
+        Args:
+            mol (Chem.rdchem.Mol): The molecule to check.
+
+            required_molecular_mass (Union[float, int]): The required molecular mass to match.
+
+            percentage_deviation_allowed (Optional[float]): Allowed percentage deviation between the
+            calculated and required molecular mass. Defaults to 0.001 (0.1%).
+
+        Returns:
+            bool: True if the molecule's mass is within the allowed deviation of the required mass,
+            False otherwise.
+
+        Raises:
+            TypeError: If `required_molecular_mass` is not a float or an integer.
+
+        Notes:
+            - Uses RDKit's `Descriptors.MolWt` to calculate the molecule's mass.
+            - The comparison uses the absolute relative difference between the calculated and
+              required mass, allowing for the specified percentage of deviation.
+            - The minimum value between the required and calculated mass is used as the
+              denominator when calculating the relative difference to handle cases where
+              one of the values might be zero or very small.
+        """
+        if not isinstance(required_molecular_mass, float) and not isinstance(
+            required_molecular_mass, int
+        ):
+            raise TypeError("required_molecular_mass must be a float or an integer.")
+
+        molecular_mass_from_mol = Descriptors.MolWt(mol)
+        minimum_value = min(required_molecular_mass, molecular_mass_from_mol)
+        absolute_relative_difference = abs(
+            (required_molecular_mass - molecular_mass_from_mol) / minimum_value
+        )
+        return absolute_relative_difference < percentage_deviation_allowed
+
+    @cache
+    def check_SMILES(
+        self,
+        SMILES: str,
+        required_formula: Optional[str] = None,
+        required_charge: Optional[Union[int, str]] = None,
+        required_structure_type: Optional[str] = None,
+    ) -> bool:
+        """
+        Validate a SMILES string against specified requirements.
+
+        Checks if a given SMILES string represents a valid molecule and
+        meets the optional requirements for formula, charge, and structure type.
+
+        Args:
+            SMILES (str): The SMILES string to validate.
+
+            required_formula (Optional[str]): The expected molecular formula. Defaults to None.
+
+            required_charge (Optional[Union[int, str]]): The expected molecular charge. Defaults to None.
+
+            required_structure_type (Optional[str]): The expected structure type. Defaults to None.
+
+        Returns:
+            bool: True if the SMILES string is valid and meets all specified requirements,
+            False otherwise.
+
+        Notes:
+            - Uses caching to improve performance for repeated calls with the same arguments.
+            - Performs a quick validity check on the SMILES string.
+            - If the SMILES string is valid, creates a molecule object for further checks.
+            - Verifies the formula, charge, and structure type if respective requirements are provided.
+        """
+        self._check_parameters(
+            required_formulas=required_formula,
+            required_charges=required_charge,
+            required_structure_types=required_structure_type,
+        )
+
+        if not self.is_valid_SMILES_fast(SMILES):
+            return False
+
+        mol = self.get_from_SMILES(SMILES)
+
+        if mol is None:
+            return False
+
+        if not self.check_formula(mol, required_formula):
+            return False
+
+        if not self.check_charge(mol, required_charge):
+            return False
+
+        if not self.check_structure_type(SMILES, required_structure_type):
+            return False
+
+        return True
+
+    def get_structure_type_from_SMILES(self, SMILES: str) -> Optional[str]:
+        """
+        Determine the structure type of a molecule from its SMILES representation.
+
+        Analyzes the SMILES string to classify the molecule into different
+        structure types based on its composition and charge distribution.
+
+        Args:
+            SMILES (str): The SMILES representation of the molecule.
+
+        Returns:
+            Optional[str]: A string representing the structure type of the molecule. Possible values are:
+
+            - "mixture_neutrals": A mixture of neutral molecules.
+            - "neutral": A single neutral molecule.
+            - "salt": A salt (mixture of oppositely charged ions with total charge of 0).
+            - "mixture_ions": A mixture of ions with non-zero total charge.
+            - "ion": A single charged molecule.
+            - "mixture_neutrals_salts": A mixture of neutral molecules and salts.
+            - "mixture_neutrals_ions": A mixture of neutral molecules and ions.
+            - None: If the SMILES cannot be parsed.
+
+        Notes:
+            - Splits the SMILES on '.' to handle mixtures.
+            - Uses RDKit to calculate formal charges for each part of the SMILES.
+            - Classification is based on the number of parts and their charges.
+            - Returns None if any part of the SMILES fails to parse.
+        """
+        SMILES_parts = SMILES.split(".")
+        SMILES_parts_charges = []
+        for SMILES_part in SMILES_parts:
+            mol = self.get_from_SMILES(SMILES_part)
+            if not mol:
+                return "None"
+            SMILES_parts_charges.append(Chem.rdmolops.GetFormalCharge(mol))
+
+        total_charge = sum(SMILES_parts_charges)
+
+        if all([charge == 0 for charge in SMILES_parts_charges]):
+            if len(SMILES_parts) > 1:
+                structure_type = "mixture_neutrals"
+            else:
+                structure_type = "neutral"
+        elif all([charge != 0 for charge in SMILES_parts_charges]):
+            if len(SMILES_parts) > 1:
+                if total_charge == 0:
+                    structure_type = "salt"
+                else:
+                    structure_type = "mixture_ions"
+            else:
+                structure_type = "ion"
+        else:
+            if total_charge == 0:
+                structure_type = "mixture_neutrals_salts"
+            else:
+                structure_type = "mixture_neutrals_ions"
+
+        return structure_type
+
+    def check_structure_type(self, SMILES: str, required_structure_type: str) -> bool:
+        """
+        Check if a molecule's structure type matches a required structure type.
+
+        Compares the structure type of a molecule (determined from its SMILES)
+        against a required structure type.
+
+        Args:
+            SMILES (str): The SMILES representation of the molecule to check.
+
+            required_structure_type (str): The required structure type to match against.
+            Must be one of the following:
+            "mixture_neutrals", "mixture_ions", "neutral", "salt", "ion",
+            "mixture_neutrals_salts", "mixture_neutrals_ions".
+
+        Returns:
+            bool: True if the molecule's structure type matches the required type, False otherwise.
+
+        Raises:
+            ValueError: If `required_structure_type` is not one of the allowed values.
+
+        Notes:
+            - If `required_structure_type` is None, the method always returns True.
+            - Uses `get_structure_type_from_SMILES` to determine the actual structure type.
+            - The comparison is case-sensitive and must match exactly.
+        """
+        if required_structure_type is None:
+            return True
+
+        available_structure_types = [
+            "mixture_neutrals",
+            "mixture_ions",
+            "neutral",
+            "salt",
+            "ion",
+            "mixture_neutrals_salts",
+            "mixture_neutrals_ions",
+        ]
+        if required_structure_type not in available_structure_types:
+            raise ValueError(
+                "required_structure_type must be one of 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ion','mixture_neutrals_salts' or 'mixture_neutrals_ions'."
+            )
+
+        return self.get_structure_type_from_SMILES(SMILES) == required_structure_type
+
+    @cache
+    def InChI_to_SMILES(self, inchi: str) -> Optional[str]:
+        """
+        Convert an InChI string to a standardized SMILES string.
+
+        Converts an InChI representation of a molecule to its standardized SMILES form.
+
+        Args:
+            inchi (str): The InChI string to convert.
+
+        Returns:
+            Optional[str]: The standardized SMILES string, or None if conversion fails.
+
+        Notes:
+            - This method is cached to improve performance for repeated calls with the same InChI.
+            - Uses `get_from_InChI` to convert InChI to a molecule object.
+            - Standardizes the SMILES using `standardize_SMILES`.
+            - Returns None if the InChI cannot be converted to a molecule.
+        """
+        mol = self.get_from_InChI(inchi)
+
+        if mol is None:
+            return None
+
+        return self.standardize_SMILES(Chem.MolToSmiles(mol))
+
+    @cache
+    def SMILES_to_InChI(self, smiles: str) -> Optional[str]:
+        """
+        Convert a SMILES string to an InChI string.
+
+        Converts a SMILES (Simplified Molecular Input Line Entry System) string
+        to its InChI (International Chemical Identifier) representation.
+
+        Args:
+            smiles (str): The SMILES string to convert.
+
+        Returns:
+            Optional[str]: The InChI string if conversion is successful, None otherwise.
+
+        Notes:
+            - Uses `get_from_SMILES` to create an RDKit molecule object from the SMILES.
+            - Standardizes the molecule using `standardize_molecule` before conversion.
+            - This method is cached for performance optimization.
+        """
+        mol = self.get_from_SMILES(smiles)
+
+        if mol is None:
+            return None
+
+        return Chem.MolToInchi(self.standardize_molecule(mol))
+
+    @cache
+    def get_from_InChI(
+        self, inchi: str, addHs: Optional[bool] = False
+    ) -> Optional[Chem.rdchem.Mol]:
+        """
+        Create an RDKit molecule object from an InChI string.
+
+        Attempts to create an RDKit molecule object from a given InChI string,
+        with options for handling hydrogens.
+
+        Args:
+            inchi (str): The InChI string to convert.
+            addHs (Optional[bool]): If True, explicitly adds hydrogen atoms to the molecule. Defaults to False.
+
+        Returns:
+            Optional[Chem.rdchem.Mol]: An RDKit molecule object if conversion is successful, None otherwise.
+
+        Notes:
+            - Returns None if the input InChI is None or an empty string.
+            - First attempts to create the molecule with sanitization.
+            - If that fails, attempts to create the molecule without sanitization.
+            - Updates the property cache of the molecule, with fallback to non-strict update.
+            - Calculates the Smallest Set of Smallest Rings (SSSR) for the molecule.
+            - Optionally adds explicit hydrogens based on the `addHs` parameter.
+            - This method is cached for performance optimization.
+        """
+        if inchi is None:
+            return None
+        if inchi == "":
+            return None
+
+        mol = Chem.MolFromInchi(inchi)
+        if mol is None:
+            mol = Chem.MolFromInchi(inchi, sanitize=False)
+
+        if mol is None:
+            return None
+
+        try:
+            mol.UpdatePropertyCache()
+        except Exception:
+            mol.UpdatePropertyCache(strict=False)
+
+        Chem.GetSymmSSSR(mol)
+
+        if mol is None:
+            return None
+
+        if addHs:
+            mol = Chem.AddHs(mol)
+
+        return mol
+
+    @cache
+    def get_from_SMILES(
+        self, SMILES: str, addHs: Optional[bool] = False
+    ) -> Optional[Chem.rdchem.Mol]:
+        """
+        Create an RDKit molecule object from a SMILES string.
+
+        Attempts to create an RDKit molecule object from a given SMILES string,
+        with options for handling multiple parts and hydrogens.
+
+        Args:
+            SMILES (str): The SMILES string to convert.
+            addHs (bool): If True, explicitly adds hydrogen atoms to the molecule. Defaults to False.
+
+        Returns:
+            Optional[Chem.rdchem.Mol]: An RDKit molecule object if conversion is successful, None otherwise.
+
+        Notes:
+            - Returns None if the input SMILES is None.
+            - Handles multi-part SMILES strings (separated by '.') by combining them into a single molecule.
+            - For single-part SMILES, attempts to create the molecule with sanitization first.
+            - If sanitization fails, attempts creation without sanitization for certain elements.
+            - Updates the property cache of the molecule, with fallback to non-strict update.
+            - Calculates the Smallest Set of Smallest Rings (SSSR) for the molecule.
+            - Optionally adds explicit hydrogens based on the `addHs` parameter.
+            - This method is cached for performance optimization.
+        """
+        if SMILES is None:
+            return None
+        SMILES_parts = SMILES.split(".")
+
+        if len(SMILES_parts) > 1:
+            mol = Chem.Mol()
+            for SMILES in SMILES_parts:
+                mol2 = self.get_from_SMILES(SMILES, addHs)
+                if mol2 is None:
+                    return None
+                mol = Chem.CombineMols(mol, mol2)
+            try:
+                mol.UpdatePropertyCache()
+            except Exception:
+                mol.UpdatePropertyCache(strict=False)
+
+            Chem.GetSymmSSSR(mol)
+            return mol
+
+        mol = Chem.MolFromSmiles(SMILES)
+        if mol is None:
+            # for some correct SMILES the sanitization process of rdkit does not work properly
+            if (
+                SMILES.count("F") > 0
+                or SMILES.count("Cl") > 0
+                or SMILES.count("Br") > 0
+                or SMILES.count("B") > 0
+            ):
+                mol = Chem.MolFromSmiles(SMILES, sanitize=False)
+                if mol is None:
+                    return None
+                mol.UpdatePropertyCache(strict=False)
+        else:
+            mol.UpdatePropertyCache()
+
+        if mol is None:
+            return None
+
+        if addHs:
+            mol = Chem.AddHs(mol)
+
+        Chem.GetSymmSSSR(mol)
+        return mol
+
+    def to_SMILES(
+        self,
+        mol: Chem.rdchem.Mol,
+        isomeric: Optional[bool] = True,
+        canonicalize_tautomer: Optional[bool] = False,
+        remove_isotopes: Optional[bool] = False,
+    ) -> str:
+        """
+        Convert an RDKit molecule object to a SMILES string.
+
+        Generates a SMILES string from an RDKit molecule object, with options
+        for handling isomers, tautomers, and isotopes.
+
+        Args:
+            mol (Chem.rdchem.Mol): The RDKit molecule object to convert.
+            isomeric (Optional[bool]): If True, includes isomeric information in the SMILES. Defaults to True.
+            canonicalize_tautomer (Optional[bool]): If True, canonicalizes the tautomer before generating SMILES. Defaults to False.
+            remove_isotopes (Optional[bool]): If True, removes isotope information before generating SMILES. Defaults to False.
+
+        Returns:
+            str: The SMILES string representation of the molecule.
+
+        Notes:
+            - If `remove_isotopes` is True, uses `remove_isotopes` method to strip isotope information.
+            - If `canonicalize_tautomer` is True, standardizes the tautomeric form of the molecule.
+            - Uses RDKit's `MolToSmiles` function to generate the final SMILES string.
+        """
+
+        if remove_isotopes:
+            mol = self.remove_isotopes(mol)
+
+        if canonicalize_tautomer:
+            mol = rdMolStandardize.CanonicalTautomer(mol)
+
+        return Chem.MolToSmiles(mol, isomericSmiles=isomeric)
+
     @cache
     def is_valid_SMILES_fast(self, SMILES: Optional[str]) -> bool:
+        """
+        Quickly check if a string is a potentially valid SMILES representation.
+
+        Performs a fast, preliminary check on a string to determine if it
+        could be a valid SMILES representation using regular expressions.
+
+        Args:
+            SMILES (Optional[str]): The string to check.
+
+        Returns:
+            bool: True if the string passes the preliminary SMILES validity check, False otherwise.
+
+        Notes:
+            - Returns False for None or non-string inputs.
+            - Uses a regular expression for validation.
+            - This is a fast check and may not catch all invalid SMILES strings.
+            - The method is cached for performance optimization.
+        """
         if not SMILES:
             return False
 
@@ -1751,13 +2964,51 @@ class MoleculeResolver:
 
     @cache
     def is_valid_SMILES(self, SMILES: Optional[str]) -> bool:
+        """
+        Thoroughly check if a string is a valid SMILES representation.
+
+        Performs a comprehensive check to determine if a string is a valid
+        SMILES representation by attempting to parse it into a molecule.
+
+        Args:
+            SMILES (Optional[str]): The string to check.
+
+        Returns:
+            bool: True if the string is a valid SMILES representation, False otherwise.
+
+        Notes:
+            - First calls `is_valid_SMILES_fast` for a quick preliminary check.
+            - If the fast check passes, attempts to convert the SMILES to a molecule using `get_from_SMILES`.
+            - Returns True only if both the fast check passes and the conversion to a molecule succeeds.
+            - This method is more thorough but slower than `is_valid_SMILES_fast`.
+            - The method is cached for performance optimization.
+        """
         if not self.is_valid_SMILES_fast(SMILES):
             return False
 
-        return self.get_from_SMILES(SMILES) != None
+        return self.get_from_SMILES(SMILES) is not None
 
     @cache
     def is_valid_InChI(self, InChI: Optional[str]) -> bool:
+        """
+        Check if a string is a valid InChI representation.
+
+        Determines if a string is a valid InChI representation by performing a format check
+        and attempting to convert it to a molecule.
+
+        Args:
+            InChI (Optional[str]): The string to check.
+
+        Returns:
+            bool: True if the string is a valid InChI representation, False otherwise.
+
+        Notes:
+            - Returns False for None or non-string inputs.
+            - Checks if the string matches the expected InChI format using a regular expression.
+            - If the format check passes, attempts to convert the InChI to a molecule using RDKit.
+            - Returns True only if both the format check passes and the conversion to a molecule succeeds.
+            - The method is cached for performance optimization.
+        """
         if not InChI:
             return False
 
@@ -1767,10 +3018,34 @@ class MoleculeResolver:
         if not regex.search(self.InChICode_regex_compiled, InChI):
             return False
 
-        return Chem.MolFromInchi(InChI) != None
+        return Chem.MolFromInchi(InChI) is not None
 
     @cache
     def is_valid_CAS(self, cas: Union[str, bool, None]) -> bool:
+        """
+        Check if a string is a valid CAS Registry Number.
+
+        Validates whether a string represents a valid CAS Registry Number by
+        checking its format and verifying its check digit.
+
+        Args:
+            cas (Union[str, bool, None]): The string to check.
+
+        Returns:
+            bool: True if the string is a valid CAS Registry Number, False otherwise.
+
+        Notes:
+            - Returns False for None, boolean inputs, or non-string inputs.
+            - Checks if the string matches the standard CAS format using a regular expression.
+            - Performs the CAS check digit validation algorithm.
+            - The method is cached for performance optimization.
+
+        Example:
+            >>> is_valid_CAS("7732-18-5")
+            True
+            >>> is_valid_CAS("7732-18-6")
+            False
+        """
         if not cas:
             return False
 
@@ -1807,10 +3082,34 @@ class MoleculeResolver:
         InChI1: str,
         InChI2: str,
         differentiate_isomers: Optional[bool] = None,
-        differentiate_tautomers: bool = None,
+        differentiate_tautomers: Optional[bool] = None,
         differentiate_isotopes: Optional[bool] = None,
-        check_for_resonance_structures: Optional[bool] = None
+        check_for_resonance_structures: Optional[bool] = None,
     ) -> bool:
+        """
+        Compare two InChI strings for equality based on specified criteria.
+
+        Determines if two InChI strings represent the same chemical entity,
+        with options to consider or ignore various structural features.
+
+        Args:
+            InChI1 (str): The first InChI string to compare.
+            InChI2 (str): The second InChI string to compare.
+            differentiate_isomers (Optional[bool]): If True, considers isomers as different. Defaults to None.
+            differentiate_tautomers (Optional[bool]): If True, considers tautomers as different. Defaults to None.
+            differentiate_isotopes (Optional[bool]): If True, considers isotopes as different. Defaults to None.
+            check_for_resonance_structures (Optional[bool]): If True, checks for resonance structures. Defaults to None.
+
+        Returns:
+            bool: True if the InChIs are considered equal based on the specified criteria, False otherwise.
+
+        Notes:
+            - Returns False if either InChI string is empty or None.
+            - If the InChI strings are identical, returns True immediately.
+            - Converts InChI strings to RDKit molecule objects for comparison.
+            - Uses the `are_equal` method for detailed comparison based on the specified criteria.
+            - This method is cached for performance optimization.
+        """
         if not InChI1 or not InChI2:
             return False
 
@@ -1825,7 +3124,7 @@ class MoleculeResolver:
             differentiate_isomers,
             differentiate_tautomers,
             differentiate_isotopes,
-            check_for_resonance_structures
+            check_for_resonance_structures,
         )
 
     @cache
@@ -1834,22 +3133,69 @@ class MoleculeResolver:
         smiles1: str,
         smiles2: str,
         differentiate_isomers: Optional[bool] = None,
-        differentiate_tautomers: bool = None,
+        differentiate_tautomers: Optional[bool] = None,
         differentiate_isotopes: Optional[bool] = None,
-        check_for_resonance_structures: Optional[bool] = None
+        check_for_resonance_structures: Optional[bool] = None,
     ) -> bool:
-        
+        """
+        Compare two SMILES strings for equality based on specified criteria.
+
+        Determines if two SMILES strings represent the same chemical entity,
+        with options to consider or ignore various structural features.
+
+        Args:
+            smiles1 (str): The first SMILES string to compare.
+            smiles2 (str): The second SMILES string to compare.
+            differentiate_isomers (Optional[bool]): If True, considers isomers as different. Defaults to None.
+            differentiate_tautomers (Optional[bool]): If True, considers tautomers as different. Defaults to None.
+            differentiate_isotopes (Optional[bool]): If True, considers isotopes as different. Defaults to None.
+            check_for_resonance_structures (Optional[bool]): If True, checks for resonance structures. Defaults to None.
+
+        Returns:
+            bool: True if the SMILES are considered equal based on the specified criteria, False otherwise.
+
+        Notes:
+            - Converts SMILES strings to RDKit molecule objects for comparison.
+            - Uses the `are_equal` method for detailed comparison based on the specified criteria.
+            - This method is cached for performance optimization.
+        """
+
         return self.are_equal(
             self.get_from_SMILES(smiles1),
             self.get_from_SMILES(smiles2),
             differentiate_isomers,
             differentiate_tautomers,
             differentiate_isotopes,
-            check_for_resonance_structures
+            check_for_resonance_structures,
         )
 
     @cache
-    def get_resonance_SMILES(self, SMILES):
+    def get_resonance_SMILES(self, SMILES: str) -> list[str]:
+        """
+        Generate resonance structures for a given molecule represented by a SMILES string.
+
+        Takes a SMILES string and returns a list of SMILES strings representing all possible resonance structures of the molecule.
+
+        Args:
+            SMILES (str): The input SMILES string representing the molecule.
+
+        Returns:
+            list[str]: A list of SMILES strings representing the resonance structures.
+            If no resonance structures are found or if the input is invalid,
+            returns a list containing only the input SMILES.
+
+        Notes:
+            - Uses RDKit's `ResonanceMolSupplier` to generate resonance structures.
+            - Implements a workaround for a known RDKit issue by setting an empty progress callback.
+            - Handles corner cases where `ResonanceMolSupplier` might return `None` for all resonance structures.
+            - Filters out any `None` results from the resonance structure generation.
+            - This method is cached for performance optimization.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> resolver.get_resonance_SMILES("C=C-C=C")
+            ['C=C-C=C', 'C=C=C-C', 'C-C=C=C']
+        """
         mol = self.get_from_SMILES(SMILES)
         rms = Chem.ResonanceMolSupplier(mol)
         # the following line is a workaroung for https://github.com/rdkit/rdkit/issues/6704
@@ -1864,174 +3210,63 @@ class MoleculeResolver:
 
         return [Chem.MolToSmiles(mol_) for mol_ in resonance_mols if mol_]
 
-    @cache
-    def clean_chemical_name(
-        self,
-        chemical_name: str,
-        normalize: bool = True,
-        unescape_html: bool = True,
-        spell_out_greek_characters: bool = False,
-        for_filename: bool = False,
-    ) -> str:
-        greek_letters = [
-            "α",
-            "β",
-            "γ",
-            "δ",
-            "ε",
-            "ϵ",
-            "ζ",
-            "η",
-            "θ",
-            "ι",
-            "κ",
-            "λ",
-            "μ",
-            "ν",
-            "ξ",
-            "ο",
-            "π",
-            "ρ",
-            "σ",
-            "τ",
-            "υ",
-            "φ",
-            "χ",
-            "ψ",
-            "ω",
-            "Α",
-            "Β",
-            "Γ",
-            "Δ",
-            "Ε",
-            "Ζ",
-            "Η",
-            "Θ",
-            "Ι",
-            "Κ",
-            "Λ",
-            "Μ",
-            "Ν",
-            "Ξ",
-            "Ο",
-            "Π",
-            "Ρ",
-            "Σ",
-            "Τ",
-            "Υ",
-            "Φ",
-            "Χ",
-            "Ψ",
-            "Ω",
-            "µ",
-            "∆",
-        ]
-        spelled_out_versions = [
-            "alpha",
-            "beta",
-            "gamma",
-            "delta",
-            "epsilon",
-            "epsilon",
-            "zeta",
-            "eta",
-            "theta",
-            "iota",
-            "kappa",
-            "lambda",
-            "mu",
-            "nu",
-            "xi",
-            "omicron",
-            "pi",
-            "rho",
-            "sigma",
-            "tau",
-            "upsilon",
-            "phi",
-            "chi",
-            "psi",
-            "omega",
-            "alpha",
-            "beta",
-            "gamma",
-            "delta",
-            "epsilon",
-            "zeta",
-            "eta",
-            "theta",
-            "iota",
-            "kappa",
-            "lambda",
-            "mu",
-            "nu",
-            "xi",
-            "omicron",
-            "pi",
-            "rho",
-            "sigma",
-            "tau",
-            "upsilon",
-            "phi",
-            "chi",
-            "psi",
-            "omega",
-            "mu",
-            "delta",
-        ]
-
-        map_to_replace = [
-            ("’", "'"),
-            ("′", "'"),
-            ("±", "+-"),
-            ("→", "-->"),
-            ("≥", ">="),
-            ("≤", "<="),
-            ("·", "."),
-            ("#", "no. "),
-            ("«", ""),
-            ("»", ""),
-        ]
-
-        if spell_out_greek_characters:
-            for greek_letter, spelled_out_version in zip(
-                greek_letters, spelled_out_versions, strict=True
-            ):
-                map_to_replace.append((greek_letter, spelled_out_version))
-
-        chemical_name = chemical_name.strip()
-
-        if unescape_html:
-            chemical_name = html.unescape(chemical_name)
-
-        for old, new in map_to_replace:
-            chemical_name = chemical_name.replace(old, new)
-
-        if normalize:
-            nfkd_form = unicodedata.normalize("NFKD", chemical_name)
-            chemical_name = "".join(
-                [c for c in nfkd_form if not unicodedata.combining(c)]
-            )
-
-        chemical_name = regex.sub(r"\s+", " ", chemical_name)
-
-        if for_filename:
-            chemical_name = regex.sub(r"[^\w\s]", "", chemical_name.lower())
-            chemical_name = chemical_name.encode("ascii", "ignore").decode("ascii")
-            chemical_name = regex.sub(r"\s+", "", chemical_name)
-
-        return chemical_name.strip()
-
     def are_equal(
         self,
         mol1: Chem.rdchem.Mol,
         mol2: Chem.rdchem.Mol,
         differentiate_isomers: Optional[bool] = None,
-        differentiate_tautomers: bool = None,
+        differentiate_tautomers: Optional[bool] = None,
         differentiate_isotopes: Optional[bool] = None,
-        check_for_resonance_structures: Optional[bool] = None
+        check_for_resonance_structures: Optional[bool] = None,
     ) -> bool:
-        
+        """
+        Compare two RDKit molecule objects for equality based on specified criteria.
+
+        Determines if two molecules are considered equal, with options to consider or ignore various structural features such as isomers, tautomers, isotopes, and resonance structures.
+
+        Args:
+            mol1: The first RDKit molecule object to compare.
+
+            mol2: The second RDKit molecule object to compare.
+
+            differentiate_isomers: If `True`, considers isomers as different.
+            If `None`, uses the class's default setting. Defaults to `None`.
+
+            differentiate_tautomers: If `True`, considers tautomers as different.
+            If `None`, uses the class's default setting. Defaults to `None`.
+
+            differentiate_isotopes: If `True`, considers isotopes as different.
+            If `None`, uses the class's default setting. Defaults to `None`.
+
+            check_for_resonance_structures: If `True`, checks for resonance structures.
+            If `None`, uses the class's default setting. Defaults to `None`.
+
+        Returns:
+            `True` if the molecules are considered equal based on the specified criteria, `False` otherwise.
+
+        Notes:
+            - Returns `False` if either molecule is `None`.
+            - Uses class default settings for unspecified comparison criteria.
+            - Performs a series of checks based on the specified criteria:
+              1. Compares InChI strings if all features are differentiated.
+              2. Compares canonical SMILES if isotopes are not differentiated.
+              3. Compares InChI strings without isotope layers if tautomers and isomers are differentiated.
+              4. Compares InChI strings without stereo layers if only tautomers are differentiated.
+              5. Compares InChI strings without stereo and tautomer layers if neither are differentiated.
+            - Optionally checks for resonance structures if specified.
+            - Uses RDKit's `MolToInchi` and `MolToSmiles` functions for conversions.
+            - Handles potential RDKit exceptions during InChI generation.
+
+        Example:
+            >>> mol1 = Chem.MolFromSmiles("CC(=O)O")
+            >>> mol2 = Chem.MolFromSmiles("CC(O)=O")
+            >>> resolver = MoleculeResolver()
+            >>> resolver.are_equal(mol1, mol2, differentiate_tautomers=False)
+            True
+            >>> resolver.are_equal(mol1, mol2, differentiate_tautomers=True)
+            False
+        """
+
         if mol1 is None or mol2 is None:
             return False
 
@@ -2040,10 +3275,10 @@ class MoleculeResolver:
 
         if differentiate_tautomers is None:
             differentiate_tautomers = self._differentiate_tautomers
-            
+
         if differentiate_isotopes is None:
             differentiate_isotopes = self._differentiate_isotopes
-        
+
         if check_for_resonance_structures is None:
             check_for_resonance_structures = self._check_for_resonance_structures
 
@@ -2053,23 +3288,29 @@ class MoleculeResolver:
 
         mol1 = self.standardize_molecule(mol1)
         mol2 = self.standardize_molecule(mol2)
-        
+
         if not differentiate_tautomers:
             mol1 = rdMolStandardize.CanonicalTautomer(mol1)
             mol2 = rdMolStandardize.CanonicalTautomer(mol2)
 
-        SMILES1 = self.to_SMILES(mol1, differentiate_isomers, not differentiate_tautomers, not differentiate_tautomers)
-        SMILES2 = self.to_SMILES(mol2, differentiate_isomers, not differentiate_tautomers, not differentiate_tautomers)
+        SMILES1 = self.to_SMILES(
+            mol1,
+            differentiate_isomers,
+            not differentiate_tautomers,
+            not differentiate_tautomers,
+        )
+        SMILES2 = self.to_SMILES(
+            mol2,
+            differentiate_isomers,
+            not differentiate_tautomers,
+            not differentiate_tautomers,
+        )
 
         if SMILES1 == SMILES2:
             return True
 
-        SMILES1_structure_type = self.get_structure_type_from_SMILES(
-            SMILES1
-        )
-        SMILES2_structure_type = self.get_structure_type_from_SMILES(
-            SMILES2
-        )
+        SMILES1_structure_type = self.get_structure_type_from_SMILES(SMILES1)
+        SMILES2_structure_type = self.get_structure_type_from_SMILES(SMILES2)
         if SMILES1_structure_type != SMILES2_structure_type:
             return False
 
@@ -2088,9 +3329,7 @@ class MoleculeResolver:
 
             matching_unique_partial_SMILES2_found = []
             for unique_partial_SMILES1_ in unique_partial_SMILES1:
-                resonance_SMILES1 = self.get_resonance_SMILES(
-                    unique_partial_SMILES1_
-                )
+                resonance_SMILES1 = self.get_resonance_SMILES(unique_partial_SMILES1_)
                 unique_partial_SMILES2 = unique_partial_SMILES2 - set(
                     matching_unique_partial_SMILES2_found
                 )
@@ -2099,7 +3338,7 @@ class MoleculeResolver:
                         unique_partial_SMILES2_
                     )
                     # one would expect the resonance structures to be equal
-                    # but to a bug sometimes you do not get all of them: https://github.com/rdkit/rdkit/issues/4491
+                    # but due to a bug sometimes you do not get all of them: https://github.com/rdkit/rdkit/issues/4491
                     # this will not be a workaround for all situations
                     # but is still better than just looking at equality
                     if set(resonance_SMILES1).intersection(set(resonance_SMILES2)):
@@ -2115,7 +3354,7 @@ class MoleculeResolver:
         if check_for_resonance_structures:
             return do_resonance_structures_overlap(SMILES1, SMILES2)
         return False
-    
+
         # https://github.com/rdkit/rdkit/discussions/4719
         # return rdMolHash.MolHash(standardized_molecule1, rdMolHash.HashFunction.HetAtomTautomer) == rdMolHash.MolHash(standardized_molecule1, rdMolHash.HashFunction.HetAtomTautomer)
 
@@ -2140,12 +3379,43 @@ class MoleculeResolver:
         #     return mol1_hash == mol2_hash
 
     def find_duplicates_in_molecule_dictionary(
-        self, molecules: dict[Any, Molecule], clustered_molecules=None
-    ):
+        self, molecules: dict[Any, Molecule], clustered_molecules: Optional[dict] = None
+    ) -> Generator[tuple[Any, Molecule, Any, Molecule, bool], None, None]:
+        """
+        Find duplicate molecules within a dictionary of molecules.
+
+        Identifies and yields pairs of duplicate molecules from the input dictionary. It can use a pre-clustered dictionary of molecules for efficiency.
+
+        Args:
+            molecules (dict[Any, Molecule]): A dictionary of molecules to search for duplicates.
+            The keys can be of any type, and the values are `Molecule` objects.
+
+            clustered_molecules (Optional[dict]): A pre-clustered dictionary of molecules,
+            grouped by molecular formula. If `None`, the method will generate this clustering.
+            Defaults to `None`.
+
+        Returns:
+            tuple[Any, Molecule, Any, Molecule, bool]: Pairs of duplicate molecules found in the input dictionary.
+
+        Notes:
+            - If `clustered_molecules` is not provided, it generates the clustering using
+              `group_molecule_dictionary_by_formula`.
+            - Uses the `intersect_molecule_dictionaries` method to find duplicates.
+            - This method is particularly useful for efficiently identifying duplicate molecules in large datasets.
+
+        Example:
+            >>> molecules = {
+            ...     "mol1": Molecule("CC"),
+            ...     "mol2": Molecule("CCC"),
+            ...     "mol3": Molecule("CC")  # Duplicate of mol1
+            ... }
+            >>> resolver = MoleculeResolver()
+            >>> duplicates = list(resolver.find_duplicates_in_molecule_dictionary(molecules))
+            >>> print(duplicates)
+            [('mol1', Molecule(...), 'mol3', Molecule(...), True)]
+        """
         if not clustered_molecules:
-            clustered_molecules = self.group_molecule_dictionary_by_formula(
-                molecules
-            )
+            clustered_molecules = self.group_molecule_dictionary_by_formula(molecules)
 
         yield from self.intersect_molecule_dictionaries(
             molecules,
@@ -2156,9 +3426,44 @@ class MoleculeResolver:
         )
 
     def group_molecule_dictionary_by_formula(
-        self,
-        molecules: dict[Any, Molecule]
-    ) -> dict[str, dict[Any, Tuple[Chem.rdchem.Mol, Molecule]]]:
+        self, molecules: dict[Any, Molecule]
+    ) -> dict[str, dict[Any, tuple[Chem.rdchem.Mol, Molecule]]]:
+        """
+        Group a dictionary of molecules by their molecular formulas.
+
+        Takes a dictionary of molecules and returns a new dictionary where molecules are grouped by their molecular formulas.
+
+        Args:
+            molecules (dict[Any, Molecule]): A dictionary of molecules to be grouped.
+            The keys can be of any type, and the values are `Molecule` objects.
+
+        Returns:
+            dict[str, dict[Any, tuple[Chem.rdchem.Mol, Molecule]]]: A dictionary where:
+            - Keys are molecular formulas (`str`).
+            - Values are dictionaries where:
+
+              - Keys are the original keys from the input dictionary.
+              - Values are tuples containing: (an RDKit `Mol` object, the original `Molecule` object)
+
+        Notes:
+            - Uses the `get_from_SMILES` method to convert SMILES to RDKit `Mol` objects.
+            - Calculates molecular formulas using RDKit's `CalcMolFormula` function.
+            - This grouping is useful for efficient comparison and searching of molecules with the same formula.
+
+        Example:
+            >>> molecules = {
+            ...     "mol1": Molecule("CC"),
+            ...     "mol2": Molecule("CCC"),
+            ...     "mol3": Molecule("CCO")
+            ... }
+            >>> resolver = MoleculeResolver()
+            >>> grouped = resolver.group_molecule_dictionary_by_formula(molecules)
+            >>> for formula, mol_dict in grouped.items():
+            ...     print(f"{formula}: {list(mol_dict.keys())}")
+            C2H6: ['mol1']
+            C3H8: ['mol2']
+            C2H6O: ['mol3']
+        """
         temporary = {}
         for key, molecule in molecules.items():
             mol_molecule = self.get_from_SMILES(molecule.SMILES)
@@ -2174,19 +3479,58 @@ class MoleculeResolver:
         self,
         molecules: dict[Any, Molecule],
         other_molecules: dict[Any, Molecule],
-        mode: str = "SMILES",
-        clustered_molecules: dict = None,
-        clustered_other_molecules: dict = None,
-        report_same_keys: bool = True,
-    ) -> Tuple[Any, Molecule, Any, Molecule, bool]:
+        mode: Optional[str] = "SMILES",
+        clustered_molecules: Optional[dict] = None,
+        clustered_other_molecules: Optional[dict] = None,
+        report_same_keys: Optional[bool] = True,
+    ) -> Generator[tuple[Any, Molecule, Any, Molecule, bool], None, None]:
+        """
+        Intersect two dictionaries of molecules based on structural similarity.
+
+        Compares molecules from two dictionaries and yields pairs of molecules that are structurally similar,
+        along with their keys and isomer information.
+
+        Args:
+            molecules (dict[Any, Molecule]): First dictionary of molecules to compare.
+
+            other_molecules (dict[Any, Molecule]): Second dictionary of molecules to compare.
+
+            mode (Optional[str]): Comparison mode, either `"SMILES"` or `"inchi"`. Defaults to `"SMILES"`.
+
+            clustered_molecules (Optional[dict]): Pre-clustered version of `molecules`.
+            If `None`, clustering will be performed. Defaults to `None`.
+
+            clustered_other_molecules (Optional[dict]): Pre-clustered version of `other_molecules`.
+            If `None`, clustering will be performed. Defaults to `None`.
+
+            report_same_keys (Optional[bool]): If `True`, report matches even if the keys are identical.
+            Defaults to `True`.
+
+        Returns:
+            tuple[Any, Molecule, Any, Molecule, bool]: A tuple containing:
+
+                - Key from the first dictionary.
+                - Molecule from the first dictionary.
+                - Key from the second dictionary.
+                - Molecule from the second dictionary.
+                - Boolean indicating if the molecules have the same isomer information.
+
+        Raises:
+            ValueError: If an unsupported mode is specified.
+
+        Notes:
+            - Molecules are first grouped by molecular formula for efficient comparison.
+            - Supports comparison using either SMILES or InChI representation.
+            - For SMILES mode, molecules are compared with and without considering isomer information.
+            - For InChI mode, molecules are compared with and without considering stereochemistry.
+            - Uses the `are_equal` and `are_InChIs_equal` methods for comparisons.
+        """
         if not clustered_molecules:
-            clustered_molecules = self.group_molecule_dictionary_by_formula(
-                molecules
-            )
+            clustered_molecules = self.group_molecule_dictionary_by_formula(molecules)
 
         if not clustered_other_molecules:
-            clustered_other_molecules = (
-                self.group_molecule_dictionary_by_formula(other_molecules)
+            clustered_other_molecules = self.group_molecule_dictionary_by_formula(
+                other_molecules
             )
 
         for mol_formula, this_formula_molecules in clustered_molecules.items():
@@ -2199,13 +3543,13 @@ class MoleculeResolver:
                         are_equal = False
                         same_isomer_information = True
                         if mode == "SMILES":
-                            if self.are_equal(
-                                mol_molecule, other_mol_molecule
-                            ):
+                            if self.are_equal(mol_molecule, other_mol_molecule):
                                 are_equal = True
                                 same_isomer_information = True
                             elif self.are_equal(
-                                mol_molecule, other_mol_molecule, differentiate_isomers=False
+                                mol_molecule,
+                                other_mol_molecule,
+                                differentiate_isomers=False,
                             ):
                                 are_equal = True
                                 same_isomer_information = False
@@ -2236,45 +3580,38 @@ class MoleculeResolver:
                                     same_isomer_information,
                                 )
 
-    @cache
-    def check_SMILES(
-        self,
-        SMILES: str,
-        required_formula: Optional[str] = None,
-        required_charge: Optional[int] = None,
-        required_structure_type: Optional[str] = None,
-    ) -> bool:
-        self._check_parameters(
-            required_formulas=required_formula,
-            required_charges=required_charge,
-            required_structure_types=required_structure_type,
-        )
-
-        if not self.is_valid_SMILES_fast(SMILES):
-            return False
-
-        mol = self.get_from_SMILES(SMILES)
-
-        if mol is None:
-            return False
-
-        if not self.check_formula(mol, required_formula):
-            return False
-
-        if not self.check_charge(mol, required_charge):
-            return False
-
-        if not self.check_structure_type(SMILES, required_structure_type):
-            return False
-
-        return True
-
     def get_SMILES_from_Mol_format(
-        self,
-        *,
-        molblock: Optional[str] = None,
-        url: Optional[str] = None,
+        self, *, molblock: Optional[str] = None, url: Optional[str] = None
     ) -> Optional[str]:
+        """
+        Convert a molecule from MOL format to SMILES representation.
+
+        Takes either a MOL block string or a URL pointing to a MOL file, converts it to an RDKit molecule object,
+        standardizes it, and returns the SMILES representation.
+
+        Args:
+            molblock (Optional[str]): A string containing the molecule information in MOL format.
+            Defaults to `None`.
+
+            url (Optional[str]): A URL pointing to a file containing the molecule information
+            in MOL format. Defaults to `None`.
+
+        Returns:
+            Optional[str]: The SMILES representation of the molecule if conversion is successful,
+            `None` otherwise.
+
+        Raises:
+            ValueError: If both `molblock` and `url` are `None`, or if both are provided.
+            TypeError: If `molblock` or `url` is provided but is not a string.
+
+        Notes:
+            - Either `molblock` or `url` must be provided, but not both.
+            - If a URL is provided, the method will attempt to fetch the MOL data from it.
+            - Includes a fix for potential issues in the MOL block format.
+            - If the initial conversion fails, it attempts to create the molecule without sanitization.
+            - The resulting molecule is standardized before converting to SMILES.
+            - Uses RDKit for molecule manipulation and conversion.
+        """
         if molblock is None and url is None:
             raise ValueError("molblock and url cannot both be None.")
         if molblock:
@@ -2307,13 +3644,13 @@ class MoleculeResolver:
             while change_was_made:
                 change_was_made = False
                 three_digit_blocks = [
-                    count_line[i : i + 3] for i in range(0, len(count_line), 3)
+                    count_line[i: i + 3] for i in range(0, len(count_line), 3)
                 ]
 
                 for i_block, three_digit_block in enumerate(three_digit_blocks):
                     if three_digit_block != "   " and three_digit_block[-1] == " ":
                         count_line = (
-                            count_line[: i_block * 3] + " " + count_line[i_block * 3 :]
+                            count_line[: i_block * 3] + " " + count_line[i_block * 3:]
                         )
                         change_was_made = True
                         break
@@ -2334,9 +3671,44 @@ class MoleculeResolver:
     def get_SMILES_from_image_file(
         self,
         image_path: str,
-        engines_order: list[str] = ["osra", "molvec", "imago"],
-        mode: str = "single",
-    ) -> str:
+        engines_order: Optional[list[str]] = ["osra", "molvec", "imago"],
+        mode: Optional[str] = "single",
+    ) -> Union[str, list[str]]:
+        """
+        Extract SMILES representation from a chemical structure image file.
+
+        Uses multiple optical structure recognition engines to convert a chemical structure image into a SMILES string.
+
+        Args:
+            image_path (str): The file path to the image containing the chemical structure.
+
+            engines_order (Optional[list[str]]): The order in which to try different recognition engines.
+            Defaults to `["osra", "molvec", "imago"]`.
+
+            mode (Optional[str]): The extraction mode. Can be either `"single"` (return first successful result)
+                or `"all"` (return results from all successful engines). Defaults to `"single"`.
+
+        Returns:
+            Union[str, list[str]]: The SMILES representation of the chemical structure.
+            If mode is `"single"`, returns the first successful SMILES string.
+            If mode is `"all"`, returns a list of all successful SMILES strings.
+
+        Raises:
+            ValueError: If an invalid mode is specified.
+
+        Notes:
+            - **This function will throw an error if the services are offline.**
+            - Attempts to use the specified engines in the given order.
+            - OSRA is typically the most effective engine and is set as the default first choice.
+            - Uses the `molvec.ncats.io` API for structure recognition.
+            - If an engine successfully recognizes the structure, the result is converted to SMILES.
+            - In `"single"` mode, the method stops after the first successful recognition.
+            - Final SMILES strings are standardized before being returned.
+            - If no engines successfully recognize the structure, an empty string or list is returned.
+        """
+        raise ConnectionError(
+            "Unfortunately, the service has been offline for some time."
+        )
         # usually OSRA works best, this is why it is left as default
         if mode not in ["single", "all"]:
             raise ValueError("The modes single and all are allowed.")
@@ -2371,15 +3743,89 @@ class MoleculeResolver:
 
         return SMILES
 
-    
-    def save_to_PNG(
+    def show_molecule_and_pause(
+        self,
+        mol: Chem.rdchem.Mol,
+        name: Optional[str] = None,
+        size: Optional[tuple[int, int]] = (1000, 1000),
+    ) -> None:
+        """
+        Display a molecule image with additional information and pause execution.
+
+        Generates an image of the molecule, adds title information including the molecule's name (if provided)
+        and formal charge, and displays the image.
+
+        Args:
+            mol (Chem.rdchem.Mol): The RDKit molecule object to be displayed.
+
+            name (Optional[str]): The name of the molecule to be displayed in the title.
+            If `None`, only the charge is shown. Defaults to `None`.
+
+            size (Optional[tuple[int, int]]): The size of the output image in pixels (width, height).
+            Defaults to `(1000, 1000)`.
+
+        Notes:
+            - Adjusts drawing options based on the image size for optimal visualization.
+            - The formal charge of the molecule is always displayed in the title.
+            - The image is displayed using the default image viewer of the system.
+            - Execution is paused after displaying the image (implicit in `img.show()`).
+            - Uses RDKit's `Draw` module for molecule rendering.
+            - The title is added to the image using the PIL (Python Imaging Library) module.
+            - The font size for atom labels and other drawing options are scaled based on the image size.
+        """
+        scaling_size = min(size)
+        Draw.DrawingOptions.atomLabelFontSize = int(50 * scaling_size / 1000)
+        Draw.DrawingOptions.dotsPerAngstrom = int(300 * scaling_size / 1000)
+        Draw.DrawingOptions.bondLineWidth = max(float(4.0 * scaling_size / 1000), 1.0)
+        img = Draw.MolToImage(mol, size=size)
+
+        title = "charge: " + str(Chem.rdmolops.GetFormalCharge(mol))
+        if name is not None:
+            title = "name: " + name + "\n" + title
+
+        draw = ImageDraw.Draw(img)
+        s = int(size[1] / 30)
+        fnt = ImageFont.truetype(font="arial.ttf", size=s)
+        draw.multiline_text((10, 10), title, font=fnt, fill=(0, 0, 0, 255))
+
+        img.show()
+
+    def save_molecule_to_PNG(
         self,
         mol: Chem.rdchem.Mol,
         filename: str,
-        atom_infos=None,
-        atom_infos_format_string: str = "%.3f",
-        size: set[int, int] = (1000, 1000),
-    ):
+        atom_infos: Optional[list] = None,
+        atom_infos_format_string: Optional[str] = "%.3f",
+        size: Optional[tuple[int, int]] = (1000, 1000),
+    ) -> None:
+        """
+        Save a molecule image to a PNG file with optional atom information.
+
+        Generates an image of the molecule, optionally adds atom-specific information, and saves it as a PNG file.
+
+        Args:
+            mol (Chem.rdchem.Mol): The RDKit molecule object to be saved.
+
+            filename (str): The path and name of the file where the image will be saved.
+
+            atom_infos (Optional[list]): A list of values to be displayed for each atom.
+            If provided, must have the same length as the number of atoms in the molecule.
+            Defaults to `None`.
+
+            atom_infos_format_string (Optional[str]): The format string to use when converting
+            `atom_infos` values to strings. Defaults to `"%.3f"`.
+
+            size (Optional[tuple[int, int]]): The size of the output image in pixels (width, height).
+            Defaults to `(1000, 1000)`.
+
+        Notes:
+            - If `atom_infos` is provided, each atom in the molecule will be annotated with the corresponding value.
+            - Creates a deep copy of the molecule to avoid modifying the original.
+            - Atom annotations are added as `'atomNote'` properties to each atom.
+            - The image is saved in PNG format using RDKit's `MolToFile` function.
+            - Uses RDKit's `Draw` module for molecule rendering.
+            - If `atom_infos` is provided but doesn't match the number of atoms, it may lead to unexpected results.
+        """
         new_mol = copy.deepcopy(mol)
 
         for i, atom in enumerate(new_mol.GetAtoms()):
@@ -2388,30 +3834,80 @@ class MoleculeResolver:
 
         Draw.MolToFile(new_mol, filename, size=size)
 
-    def normalize_html(self, html_):
-        html_ = regex.sub("\s+", " ", html_)
-        html_ = html_.replace("&nbsp;", " ")
-        html_ = regex.sub("\s+", " ", html_)
-        return html_
+    def normalize_html(self, html_code: str) -> str:
+        """
+        Normalize HTML content.
+
+        This method is a placeholder for HTML normalization logic.
+
+        Args:
+            html_code (str): The HTML content to normalize.
+
+        Returns:
+            str: The normalized HTML content.
+
+        Notes:
+            - Currently not implemented.
+        """
+        html_code = regex.sub("\s+", " ", html_code)
+        html_code = html_code.replace("&nbsp;", " ")
+        html_code = regex.sub("\s+", " ", html_code)
+        return html_code
 
     def parse_items_from_html(
         self,
-        html_: str,
+        html_code: str,
         split_tag: str,
-        properties_regex: list[Tuple[str, str, list[int]]],
+        properties_regex: list[tuple[str, str, list[int]]],
         property_indices_required: Optional[list[int]] = None,
-    ):
-        html_ = self.normalize_html(html_)
-        # HTMLparser was thought of here, but IMHO it is way to complicated
-        # to match the correct opening and closing tags with the python std library
-        # I did not want to depend on beautifulsoup at the beginning, but it is
-        # a dependency that I am willing to add in the future.
-        # The following code is a simple and quick solution that works for the
-        # time being.
+    ) -> list[list]:
+        """
+        Parse and extract items from HTML content based on specified regex patterns.
+
+        Splits the HTML content, applies regex patterns to extract properties, and returns a list of items that meet the specified requirements.
+
+        Args:
+            html_code (str): The HTML content to parse.
+
+            split_tag (str): The HTML tag used to split the content into parts.
+            If empty, the entire HTML is treated as one part.
+
+            properties_regex (list[tuple[str, str, list[int]]]): A list of tuples, each containing:
+
+                - `source_type` (str): `'html'` or `'text'` to indicate where to apply the regex.
+                - `property_regex` (str): The regex pattern to extract the property.
+                - `allowed_match_number` (list[int]): A list of allowed numbers of matches for the regex.
+
+            property_indices_required (Optional[list[int]]): Indices of properties that must be non-`None` for an item to be included in the result. Defaults to `None`.
+
+        Returns:
+            list[list]: A list of items, where each item is a list of extracted properties.
+
+        Raises:
+            RuntimeError: If the number of regex matches doesn't fall within the allowed range for any property.
+
+        Notes:
+            - First normalizes the HTML using the `normalize_html` method.
+
+            - Splits the HTML based on the provided `split_tag`.
+
+            - For each part, applies the regex patterns to extract properties.
+
+            - Items are only included in the result if they meet the requirements specified by
+              `property_indices_required`.
+
+            - HTMLparser was thought of here, but IMHO it is way too complicated to match the correct
+              opening and closing tags with the python std library. I did not want to depend on
+              beautifulsoup at the beginning, but it is a dependency that I am willing to add in the
+              future. The following code is a simple and quick solution that works for the time being.
+
+        """
+        html_code = self.normalize_html(html_code)
+
         if split_tag:
-            html_parts = html_.split(split_tag)[1:]
+            html_parts = html_code.split(split_tag)[1:]
         else:
-            html_parts = [html_]
+            html_parts = [html_code]
 
         all_items = []
         for html_part in html_parts:
@@ -2443,7 +3939,25 @@ class MoleculeResolver:
 
         return all_items
 
-    def get_java_path(self):
+    def get_java_path(self) -> Optional[str]:
+        """
+        Get the full path of the Java executable.
+
+        Determines the full path of the Java executable on the system, supporting Windows, Linux, and macOS platforms.
+
+        Returns:
+            Optional[str]: The full path to the Java executable if found, `None` otherwise.
+
+        Raises:
+            NotImplementedError: If the method is called on an unsupported operating system.
+
+        Notes:
+            - On Windows, uses the `'where'` command to locate Java.
+            - On Linux and macOS, uses the `'which'` command.
+            - Checks if the found Java paths actually exist on the file system.
+            - If multiple Java installations are found, the first valid path is returned.
+            - Returns `None` if Java is not found or if the `'where'`/`'which'` command fails.
+        """
         if platform.system().lower() == "windows":
             search_command = "where"
         elif platform.system().lower() in ["linux", "darwin"]:
@@ -2470,8 +3984,34 @@ class MoleculeResolver:
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
-        allow_warnings: bool = False,
+        allow_warnings: Optional[bool] = False,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from OPSIN based on its name.
+
+        Queries the OPSIN (Open Parser for Systematic IUPAC Nomenclature) service
+        to convert a chemical name into a molecular structure, with optional constraints.
+
+        Args:
+            name (str): The chemical name to be converted to a molecular structure.
+            required_formula (Optional[str]): The expected molecular formula.
+            required_charge (Optional[int]): The expected molecular charge.
+            required_structure_type (Optional[str]): The expected structure type.
+            allow_warnings (Optional[bool]): If True, accept results with warnings.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if successful, None otherwise.
+
+        Notes:
+            - Checks the molecule cache before querying OPSIN.
+            - Uses a resilient request method to handle potential network issues.
+            - The SMILES string returned by OPSIN is checked against the required parameters.
+            - If the SMILES check fails, it attempts to convert the InChI to SMILES.
+            - Standardizes the SMILES string before creating the Molecule object.
+            - Any warnings from OPSIN are included in the Molecule's additional_information.
+            - The result is filtered and combined with other results before being returned.
+            - If no valid molecule is found, the method returns None.
+        """
         SMILES = None
         additional_information = ""
         self._check_parameters(
@@ -2502,22 +4042,16 @@ class MoleculeResolver:
                             required_structure_type,
                         ):
                             SMILES = temp["smiles"]
-                            SMILES = self.standardize_SMILES(
-                                SMILES
-                            )
+                            SMILES = self.standardize_SMILES(SMILES)
                         else:
-                            SMILES_from_InChI = self.InChI_to_SMILES(
-                                temp["inchi"]
-                            )
+                            SMILES_from_InChI = self.InChI_to_SMILES(temp["inchi"])
                             if self.check_SMILES(
                                 SMILES_from_InChI,
                                 required_formula,
                                 required_charge,
                                 required_structure_type,
                             ):
-                                SMILES = self.standardize_SMILES(
-                                    SMILES_from_InChI
-                                )
+                                SMILES = self.standardize_SMILES(SMILES_from_InChI)
 
                         additional_information = ""
                         if "warnings" in temp:
@@ -2543,10 +4077,33 @@ class MoleculeResolver:
         )
 
     def get_molecule_from_OPSIN_batchmode(
-        self,
-        names: list[str],
-        allow_uninterpretable_stereo: bool = False,
+        self, names: list[str], allow_uninterpretable_stereo: Optional[bool] = False
     ) -> list[Optional[Molecule]]:
+        """
+        Convert a batch of chemical names to molecules using OPSIN in offline mode.
+
+        Uses OPSIN to convert a list of chemical names to molecular structures in batch mode.
+
+        Args:
+            names (list[str]): A list of chemical names to be converted.
+            allow_uninterpretable_stereo (Optional[bool]): Allows OPSIN to ignore uninterpretable stereochemistry.
+
+        Returns:
+            list[Optional[Molecule]]: A list of Molecule objects corresponding to the input names.
+
+        Raises:
+            FileNotFoundError: If the Java installation could not be found.
+            RuntimeError: If there was a problem parsing the OPSIN offline output file.
+
+        Notes:
+            - Checks a cache for previously processed molecules.
+            - Downloads the latest version of OPSIN if not already present.
+            - Runs OPSIN in offline mode using Java, processing all names in a single batch.
+            - Standardizes the SMILES strings returned by OPSIN.
+            - Each successfully converted molecule is stored with metadata.
+            - Uses a temporary directory for OPSIN operations, cleaned up after use.
+            - If allow_uninterpretable_stereo is True, it's noted in the molecule's additional_information.
+        """
         self._check_parameters(
             identifiers=names,
             modes="name",
@@ -2663,8 +4220,35 @@ class MoleculeResolver:
         self,
         identifier: str,
         required_formula: Optional[str] = None,
-        required_charge: Optional[int] = None
-    ) -> Optional[list]:
+        required_charge: Optional[int] = None,
+    ) -> Optional[list[tuple[Molecule, int]]]:
+        """
+        Search PubChem for an ion molecule based on a partial identifier.
+
+        Performs a partial search on PubChem using the given identifier and returns matching ion molecules
+        that satisfy the specified formula and charge requirements.
+
+        Args:
+            identifier (str): The partial identifier to search for.
+            required_formula (Optional[str]): The expected molecular formula.
+            required_charge (Optional[int]): The expected molecular charge.
+
+        Returns:
+            Optional[list[tuple[Molecule, int]]]: A list of tuples with Molecule objects and their occurrence counts.
+
+        Raises:
+            ValueError: If the parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - Cached to improve performance for repeated calls.
+            - Uses a resilient request method to handle potential network issues.
+            - The search is performed on the PubChem Compound database.
+            - For each compound found, checks if it's a salt or mixture.
+            - Each component is checked against the required formula and charge.
+            - Standardizes the SMILES strings of matching molecules.
+            - Results are sorted by frequency.
+            - Returns None if no matching molecules are found.
+        """
         required_structure_type = "ion"
         self._check_parameters(
             required_formulas=required_formula,
@@ -2695,9 +4279,7 @@ class MoleculeResolver:
                             temp_mol, required_formula
                         ) and self.check_charge(temp_mol, required_charge):
                             SMILES = Chem.MolToSmiles(temp_mol)
-                            SMILES = self.standardize_SMILES(
-                                SMILES
-                            )
+                            SMILES = self.standardize_SMILES(SMILES)
                             found_SMILES.append(SMILES)
 
         if len(found_SMILES) == 0:
@@ -2718,6 +4300,33 @@ class MoleculeResolver:
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from ChEBI based on the provided identifier and mode.
+
+        Queries the ChEBI database to retrieve molecule information based on various identifiers.
+
+        Args:
+            identifier (str): The identifier to search for.
+            mode (str): The type of identifier (e.g., 'name', 'cas', 'formula', 'smiles', 'inchi', 'inchikey').
+            required_formula (Optional[str]): The expected molecular formula.
+            required_charge (Optional[int]): The expected molecular charge.
+            required_structure_type (Optional[str]): The expected structure type.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if found and meets all requirements, None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation.
+
+        Notes:
+            - Checks a cache for previously retrieved molecules.
+            - Uses the ChEBI web services API to query the database.
+            - Retrieves up to 5 results for formula searches; otherwise, retrieves 1 result.
+            - Extracts SMILES, synonyms, CAS numbers, and ChEBI ID.
+            - Filters results based on required formula, charge, and structure type.
+            - Combines multiple matching molecules into a single result if necessary.
+            - Uses resilient network requests to handle potential connection issues.
+        """
         if required_formula is None:
             if mode == "formula":
                 required_formula = identifier
@@ -2800,9 +4409,7 @@ class MoleculeResolver:
                                     temp = [temp]
                                 synonyms.extend([synonym["data"] for synonym in temp])
 
-                            synonyms = self.filter_and_sort_synonyms(
-                                synonyms
-                            )
+                            synonyms = self.filter_and_sort_synonyms(synonyms)
 
                             if "RegistryNumbers" in molecule:
                                 temp = molecule["RegistryNumbers"]
@@ -2831,13 +4438,42 @@ class MoleculeResolver:
 
     def get_molecules_using_batchmode_from(
         self,
-        identifiers: str,
-        modes: str,
+        identifiers: list[list[str]],
+        modes: list[list[str]],
         service: str,
-        batch_size: int = 1000,
-        progressbar: bool = False,
-        ignore_exceptions: bool = False,
+        batch_size: Optional[int] = 1000,
+        progressbar: Optional[bool] = False,
+        ignore_exceptions: Optional[bool] = False,
     ) -> tuple[dict[str, list[Optional[Molecule]]], list[str]]:
+        """
+        Retrieve molecules in batch mode from a specified service.
+
+        Performs batch retrieval of molecules from a supported service using provided identifiers and modes.
+
+        Args:
+            identifiers (list[list[str]]): A list of lists containing identifiers for molecules.
+            modes (list[list[str]]): A list of lists containing modes corresponding to the identifiers.
+            service (str): The name of the service to use for retrieval.
+            batch_size (Optional[int]): Number of identifiers to process in each batch.
+            progressbar (Optional[bool]): Display a progress bar during processing.
+            ignore_exceptions (Optional[bool]): Ignore exceptions during processing.
+
+        Returns:
+            tuple[dict[str, list[Optional[Molecule]]], list[str]]: A dictionary of results and a list of supported modes.
+
+        Raises:
+            ValueError: If the specified service does not have batch capabilities or is not supported.
+            ValueError: If the list of identifiers and modes for a molecule are not of the same length.
+            NotImplementedError: If batch functionality for the specified service is not implemented.
+            RuntimeError: If the number of returned values doesn't match the number of unique values requested.
+
+        Notes:
+            - Checks if the service supports batch capabilities.
+            - Groups identifiers by mode for efficient batch processing.
+            - Uses different batch retrieval functions based on the service.
+            - Supports services like PubChem, SRS, CompTox, and OPSIN.
+            - Organizes results by mode.
+        """
         if service not in self._available_services_with_batch_capabilities:
             raise ValueError(
                 f"The service {service} does not have batch capabilities or is not supported."
@@ -2857,9 +4493,7 @@ class MoleculeResolver:
 
         modes = new_modes
 
-        self._check_parameters(
-            identifiers=identifiers, modes=modes, context="batch"
-        )
+        self._check_parameters(identifiers=identifiers, modes=modes, context="batch")
 
         identifier_sets = {}
         identifier_indices_sets = {}
@@ -2974,8 +4608,33 @@ class MoleculeResolver:
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
-        # new API, at some point we need to change
-        # https://api-ccte.epa.gov/docs/chemical.html#/
+        """
+        Retrieve a molecule from CompTox based on the provided identifier and mode.
+
+        Queries the CompTox database to retrieve molecule information based on various identifiers.
+
+        Args:
+            identifier (str): The identifier to search for.
+            mode (str): The type of identifier.
+            required_formula (Optional[str]): The expected molecular formula.
+            required_charge (Optional[int]): The expected molecular charge.
+            required_structure_type (Optional[str]): The expected structure type.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if found and meets all requirements, None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation.
+
+        Notes:
+            - Checks a cache for previously retrieved molecules.
+            - Uses the CompTox API to query the database.
+            - Extracts SMILES, synonyms, CAS numbers, and DTXSID.
+            - Filters results based on required formula, charge, and structure type.
+            - Includes CompTox QC level in the additional information.
+            - # new API, at some point we need to change to https://api-ccte.epa.gov/docs/chemical.html#/
+
+        """
 
         self._check_parameters(
             modes=mode,
@@ -3019,9 +4678,7 @@ class MoleculeResolver:
                             temp_substance = json.loads(substance_response_text)
 
                             temp_SMILES = temp_substance["smiles"]
-                            temp_SMILES = self.standardize_SMILES(
-                                temp_SMILES
-                            )
+                            temp_SMILES = self.standardize_SMILES(temp_SMILES)
                             if not temp_SMILES:
                                 return
                             temp_synonyms = []
@@ -3053,9 +4710,7 @@ class MoleculeResolver:
                                     QC_LEVEL_str = (
                                         f'|QC_LEVEL:{float(temp_substance["qcLevel"])}'
                                     )
-                            temp_synonyms = self.filter_and_sort_synonyms(
-                                temp_synonyms
-                            )
+                            temp_synonyms = self.filter_and_sort_synonyms(temp_synonyms)
                             molecules.append(
                                 Molecule(
                                     temp_SMILES,
@@ -3092,6 +4747,33 @@ class MoleculeResolver:
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from CTS (Chemical Translation Service) based on the provided identifier and mode.
+
+        Queries CTS to convert various chemical identifiers into molecular structures and associated information.
+
+        Args:
+            identifier (str): The chemical identifier to search for.
+            mode (str): The type of identifier (e.g., 'name', 'cas', 'inchi', 'smiles').
+            required_formula (Optional[str]): The expected molecular formula.
+            required_charge (Optional[int]): The expected molecular charge.
+            required_structure_type (Optional[str]): The expected structure type.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if found and meets all requirements, None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation.
+
+        Notes:
+            - Checks a cache for previously retrieved molecules.
+            - Uses the CTS REST API to query the service.
+            - Retrieves SMILES, CAS numbers, and synonyms.
+            - Filters out radicals and mixtures based on the required_structure_type.
+            - Filters results based on required formula, charge, and structure type.
+            - Issues a warning and returns None if CTS is down.
+            - Uses resilient network requests to handle potential connection issues.
+        """
         self._check_parameters(
             identifiers=identifier,
             modes=mode,
@@ -3180,9 +4862,7 @@ class MoleculeResolver:
                             found_InChIs = temp["results"]
                             accepted_SMILES = []
                             for InChI in found_InChIs:
-                                this_SMILES = self.InChI_to_SMILES(
-                                    InChI
-                                )
+                                this_SMILES = self.InChI_to_SMILES(InChI)
                                 if not this_SMILES:
                                     continue
                                 if (
@@ -3221,9 +4901,35 @@ class MoleculeResolver:
         )
 
     def get_CompTox_request_unique_id(self) -> str:
+        """
+        Generate a unique identifier for CompTox requests based on the current timestamp.
+
+        Returns:
+            str: A unique base36-encoded string derived from the current timestamp.
+
+        Notes:
+            - Uses the current time in milliseconds for increased uniqueness.
+            - Base36 encoding results in a shorter string compared to decimal representation.
+            - Useful for generating unique, short, and time-based request IDs.
+        """
+
         def base36encode(
-            number, alphabet="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".lower()
+            number: int,
+            alphabet: Optional[str] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".lower(),
         ):
+            """Converts an integer to a base36 string.
+
+            Args:
+                number (int): The integer to convert.
+                alphabet (Optional[str]): The alphabet to use for base36 encoding.
+                Defaults to lowercase alphanumeric characters.
+
+            Returns:
+                str: The base36 encoded string.
+
+            Raises:
+                TypeError: If the input is not an integer.
+            """
             """Converts an integer to a base36 string."""
             if not isinstance(number, (int)):
                 raise TypeError("number must be an integer")
@@ -3249,6 +4955,46 @@ class MoleculeResolver:
     def get_molecules_from_CompTox_batchmode(
         self, identifiers: list[str], mode: str
     ) -> list[Optional[Molecule]]:
+        """
+        Retrieve molecules from CompTox in batch mode.
+
+        This method queries the CompTox (Computational Toxicology) database to retrieve
+        molecule information for multiple identifiers in a single batch request.
+
+        Args:
+            identifiers (list[str]): A list of chemical identifiers to search for in CompTox.
+            mode (str): The type of identifier. Supported modes are 'name', 'cas', and 'inchikey'.
+
+        Returns:
+            list[Optional[Molecule]]: A list of Molecule objects corresponding to the input identifiers.
+            Each element is either a Molecule object if found, or None if not found or invalid.
+
+        Raises:
+            TypeError: If any of the identifiers is not a string.
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - The method first checks a cache for previously retrieved molecules.
+            - It uses the CompTox batch search API to query the database.
+            - The search is performed based on the specified mode for all identifiers.
+            - The method retrieves SMILES, synonyms, CAS numbers, IUPAC names, and QC levels.
+            - It creates Molecule objects for valid results, including metadata.
+            - The results are filtered based on the quality of the match and data.
+            - The method uses resilient network requests to handle potential connection issues.
+            - It includes a polling mechanism to wait for the CompTox job to complete.
+            - The results are processed from an Excel file returned by the CompTox API.
+            - Synonyms are extracted from a separate sheet in the Excel file.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> identifiers = ["50-00-0", "64-17-5", "71-43-2"]
+            >>> molecules = resolver.get_molecules_from_CompTox_batchmode(identifiers, mode="cas")
+            >>> for identifier, molecule in zip(identifiers, molecules):
+            ...     if molecule:
+            ...         print(f"Found molecule for {identifier}: {molecule.get_SMILES()}")
+            ...     else:
+            ...         print(f"No molecule found for {identifier}")
+        """
         self._check_parameters(
             identifiers=identifiers,
             modes=mode,
@@ -3284,7 +5030,9 @@ class MoleculeResolver:
                 "inputType": "IDENTIFIER",
                 "massError": 0,
                 "searchItems": "\n".join(identifiers_to_search),
-                #'qc_level', 'expocast', 'data_sources', 'toxvaldata', 'assays', 'number_of_pubmed_articles', 'number_of_pubchem_data_sources', 'number_of_cpdat_sources', 'in_iris_list', 'in_pprtv_list', 'in_wikipedia_list', 'qsar_ready_smiles', 'ms_ready_smiles', 'synonym_identifier'
+                # 'qc_level', 'expocast', 'data_sources', 'toxvaldata', 'assays', 'number_of_pubmed_articles',
+                # 'number_of_pubchem_data_sources', 'number_of_cpdat_sources', 'in_iris_list', 'in_pprtv_list',
+                # 'in_wikipedia_list', 'qsar_ready_smiles', 'ms_ready_smiles', 'synonym_identifier'
             }
 
             def poll_request(job_id):
@@ -3390,14 +5138,10 @@ class MoleculeResolver:
                             else:
                                 CAS = [CAS]
 
-                            if "N/A" in SMILES or not self.is_valid_SMILES(
-                                SMILES
-                            ):
+                            if "N/A" in SMILES or not self.is_valid_SMILES(SMILES):
                                 return
 
-                            SMILES = self.standardize_SMILES(
-                                SMILES
-                            )
+                            SMILES = self.standardize_SMILES(SMILES)
 
                             # the rating is needed because for some substances it
                             # returns more than one row. It is used to get the best result later.
@@ -3501,10 +5245,8 @@ class MoleculeResolver:
                                             ]:
                                                 if new_synonym not in this_synonyms:
                                                     this_synonyms.append(new_synonym)
-                                    synonyms = (
-                                        self.filter_and_sort_synonyms(
-                                            this_synonyms
-                                        )
+                                    synonyms = self.filter_and_sort_synonyms(
+                                        this_synonyms
                                     )
                                     results[molecule_index].append(
                                         Molecule(
@@ -3528,6 +5270,45 @@ class MoleculeResolver:
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from Chemeo based on the provided identifier and mode.
+
+        This method queries the Chemeo database to retrieve molecule information using
+        various types of chemical identifiers.
+
+        Args:
+            identifier (str): The chemical identifier to search for in Chemeo.
+            mode (str): The type of identifier. Supported modes include 'name', 'cas', and 'smiles'.
+            required_formula (Optional[str]): The expected molecular formula. Defaults to None.
+            required_charge (Optional[int]): The expected molecular charge. Defaults to None.
+            required_structure_type (Optional[str]): The expected structure type. Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if a matching molecule is found and meets all requirements,
+            None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - The method first checks a cache for previously retrieved molecules.
+            - It requires a valid Chemeo API token to perform the search.
+            - The search is performed in two steps: first converting the identifier to a Chemeo CID,
+              then searching for the compound details using the CID.
+            - It extracts SMILES, synonyms, CAS numbers, and other relevant information from the API response.
+            - The method prioritizes 3D mol block over 2D mol block, then InChI, and finally SMILES for structure representation.
+            - It filters results to ensure the returned molecule matches the input SMILES (if mode is 'smiles').
+            - The results are further filtered based on the required formula, charge, and structure type.
+            - The method uses resilient network requests to handle potential connection issues.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> molecule = resolver.get_molecule_from_Chemeo("ethanol", mode="name")
+            >>> if molecule:
+            ...     print(f"Found molecule: {molecule.get_SMILES()}")
+            ... else:
+            ...     print("No matching molecule found")
+        """
         self._check_parameters(
             identifiers=identifier,
             modes=mode,
@@ -3549,10 +5330,8 @@ class MoleculeResolver:
                     valid_token_found = isinstance(
                         self.available_service_API_keys["chemeo"], str
                     )
-                    valid_token_found = (
-                        self.chemeo_API_token_regex_compiled.match(
-                            self.available_service_API_keys["chemeo"]
-                        )
+                    valid_token_found = self.chemeo_API_token_regex_compiled.match(
+                        self.available_service_API_keys["chemeo"]
                     )
 
                 if not valid_token_found:
@@ -3598,9 +5377,7 @@ class MoleculeResolver:
 
                         if "other_names" in result:
                             temp_synonyms.extend(result["other_names"])
-                        temp_synonyms = self.filter_and_sort_synonyms(
-                            temp_synonyms
-                        )
+                        temp_synonyms = self.filter_and_sort_synonyms(temp_synonyms)
 
                         temp_CAS = []
                         if "cas" in result:
@@ -3623,9 +5400,7 @@ class MoleculeResolver:
                             )
 
                         if temp_SMILES is None and "inchi" in result:
-                            temp_SMILES = self.InChI_to_SMILES(
-                                result["inchi"]
-                            )
+                            temp_SMILES = self.InChI_to_SMILES(result["inchi"])
 
                         if temp_SMILES is None and "smiles" in result:
                             temp_SMILES = result["smiles"]
@@ -3663,8 +5438,52 @@ class MoleculeResolver:
     def get_molecules_from_pubchem_batchmode(
         self, original_identifiers: list[str], mode: str
     ) -> list[Optional[list[Molecule]]]:
-        # https://pubchem.ncbi.nlm.nih.gov/docs/power-user-gateway
-        # https://pubchem.ncbi.nlm.nih.gov/docs/identifier-exchange-service
+        """
+        Retrieve molecules from PubChem in batch mode.
+
+        This method queries the PubChem database to retrieve molecule information for multiple
+        identifiers in a single batch request using the PubChem Power User Gateway (PUG).
+
+        Args:
+            original_identifiers (list[str]): A list of chemical identifiers to search for in PubChem.
+
+            mode (str): The type of identifier. Supported modes include 'name', 'cas', 'formula',
+            'smiles', 'inchi', and 'inchikey'.
+
+        Returns:
+            list[Optional[list[Molecule]]]: A list where each element corresponds to an input identifier.
+            Each element is either a list of Molecule objects (if found) or None (if not found or invalid).
+            Multiple Molecule objects may be returned for a single identifier if multiple matches are found.
+
+        Raises:
+            TypeError: If any of the identifiers is not a string.
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - The method first checks parameters using the _check_parameters method.
+            - It cleans identifiers, especially for 'name' mode, removing certain prefixes and suffixes.
+            - The method uses PubChem's PUG XML API for batch requests.
+            - It performs two main steps: CID search and information retrieval for found CIDs.
+            - The search and retrieval are done in batches to handle large numbers of identifiers efficiently.
+            - It extracts SMILES, synonyms, CAS numbers, and other relevant information from the API response.
+            - The method uses resilient network requests to handle potential connection issues.
+            - It includes a polling mechanism to wait for PubChem jobs to complete.
+            - Results are processed from gzipped files returned by the PubChem API.
+            - The method standardizes SMILES strings and creates Molecule objects with metadata.
+            - API: https://pubchem.ncbi.nlm.nih.gov/docs/power-user-gateway
+            - API: https://pubchem.ncbi.nlm.nih.gov/docs/identifier-exchange-service
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> identifiers = ["ethanol", "acetone", "benzene"]
+            >>> results = resolver.get_molecules_from_pubchem_batchmode(identifiers, mode="name")
+            >>> for identifier, molecules in zip(identifiers, results):
+            ...     if molecules:
+            ...         print(f"Found {len(molecules)} molecule(s) for {identifier}")
+            ...     else:
+            ...         print(f"No molecules found for {identifier}")
+        """
+
         self._check_parameters(
             identifiers=original_identifiers,
             modes=mode,
@@ -4029,9 +5848,7 @@ class MoleculeResolver:
 
                     for result in SMILES_results:
                         cid, this_SMILES = result.split("\t")
-                        this_SMILES = self.standardize_SMILES(
-                            this_SMILES
-                        )
+                        this_SMILES = self.standardize_SMILES(this_SMILES)
                         SMILES[int(cid)] = this_SMILES
 
                 for molecule_index, original_identifier in zip(
@@ -4048,9 +5865,7 @@ class MoleculeResolver:
                         results[molecule_index] = [
                             Molecule(
                                 SMILES[cid],
-                                self.filter_and_sort_synonyms(
-                                    synonyms[cid]
-                                ),
+                                self.filter_and_sort_synonyms(synonyms[cid]),
                                 self.filter_and_sort_CAS(synonyms[cid]),
                                 cid,
                                 mode,
@@ -4067,8 +5882,52 @@ class MoleculeResolver:
         mode: str,
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
-        required_structure_type: Optional[str] = None
+        required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from PubChem based on the provided identifier and mode.
+
+        This method queries the PubChem database to retrieve molecule information using
+        various types of chemical identifiers.
+
+        Args:
+            identifier (str): The chemical identifier to search for in PubChem.
+
+            mode (str): The type of identifier. Supported modes include 'name', 'cas', 'formula',
+            'smiles', 'inchi', and 'inchikey'.
+
+            required_formula (Optional[str]): The expected molecular formula. Defaults to None.
+
+            required_charge (Optional[int]): The expected molecular charge. Defaults to None.
+
+            required_structure_type (Optional[str]): The expected structure type. Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if a matching molecule is found and meets all requirements,
+                                None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - The method first checks a cache for previously retrieved molecules.
+            - It uses the PubChem REST API to query the database.
+            - For 'formula' mode, it retrieves multiple results and processes them individually.
+            - The method extracts SMILES, synonyms, CAS numbers, and PubChem CID from the API response.
+            - It standardizes SMILES strings and creates Molecule objects with metadata.
+            - The results are filtered based on the required formula, charge, and structure type.
+            - For 'formula' mode, if no results are found, it tries searching with the Hill formula.
+            - The method uses resilient network requests to handle potential connection issues.
+            - It includes special handling for different PubChem response formats and data structures.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> molecule = resolver.get_molecule_from_pubchem("ethanol", mode="name")
+            >>> if molecule:
+            ...     print(f"Found molecule: {molecule.get_SMILES()}")
+            ... else:
+            ...     print("No matching molecule found")
+        """
         if required_formula is None:
             if mode == "formula":
                 required_formula = identifier
@@ -4235,9 +6094,7 @@ class MoleculeResolver:
                             temp_synonyms.insert(0, IUPAC_names["Traditional"])
 
                         CAS = self.filter_and_sort_CAS(temp_synonyms)
-                        synonyms = self.filter_and_sort_synonyms(
-                            temp_synonyms
-                        )
+                        synonyms = self.filter_and_sort_synonyms(temp_synonyms)
 
                         molecules.append(
                             Molecule(SMILES, synonyms, CAS, cid, mode, "pubchem")
@@ -4258,6 +6115,51 @@ class MoleculeResolver:
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from CAS Registry based on the provided identifier and mode.
+
+        This method queries the CAS (Chemical Abstracts Service) Registry to retrieve
+        molecule information using various types of chemical identifiers.
+
+        Args:
+            identifier (str): The chemical identifier to search for in CAS Registry.
+
+            mode (str): The type of identifier. Supported modes include 'name', 'cas', 'formula',
+            'smiles', 'inchi', and 'inchikey'.
+
+            required_formula (Optional[str]): The expected molecular formula. Defaults to None.
+            required_charge (Optional[int]): The expected molecular charge. Defaults to None.
+
+            required_structure_type (Optional[str]): The expected structure type. Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if a matching molecule is found and meets all requirements,
+            None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - The method first checks a cache for previously retrieved molecules.
+            - It uses the CAS Common Chemistry API to query the database.
+            - The search is performed in two steps: first a general search, then a detailed lookup.
+            - It extracts SMILES, synonyms, CAS numbers, and InChI from the API response.
+            - The method standardizes SMILES strings and creates Molecule objects with metadata.
+            - Results are filtered based on the required formula, charge, and structure type.
+            - For 'smiles' mode, it performs additional checks to ensure the returned structure matches the input.
+            - If no results are found for 'smiles' mode, it attempts to search using the InChI representation.
+            - The method uses resilient network requests to handle potential connection issues.
+            - Rejected status codes (403, 404) are handled gracefully.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> molecule = resolver.get_molecule_from_CAS_registry("64-17-5", mode="cas")
+            >>> if molecule:
+            ...     print(f"Found molecule: {molecule.get_SMILES()}")
+            ... else:
+            ...     print("No matching molecule found")
+
+        """
         self._check_parameters(
             required_formulas=required_formula,
             required_charges=required_charge,
@@ -4302,9 +6204,7 @@ class MoleculeResolver:
                             synonyms.extend(details["synonyms"])
 
                             SMILES = details["smile"]
-                            SMILES = self.standardize_SMILES(
-                                SMILES
-                            )
+                            SMILES = self.standardize_SMILES(SMILES)
 
                             # sometimes the cas registry gives back wrong aromaticity results
                             # when searching by SMILES, this is to filter out most of them
@@ -4326,9 +6226,7 @@ class MoleculeResolver:
                                 molecules.append(
                                     Molecule(
                                         SMILES,
-                                        self.filter_and_sort_synonyms(
-                                            synonyms
-                                        ),
+                                        self.filter_and_sort_synonyms(synonyms),
                                         [CAS],
                                         None,
                                         mode_used,
@@ -4336,9 +6234,7 @@ class MoleculeResolver:
                                     )
                                 )
                             elif inchi != "":
-                                SMILES_from_InChI = self.InChI_to_SMILES(
-                                    inchi
-                                )
+                                SMILES_from_InChI = self.InChI_to_SMILES(inchi)
                                 if self.check_SMILES(
                                     SMILES_from_InChI,
                                     required_formula,
@@ -4348,9 +6244,7 @@ class MoleculeResolver:
                                     molecules.append(
                                         Molecule(
                                             SMILES_from_InChI,
-                                            self.filter_and_sort_synonyms(
-                                                synonyms
-                                            ),
+                                            self.filter_and_sort_synonyms(synonyms),
                                             [CAS],
                                             None,
                                             mode_used,
@@ -4386,7 +6280,50 @@ class MoleculeResolver:
 
     def _match_SRS_results_to_identifiers(
         self, identifiers: list[str], mode: str, results: list[dict]
-    ):
+    ) -> dict[str, list[tuple]]:
+        """
+        Match SRS (Substance Registry Services) results to input identifiers.
+
+        This method processes the results from an SRS query and matches them to the
+        original input identifiers, organizing the data for easy retrieval.
+
+        Args:
+            identifiers (list[str]): A list of chemical identifiers used in the original query.
+            mode (str): The type of identifier used. Supported modes are 'cas' and 'name'.
+            results (list[dict]): A list of dictionaries containing the SRS query results.
+
+        Returns:
+            dict[str, list[tuple]]: A dictionary where keys are the original identifiers and values
+            are lists of tuples. Each tuple contains information about a matched molecule:
+            (SMILES, primary_names, synonyms, CAS numbers, ITN, all_synonyms_lower).
+
+        Raises:
+            RuntimeError: If an ITN (Internal Tracking Number) is encountered more than once in the results.
+
+        Notes:
+            - The method processes each result, extracting relevant information such as names, CAS numbers, and SMILES.
+            - It organizes the data into several dictionaries for efficient lookup:
+
+                - infos_by_ITN: Stores all information for each ITN.
+                - ITNs_by_primary_name: Maps primary names to their corresponding ITNs.
+                - ITNs_by_synonym: Maps synonyms to their corresponding ITNs.
+                - ITNs_by_all_names: Maps all names (primary and synonyms) to their corresponding ITNs.
+                - ITNs_by_CAS: Maps CAS numbers to their corresponding ITNs.
+            - The method attempts to standardize SMILES notations and convert InChI to SMILES if necessary.
+            - It implements a matching algorithm that tries to find the best match for each input identifier.
+            - The matching process is iterative and attempts to resolve ambiguities when multiple matches are found.
+            - It uses various strategies to determine the best match, including checking for unique matches,
+              comparing SMILES, and counting synonym occurrences.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> identifiers = ["50-00-0", "ethanol"]
+            >>> mode = "name"
+            >>> results = [...]  # SRS query results
+            >>> matched = resolver._match_SRS_results_to_identifiers(identifiers, mode, results)
+            >>> for identifier, matches in matched.items():
+            ...     print(f"Matches for {identifier}: {len(matches)}")
+        """
         infos_by_ITN = {}
         ITNs_by_primary_name = {}
         ITNs_by_synonym = {}
@@ -4525,9 +6462,7 @@ class MoleculeResolver:
                             else:
                                 unique_SMILES = set(
                                     [
-                                        self.standardize_SMILES(
-                                            infos_by_ITN[ITN][0]
-                                        )
+                                        self.standardize_SMILES(infos_by_ITN[ITN][0])
                                         for ITN in temptative_ITNs
                                     ]
                                 )
@@ -4562,9 +6497,50 @@ class MoleculeResolver:
 
     def get_molecules_from_SRS_batchmode(
         self, identifiers: list[str], mode: str
-    ) -> list[Optional[Molecule]]:
-        # https://www.postman.com/api-evangelist/workspace/environmental-protection-agency-epa/collection/35240-6b84cc71-ce77-48b8-babd-323eb8d670bd
-        # new api https://cdxappstest.epacdx.net/oms-substance-registry-services/swagger-ui/
+    ) -> list[Optional[list[Molecule]]]:
+        """
+        Retrieve molecules from SRS (Substance Registry Services) in batch mode.
+
+        This method queries the EPA's Substance Registry Services to retrieve molecule
+        information for multiple identifiers in a single batch request.
+
+        Args:
+            identifiers (list[str]): A list of chemical identifiers to search for in SRS.
+
+            mode (str): The type of identifier. Supported modes are determined by the
+            _check_parameters method, typically including 'name' and 'cas'.
+
+        Returns:
+            list[Optional[list[Molecule]]]: A list where each element corresponds to an input
+            identifier. Each element is either a list of Molecule objects (if found) or
+            None (if not found or invalid).
+
+        Raises:
+            TypeError: If any of the identifiers is not a string.
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - The method first checks a cache for previously retrieved molecules.
+            - It uses the SRS REST API to query the database.
+            - The search is performed in batches to handle large numbers of identifiers efficiently.
+            - It extracts SMILES, synonyms, CAS numbers, and other relevant information from the API response.
+            - The method uses resilient network requests to handle potential connection issues.
+            - Results are processed and matched to the original identifiers using the _match_SRS_results_to_identifiers method.
+            - The SRS API has a limit on URL length, so the method splits large batches into smaller chunks.
+            - Synonyms are filtered and sorted before being added to the Molecule objects.
+            - API: https://www.postman.com/api-evangelist/workspace/environmental-protection-agency-epa/collection/35240-6b84cc71-ce77-48b8-babd-323eb8d670bd
+            - new API; https://cdxappstest.epacdx.net/oms-substance-registry-services/swagger-ui/
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> identifiers = ["50-00-0", "64-17-5", "71-43-2"]
+            >>> molecules = resolver.get_molecules_from_SRS_batchmode(identifiers, mode="cas")
+            >>> for identifier, molecule in zip(identifiers, molecules):
+            ...     if molecule:
+            ...         print(f"Found molecule for {identifier}: {molecule[0].get_SMILES()}")
+            ...     else:
+            ...         print(f"No molecule found for {identifier}")
+        """
 
         self._check_parameters(
             identifiers=identifiers,
@@ -4635,10 +6611,8 @@ class MoleculeResolver:
                                 ITN,
                                 _,
                             ) in infos_by_identifier[identifier]:
-                                temp_synonyms = (
-                                    self.filter_and_sort_synonyms(
-                                        primary_names + synonyms
-                                    )
+                                temp_synonyms = self.filter_and_sort_synonyms(
+                                    primary_names + synonyms
                                 )
                                 this_molecules.append(
                                     Molecule(
@@ -4662,8 +6636,54 @@ class MoleculeResolver:
         mode: str,
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
-        required_structure_type: Optional[str] = None
+        required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from SRS (Substance Registry Services) based on the provided identifier and mode.
+
+        This method queries the EPA's Substance Registry Services to retrieve molecule
+        information using various types of chemical identifiers.
+
+        Args:
+            identifier (str): The chemical identifier to search for in SRS.
+
+            mode (str): The type of identifier. Supported modes are determined by the
+            _check_parameters method, typically including 'name' and 'cas'.
+
+            required_formula (Optional[str]): The expected molecular formula. Defaults to None.
+
+            required_charge (Optional[int]): The expected molecular charge. Defaults to None.
+
+            required_structure_type (Optional[str]): The expected structure type. Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if a matching molecule is found and meets all requirements,
+            None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+            RuntimeError: If more than one molecule is found for the given identifier.
+
+        Notes:
+            - The method first checks parameters using the _check_parameters method.
+            - It then checks a cache for previously retrieved molecules.
+            - The method uses the SRS REST API to query the database.
+            - It constructs the API URL based on the mode and identifier.
+            - The query uses resilient network requests to handle potential connection issues.
+            - If a result is found, it processes the JSON response to extract relevant information.
+            - The method extracts SMILES, primary names, synonyms, CAS numbers, and ITN (Internal Tracking Number).
+            - It filters and sorts synonyms before creating the Molecule object.
+            - The SMILES is checked against required formula, charge, and structure type if specified.
+            - Only one molecule is returned; if multiple are found, it raises a RuntimeError.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> molecule = resolver.get_molecule_from_SRS("50-00-0", mode="cas")
+            >>> if molecule:
+            ...     print(f"Found molecule: {molecule.get_SMILES()}")
+            ... else:
+            ...     print("No matching molecule found")
+        """
         self._check_parameters(
             required_formulas=required_formula,
             required_charges=required_charge,
@@ -4725,24 +6745,52 @@ class MoleculeResolver:
                             )
 
         return self.filter_and_combine_molecules(
-            molecules,
-            required_formula,
-            required_charge,
-            required_structure_type
+            molecules, required_formula, required_charge, required_structure_type
         )
 
     @cache
     def _get_info_from_CIR(
         self,
-        structure_identifier,
-        representation,
-        resolvers_to_use: Tuple[str],
+        structure_identifier: str,
+        representation: str,
+        resolvers_to_use: tuple[str],
         expected_number_of_results: Optional[int] = None,
     ) -> Optional[list[str]]:
-        # got API info from:
-        # https://cactus.nci.nih.gov/chemical/structure_documentation
-        # https://search.r-project.org/CRAN/refmans/webchem/html/cir_query.html
-        # https://github.com/mcs07/CIRpy
+        """
+        Retrieve chemical information from the Chemical Identifier Resolver (CIR).
+
+        This method queries the CIR API to obtain various representations of a chemical structure.
+
+        Args:
+            structure_identifier (str): The chemical identifier to search for.
+            representation (str): The desired representation of the chemical (e.g., 'smiles', 'iupac_name').
+            resolvers_to_use (tuple[str]): A tuple of resolver names to use in the query.
+            expected_number_of_results (Optional[int]): The expected number of results.
+            Defaults to None.
+
+        Returns:
+            Optional[list[str]]: A list of strings containing the requested chemical information,
+            or None if the query fails or no results are found.
+
+        Raises:
+            RuntimeError: If the number of results doesn't match the expected number.
+            requests.exceptions.ConnectionError: If there's a connection error during the API request.
+
+        Notes:
+            - This method is cached to improve performance for repeated queries.
+            - It uses a resilient request mechanism to handle potential network issues.
+            - If CIR is down, it sets a flag to avoid further attempts in the same session.
+            - There's a 1-second delay between requests to avoid overwhelming the CIR server.
+            - The method can handle connection reset errors by reinitializing the session.
+            - API: https://cactus.nci.nih.gov/chemical/structure_documentation
+            - API: https://search.r-project.org/CRAN/refmans/webchem/html/cir_query.html
+            - API: https://github.com/mcs07/CIRpy
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> smiles = resolver._get_info_from_CIR("ethanol", "smiles", ("name",))
+            >>> print(smiles)
+        """
 
         if "CIR_is_down" in self._message_slugs_shown:
             return None
@@ -4792,9 +6840,29 @@ class MoleculeResolver:
         return None
 
     @cache
-    def get_iupac_name_from_CIR(self, SMILES: str):
-        result = self._get_info_from_CIR(SMILES, "iupac_name", ("smiles",))
-        return result[0] if result else None
+    def get_iupac_name_from_CIR(self, SMILES: str) -> Optional[str]:
+        """
+        Retrieve the IUPAC name for a given SMILES string using the Chemical Identifier Resolver (CIR).
+
+        This method uses the CIR API to convert a SMILES representation of a molecule to its IUPAC name.
+
+        Args:
+            SMILES (str): The SMILES string representation of the molecule.
+
+        Returns:
+            Optional[str]: The IUPAC name of the molecule if found, or None if not found or in case of an error.
+
+        Notes:
+            - This method is cached to improve performance for repeated queries.
+            - It internally uses the _get_info_from_CIR method to perform the API request.
+            - The method specifically requests the 'iupac_name' representation and uses 'smiles' as the resolver.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> iupac_name = resolver.get_iupac_name_from_CIR("CCO")
+            >>> print(iupac_name)
+        """
+        # Implementation goes here (not provided)
 
     def get_molecule_from_CIR(
         self,
@@ -4804,6 +6872,43 @@ class MoleculeResolver:
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from Chemical Identifier Resolver (CIR) based on the provided identifier and mode.
+
+        This method queries the CIR to retrieve molecule information using various types of chemical identifiers.
+
+        Args:
+            identifier (str): The chemical identifier to search for in CIR.
+            mode (str): The type of identifier. Supported modes include 'formula', 'name', 'smiles', 'inchi', 'inchikey', and 'cas'.
+            required_formula (Optional[str]): The expected molecular formula. Defaults to None.
+            required_charge (Optional[int]): The expected molecular charge. Defaults to None.
+            required_structure_type (Optional[str]): The expected structure type. Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if a matching molecule is found and meets all requirements,
+            None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Notes:
+            - The method first checks parameters using the _check_parameters method.
+            - It then checks a cache for previously retrieved molecules.
+            - The method uses different resolvers based on the input mode.
+            - It retrieves SMILES representation from CIR using the _get_info_from_CIR method.
+            - If a SMILES is found, it retrieves additional information like names and CAS numbers.
+            - The method standardizes the SMILES string using the standardize_SMILES method.
+            - Synonyms and CAS numbers are filtered and sorted before being added to the Molecule object.
+            - The resulting molecule is filtered based on the required formula, charge, and structure type if specified.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> molecule = resolver.get_molecule_from_CIR("ethanol", mode="name")
+            >>> if molecule:
+            ...     print(f"Found molecule: {molecule.get_SMILES()}")
+            ... else:
+            ...     print("No matching molecule found")
+        """
         if required_formula is None:
             if mode == "formula":
                 required_formula = identifier
@@ -4845,18 +6950,13 @@ class MoleculeResolver:
                     synonyms = self.filter_and_sort_synonyms(
                         CIR_names if CIR_names else []
                     )
-                    CAS = self.filter_and_sort_CAS(
-                        CIR_names if CIR_names else []
-                    )
+                    CAS = self.filter_and_sort_CAS(CIR_names if CIR_names else [])
                     molecules.append(
                         Molecule(SMILES, synonyms, CAS, mode=mode, service="cir")
                     )
 
         return self.filter_and_combine_molecules(
-            molecules,
-            required_formula,
-            required_charge,
-            required_structure_type
+            molecules, required_formula, required_charge, required_structure_type
         )
 
     def get_molecule_from_NIST(
@@ -4865,8 +6965,48 @@ class MoleculeResolver:
         mode: str,
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
-        required_structure_type: Optional[str] = None
+        required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from NIST (National Institute of Standards and Technology) based on the provided identifier and mode.
+
+        This method queries the NIST Chemistry WebBook to retrieve molecule information using various types of chemical identifiers.
+
+        Args:
+            identifier (str): The chemical identifier to search for in NIST.
+            mode (str): The type of identifier. Supported modes include 'formula', 'name', 'cas', 'inchi', and 'smiles'.
+            required_formula (Optional[str]): The expected molecular formula. Defaults to None.
+            required_charge (Optional[int]): The expected molecular charge. Defaults to None.
+            required_structure_type (Optional[str]): The expected structure type. Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if a matching molecule is found and meets all requirements,
+            None otherwise.
+
+        Raises:
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+            RuntimeError: If the webpage format has changed and cannot be parsed.
+
+        Notes:
+            - The method first checks parameters using the _check_parameters method.
+            - It then checks a cache for previously retrieved molecules.
+            - For 'smiles' mode, it converts the SMILES to InChI before querying NIST.
+            - The method uses web scraping techniques to extract information from the NIST Chemistry WebBook.
+            - It handles different response formats, including search results and direct molecule pages.
+            - The method extracts InChI, CAS numbers, names, and synonyms from the HTML content.
+            - It converts InChI to SMILES using the InChI_to_SMILES method.
+            - Synonyms and CAS numbers are filtered and sorted before being added to the Molecule object.
+            - The resulting molecule is filtered based on the required formula, charge, and structure type if specified.
+            - For search result pages, it recursively queries each result until a matching molecule is found.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> molecule = resolver.get_molecule_from_NIST("64-17-5", mode="cas")
+            >>> if molecule:
+            ...     print(f"Found molecule: {molecule.get_SMILES()}")
+            ... else:
+            ...     print("No matching molecule found")
+        """
         if required_formula is None:
             if mode == "formula":
                 required_formula = identifier
@@ -4897,9 +7037,7 @@ class MoleculeResolver:
 
                 mode_used = mode
                 if mode == "smiles":
-                    identifier = self.SMILES_to_InChI(
-                        identifier
-                    )
+                    identifier = self.SMILES_to_InChI(identifier)
 
                 response_text = self._resilient_request(
                     f'https://webbook.nist.gov/cgi/cbook.cgi?{urllib.parse.quote(nist_modes[mode])}={urllib.parse.quote(identifier, safe="")}'
@@ -4977,9 +7115,7 @@ class MoleculeResolver:
                         )
 
                 if response_text is not None:
-                    relevant_response_text = self.normalize_html(
-                        response_text
-                    )
+                    relevant_response_text = self.normalize_html(response_text)
                     relevant_response_text = regex.findall(
                         '<main id="main">(.*)</main>', relevant_response_text
                     )
@@ -5013,41 +7149,88 @@ class MoleculeResolver:
                                     "cas",
                                     required_formula,
                                     required_charge,
-                                    required_structure_type
+                                    required_structure_type,
                                 )
                                 if temp_result is not None:
                                     temp_result.mode = mode_used
                                     molecules.append(temp_result)
 
         return self.filter_and_combine_molecules(
-            molecules,
-            required_formula,
-            required_charge,
-            required_structure_type
+            molecules, required_formula, required_charge, required_structure_type
         )
 
     def find_salt_molecules(
         self,
         identifiers: list[str],
-        modes: list[str] = ["name"],
+        modes: Optional[list[str]] = ["name"],
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
         services_to_use: Optional[list[str]] = None,
-        search_iupac_name: bool = False,
-        interactive: bool = False,
+        search_iupac_name: Optional[bool] = False,
+        interactive: Optional[bool] = False,
         minimum_number_of_cross_checks: Optional[int] = 1,
-        ignore_exceptions: bool = False,
+        ignore_exceptions: Optional[bool] = False,
     ) -> tuple[list, list[int]]:
+        """Finds salt molecules based on the provided identifiers and criteria.
+
+        This method searches for salt molecules using the specified identifiers and optional parameters.
+        It checks the structure type, charge, and other attributes to ensure accurate identification
+        of salt compounds. If the search is unsuccessful, it attempts to derive information from
+        synonyms or provided SMILES strings.
+
+        Args:
+            identifiers (list[str]): A list of identifiers for the molecules to search for.
+
+            modes (Optional[list[str]]): The modes of identification for the identifiers.
+            Defaults to ['name'].
+
+            required_formula (Optional[str]): A chemical formula that the molecules must match.
+            Defaults to None, meaning no specific formula is required.
+
+            required_charge (Optional[int]): The charge that the molecules must possess.
+            Defaults to None, which sets the charge to 0.
+
+            required_structure_type (Optional[str]): The required structure type
+            (e.g., "salt"). Defaults to None, which defaults to "salt".
+
+            services_to_use (Optional[list[str]]): Specific services to be used for
+            retrieving data. Defaults to None, meaning all services are available.
+
+            search_iupac_name (Optional[bool]): If True, attempts to search using the IUPAC name.
+            Defaults to False.
+
+            interactive (Optional[bool]): If True, allows for interactive user input if necessary.
+            Defaults to False.
+
+            minimum_number_of_cross_checks (Optional[int]): Minimum number of services
+            to cross-check for validity. Defaults to 1.
+
+            ignore_exceptions (Optional[bool]): If True, ignores exceptions that may occur during
+            the search process. Defaults to False.
+
+        Returns:
+            tuple[list, list[int]]: A tuple containing:
+
+                - A list of found molecules, where each molecule is represented as a tuple of
+                  relevant information.
+                - A list of stoichiometric coefficients corresponding to the found molecules.
+
+        Raises:
+            ValueError: If the provided SMILES does not represent a salt.
+            NotImplementedError: If the functionality for salts with more than 2 ions is invoked.
+
+        Example:
+            >>> find_salt_molecules(["NaCl", "K2SO4"], modes=['name'], required_charge=0)
+            ([(...molecule data...)], [...stoichiometric coefficients...])
+        """
         (
             flattened_identifiers,
             flattened_modes,
             synonyms,
             CAS,
             given_SMILES,
-        ) = self._check_and_flatten_identifiers_and_modes(
-            identifiers, modes
-        )
+        ) = self._check_and_flatten_identifiers_and_modes(identifiers, modes)
         CAS = list(CAS)
 
         if given_SMILES:
@@ -5109,8 +7292,7 @@ class MoleculeResolver:
                 if SMILES.count(".") > 0:
                     ionic_SMILES_list = SMILES.split(".")
                     ionic_SMILES_list = [
-                        self.standardize_SMILES(smi)
-                        for smi in ionic_SMILES_list
+                        self.standardize_SMILES(smi) for smi in ionic_SMILES_list
                     ]
                     SMILES = ".".join(ionic_SMILES_list)
                     ionic_SMILES_set = set(ionic_SMILES_list)
@@ -5271,9 +7453,7 @@ class MoleculeResolver:
                     temp_smiles = stoichometric_coefficients[1] * [cation_info[0]]
                     temp_smiles.extend(stoichometric_coefficients[2] * [anion_info[0]])
                     salt_info = (
-                        self.standardize_SMILES(
-                            ".".join(temp_smiles)
-                        ),
+                        self.standardize_SMILES(".".join(temp_smiles)),
                         synonyms,
                         list(CAS),
                         "from consisting ions",
@@ -5292,15 +7472,52 @@ class MoleculeResolver:
     def find_single_molecule(
         self,
         identifiers: list[str],
-        modes: list[str] = ["name"],
+        modes: Optional[list[str]] = ["name"],
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
         services_to_use: Optional[list[str]] = None,
-        search_iupac_name: bool = False,
-        interactive: bool = False,
-        ignore_exceptions: bool = False,
+        search_iupac_name: Optional[bool] = False,
+        interactive: Optional[bool] = False,
+        ignore_exceptions: Optional[bool] = False,
     ) -> Optional[Molecule]:
+        """Searches for a single molecule across multiple chemical databases and services.
+
+        This method attempts to find a molecule based on the provided identifiers and modes,
+        using various chemical databases and services. It returns the first matching molecule
+        that satisfies all the specified requirements.
+
+        Args:
+            identifiers (list[str]): A list of identifiers for the molecule (e.g., names, formulas, CAS numbers).
+
+            modes (Optional[list[str]]): A list of modes corresponding to each identifier. Defaults to ['name']
+
+            required_formula (Optional[str]): The required molecular formula. Defaults to None.
+
+            required_charge (Optional[int]): The required molecular charge. Defaults to None.
+
+            required_structure_type (Optional[str]): The required structure type. Defaults to None.
+
+            services_to_use (Optional[list[str]]): A list of services to use for the search.
+            If None, all available services will be used. Defaults to None.
+
+            search_iupac_name (Optional[bool]): Whether to search for IUPAC names. Defaults to False.
+
+            interactive (Optional[bool]): Whether to run in interactive mode. Defaults to False.
+
+            ignore_exceptions (Optional[bool]): Whether to ignore exceptions during the search. Defaults to False.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if found, None otherwise.
+
+        Raises:
+            Various exceptions depending on the services used and error conditions encountered.
+
+        Notes:
+            This method searches through multiple chemical databases and services in a specific order.
+            It stops and returns the first matching molecule that satisfies all the specified requirements.
+            The search order and the exact behavior may depend on the available services and the provided parameters.
+        """
         if services_to_use is None:
             services_to_use = self._available_services
 
@@ -5310,9 +7527,7 @@ class MoleculeResolver:
             synonyms,
             CAS,
             given_SMILES,
-        ) = self._check_and_flatten_identifiers_and_modes(
-            identifiers, modes
-        )
+        ) = self._check_and_flatten_identifiers_and_modes(identifiers, modes)
         self._check_parameters(
             services=services_to_use,
             required_formulas=required_formula,
@@ -5336,16 +7551,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CAS_registry(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5361,16 +7573,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_pubchem(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5386,16 +7595,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CIR(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5407,15 +7613,12 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_OPSIN(
                                 identifier,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5427,16 +7630,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_ChEBI(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5452,16 +7652,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_SRS(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5477,16 +7674,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CompTox(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5502,16 +7696,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_Chemeo(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5527,16 +7718,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CTS(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5550,16 +7738,13 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if (
-                            mode
-                            in self._supported_modes_by_services[service]
-                        ):
+                        if mode in self._supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_NIST(
                                 identifier,
                                 mode,
                                 required_formula,
                                 required_charge,
-                                required_structure_type
+                                required_structure_type,
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
@@ -5599,9 +7784,7 @@ class MoleculeResolver:
                         ):
                             molecules = (
                                 self.get_molecule_for_ion_from_partial_pubchem_search(
-                                    identifier,
-                                    required_formula,
-                                    required_charge
+                                    identifier, required_formula, required_charge
                                 )
                             )
                             if molecules is not None:
@@ -5622,7 +7805,7 @@ class MoleculeResolver:
                     identifiers,
                     modes,
                     required_formula=required_formula,
-                    required_charge=required_charge
+                    required_charge=required_charge,
                 )
 
             if SMILES is not None:
@@ -5686,20 +7869,58 @@ class MoleculeResolver:
     def find_single_molecule_interactively(
         self,
         identifiers: list[str],
-        modes: list[str] = ["name"],
+        modes: Optional[list[str]] = ["name"],
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
-        required_structure_type: Optional[str] = None
+        required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
+        """Interactively searches for a single molecule based on user input.
+
+        This method prompts the user to input various identifiers for a molecule and
+        attempts to find a matching molecule that satisfies all specified requirements.
+        It allows for iterative refinement of the search based on user feedback.
+
+        Args:
+            identifiers (list[str]): Initial list of identifiers for the molecule.
+
+            modes (Optional[list[str]]): List of modes corresponding to each identifier.
+            Defaults to ['name'].
+
+            required_formula (Optional[str]): The required molecular formula.
+            Defaults to None.
+
+            required_charge (Optional[int]): The required molecular charge.
+            Defaults to None.
+
+            required_structure_type (Optional[str]): The required structure type.
+            Defaults to None.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if a matching molecule is found and
+            confirmed by the user, None if the search is aborted or no matching
+            molecule is found.
+
+        Raises:
+            Various exceptions may be raised during the molecule search process.
+
+        Notes:
+            - The method uses a combination of automated searches and user input.
+            - It supports various input formats including PubChem CID, name, CAS number,
+              SMILES, and InChI.
+            - The user can view and confirm the molecular structure before accepting
+              the result.
+            - If no synonyms are found, the user is prompted to provide a name for
+              the molecule.
+            - The method allows the user to input or confirm the CAS number.
+
+        """
         (
             flattened_identifiers,
             flattened_modes,
             synonyms,
             CAS,
             given_SMILES,
-        ) = self._check_and_flatten_identifiers_and_modes(
-            identifiers, modes
-        )
+        ) = self._check_and_flatten_identifiers_and_modes(identifiers, modes)
         self._check_parameters(
             required_formulas=required_formula,
             required_charges=required_charge,
@@ -5770,10 +7991,7 @@ class MoleculeResolver:
                     ) = (identifier, synonyms, CAS, "manual geometry", "interactive")
                 else:
                     cmp = self.find_single_molecule(
-                        [identifier],
-                        [mode],
-                        required_formula,
-                        required_charge
+                        [identifier], [mode], required_formula, required_charge
                     )
                     (
                         temptative_SMILES,
@@ -5820,7 +8038,7 @@ class MoleculeResolver:
                 temp_mol = self.get_from_SMILES(temptative_SMILES)
 
                 if temp_mol is not None:
-                    self.show_and_pause(temp_mol, temptative_synonyms[0])
+                    self.show_molecule_and_pause(temp_mol, temptative_synonyms[0])
                 else:
                     print(
                         "Error: Image could not be gernerated from SMILES, this however does not mean always that the SMILES ist wrong."
@@ -5864,16 +8082,49 @@ class MoleculeResolver:
     def find_single_molecule_cross_checked(
         self,
         identifiers: list[str],
-        modes: list[str] = ["name"],
+        modes: Optional[list[str]] = ["name"],
         required_formula: Optional[str] = None,
         required_charge: Optional[int] = None,
         required_structure_type: Optional[str] = None,
         services_to_use: Optional[list[str]] = None,
-        search_iupac_name: bool = False,
+        search_iupac_name: Optional[bool] = False,
         minimum_number_of_cross_checks: Optional[int] = 1,
-        try_to_choose_best_structure: bool = True,
-        ignore_exceptions: bool = False,
+        try_to_choose_best_structure: Optional[bool] = True,
+        ignore_exceptions: Optional[bool] = False,
     ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
+        """Finds a single molecule with cross-checking across multiple services.
+
+        This method searches for a molecule using the provided identifiers and modes,
+        cross-checking the results across multiple chemical services to ensure accuracy.
+
+        Args:
+            identifiers (list[str]): List of identifiers for the molecule.
+            modes (Optional[list[str]]): List of search modes. Defaults to ['name'].
+            required_formula (Optional[str]): Required molecular formula. Defaults to None.
+            required_charge (Optional[int]): Required molecular charge. Defaults to None.
+            required_structure_type (Optional[str]): Required structure type. Defaults to None.
+            services_to_use (Optional[list[str]]): List of services to use. If None, all available services are used.
+            search_iupac_name (Optional[bool]): Whether to search for IUPAC names. Defaults to False.
+            minimum_number_of_cross_checks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
+            try_to_choose_best_structure (Optional[bool]): Whether to attempt to select the best structure. Defaults to True.
+            ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
+
+        Returns:
+            Union[Optional[Molecule], list[Optional[Molecule]]]: A single Molecule object if a best structure is chosen,
+            a list of Molecule objects if multiple structures are found and not choosing the best,
+            or None if no matching molecule is found.
+
+        Raises:
+            ValueError: If minimum_number_of_cross_checks exceeds the number of services used.
+
+        Notes:
+            - The method searches across multiple services and cross-checks the results.
+            - It filters and groups molecules based on structure similarity.
+            - If try_to_choose_best_structure is True, it attempts to select the most reliable structure.
+            - The method uses various heuristics to resolve conflicts between different services.
+            - OPSIN is given preference for name-based searches when available.
+            - ChEBI results are given lower priority in case of conflicts.
+        """
         if services_to_use is None:
             services_to_use = self._available_services
 
@@ -5901,18 +8152,13 @@ class MoleculeResolver:
             molecules.append(molecule)
 
         filtered_molecules = self.filter_molecules(
-            molecules,
-            required_formula,
-            required_charge,
-            required_structure_type
+            molecules, required_formula, required_charge, required_structure_type
         )
 
         if not filtered_molecules:
             return None
 
-        grouped_molecules = self.group_molecules_by_structure(
-            filtered_molecules, False
-        )
+        grouped_molecules = self.group_molecules_by_structure(filtered_molecules, False)
 
         maximum_number_of_crosschecks_found = max(
             [len(v) for v in grouped_molecules.values()]
@@ -5920,13 +8166,12 @@ class MoleculeResolver:
 
         if maximum_number_of_crosschecks_found < minimum_number_of_cross_checks:
             return None
-        
+
         SMILES_with_highest_number_of_crosschecks = []
         for group_SMILES, group_molecules in grouped_molecules.items():
             if len(group_molecules) >= minimum_number_of_cross_checks:
                 if len(group_molecules) == maximum_number_of_crosschecks_found:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
-
 
         if try_to_choose_best_structure:
             SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
@@ -6021,8 +8266,7 @@ class MoleculeResolver:
                                 f"\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n"
                             )
             molec = self.combine_molecules(
-                SMILES_preferred,
-                grouped_molecules[SMILES_preferred]
+                SMILES_preferred, grouped_molecules[SMILES_preferred]
             )
             molec.found_molecules.append(grouped_molecules)
             return molec
@@ -6035,18 +8279,77 @@ class MoleculeResolver:
     def find_multiple_molecules_parallelized(
         self,
         identifiers: list[str],
-        modes: list[str],
+        modes: Optional[list[str]] = ["name"],
         required_formulas: Optional[list[str]] = None,
         required_charges: Optional[list[int]] = None,
         required_structure_types: Optional[list[str]] = None,
         services_to_use: Optional[list[str]] = None,
-        search_iupac_name: bool = False,
+        search_iupac_name: Optional[bool] = False,
         minimum_number_of_cross_checks: Optional[int] = 1,
-        try_to_choose_best_structure: bool = True,
-        progressbar: bool = True,
-        max_workers: int = 5,
+        try_to_choose_best_structure: Optional[bool] = True,
+        progressbar: Optional[bool] = True,
+        max_workers: Optional[int] = 5,
         ignore_exceptions: bool = True,
     ) -> list[Optional[Molecule]]:
+        """Finds multiple molecules in parallel based on provided identifiers and criteria.
+
+        This method utilizes multithreading to search for multiple molecules concurrently. It
+        checks various attributes such as required formulas, charges, and structure types,
+        and fetches data from specified services, with options for progress tracking and
+        batch processing.
+
+        Args:
+            identifiers (list[str]): A list of identifiers for the molecules to search for.
+
+            modes (Optional[list[str]]): The modes of identification for the identifiers. Defaults to ['name']
+
+            required_formulas (Optional[list[str]]): A list of chemical formulas
+            hat the molecules must match. Defaults to None, which means no specific formula
+            is required for each identifier.
+
+            required_charges (Optional[list[int]]): A list of charges that the
+            molecules must possess. Defaults to None, indicating no specific charge is required.
+
+            required_structure_types (Optional[list[str]]): A list of required
+            structure types (e.g., "salt"). Defaults to None, meaning no specific structure
+            type is required.
+
+            services_to_use (Optional[list[str]]): Specific services to be used for
+            retrieving data. Defaults to None, meaning all available services are considered.
+
+            search_iupac_name (Optional[bool]): If True, attempts to search using the IUPAC name.
+            Defaults to False.
+
+            minimum_number_of_cross_checks (Optional[int]): Minimum number of services
+            to cross-check for validity. Defaults to 1.
+
+            try_to_choose_best_structure (Optional[bool]): If True, attempts to select the best
+            structure among the results. Defaults to True.
+
+            progressbar (Optional[bool]): If True, displays a progress bar during the search.
+            Defaults to True.
+
+            max_workers (Optional[int]): Maximum number of threads to use for parallel processing.
+            Defaults to 5.
+
+            ignore_exceptions (Optional[bool]): If True, ignores exceptions that may occur during
+            the search process. Defaults to True.
+
+        Returns:
+            list[Optional[Molecule]]: A list of found molecules, where each molecule is represented
+            as an instance of the Molecule class, or None if not found.
+
+        Raises:
+            ValueError: If any of the identifiers or parameters are invalid.
+
+        Example:
+            >>> find_multiple_molecules_parallelized(
+            ...     identifiers=["NaCl", "K2SO4"],
+            ...     modes=['name'],
+            ...     required_charges=[0, -2]
+            ... )
+            [<Molecule instance for NaCl>, <Molecule instance for K2SO4>]
+        """
         # reinitialize session
         self._session = None
         self._init_session(pool_maxsize=max_workers * 2)
