@@ -57,17 +57,17 @@ class Molecule:
             the 'found_molecules' field before returning the dictionary.
         """
         d = copy.deepcopy(self.__dict__)
-        if found_molecules == 'remove':
+        if found_molecules == "remove":
             if "found_molecules" in d:
                 d.pop("found_molecules")
-        elif found_molecules == 'recursive':
+        elif found_molecules == "recursive":
             if "found_molecules" in d:
                 new_found_molecules = []
                 for grouped_item in d["found_molecules"]:
                     key = list(grouped_item.keys())[0]
                     value = list(grouped_item.values())[0]
                     new_found_molecules.append(
-                        {key: [m.to_dict('recursive') for m in value]}
+                        {key: [m.to_dict("recursive") for m in value]}
                     )
                 d["found_molecules"] = new_found_molecules
         return d

@@ -42,7 +42,7 @@ class SqliteMoleculeCache:
         self._connections = {}
         self._main_thread_id = threading.get_ident()
 
-    def __enter__(self) -> 'SqliteMoleculeCache':
+    def __enter__(self) -> "SqliteMoleculeCache":
         """
         Enter the runtime context related to this object.
 

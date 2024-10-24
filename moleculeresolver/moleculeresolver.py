@@ -260,6 +260,7 @@ class MoleculeResolver:
 
         default_standardization_options = {
             "disconnect_metals": False,
+            "disconnect_more_metals_for_salts": True,
             "normalize": True,
             "reionize": True,
             "uncharge": False,
@@ -710,7 +711,7 @@ class MoleculeResolver:
                         raise error
                     
                     if response.status_code in offline_status_codes:
-                        raise requests.exceptions.ConnectionError('The service is probably offline.')
+                        raise requests.exceptions.ConnectionError("The service is probably offline.")
 
                     if response is not None:
                         print(
@@ -2190,15 +2191,16 @@ class MoleculeResolver:
                 cmp.SMILES = self.standardize_SMILES(cmp.SMILES)
                 filtered_molecules.append(cmp)
             elif required_structure_type == "salt":
-                new_SMILES = self.try_disconnect_more_metals(cmp.SMILES)
-                if self.check_SMILES(
-                    new_SMILES,
-                    required_formula,
-                    required_charge,
-                    required_structure_type,
-                ):
-                    cmp.SMILES = new_SMILES
-                    filtered_molecules.append(cmp)
+                if self._standardization_options.disconnect_more_metals_for_salts:
+                    new_SMILES = self.try_disconnect_more_metals(cmp.SMILES)
+                    if self.check_SMILES(
+                        new_SMILES,
+                        required_formula,
+                        required_charge,
+                        required_structure_type,
+                    ):
+                        cmp.SMILES = new_SMILES
+                        filtered_molecules.append(cmp)
 
         return filtered_molecules
 
