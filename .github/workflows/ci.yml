@@ -140,8 +140,9 @@ jobs:
           echo "If this was the main branch, I would push a new tag named $TAG_NAME"
           echo "should_release=false" >> $GITHUB_OUTPUT
         fi
-        sleep 30
-
+    - name: Wait for GitHub to register the tag
+      run: sleep 10
+      
     - name: Release
       uses: softprops/action-gh-release@v1
       if: ${{ steps.push_tag.outputs.should_release == 'true' }}
