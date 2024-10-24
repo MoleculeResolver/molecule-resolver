@@ -8417,7 +8417,6 @@ class MoleculeResolver:
                     modes,
                     service,
                     progressbar=progressbar,
-                    ignore_exceptions=ignore_exceptions,
                 )
 
         def _find(generator):
