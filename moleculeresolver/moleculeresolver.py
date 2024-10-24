@@ -211,6 +211,7 @@ class MoleculeResolver:
         differentiate_tautomers: Optional[bool] = True,
         differentiate_isotopes: Optional[bool] = True,
         check_for_resonance_structures: Optional[bool] = None,
+        show_warning_if_non_unique_structure_was_found: Optional[bool] = False,
     ) -> None:
         """
         Initialize a MoleculeResolver instance.
@@ -232,11 +233,12 @@ class MoleculeResolver:
 
             check_for_resonance_structures (Optional[bool]): Whether to check for resonance structures. Defaults to None.
 
+            show_warning_if_non_unique_structure_was_found (Optional[bool]): Whether to show a warning if a non-unique structure was found. Defaults to False.
+
         Notes:
             - Sets up the MoleculeResolver with the provided configuration options.
             - Initializes various attributes and sets up the molecule cache if a database path is provided.
         """
-        # The rest of the __init__ method implementation would follow here
 
         if not available_service_API_keys:
             available_service_API_keys = {}
@@ -282,6 +284,7 @@ class MoleculeResolver:
         self._differentiate_tautomers = differentiate_tautomers
         self._differentiate_isotopes = differentiate_isotopes
         self._check_for_resonance_structures = check_for_resonance_structures
+        self._show_warning_if_non_unique_structure_was_found = show_warning_if_non_unique_structure_was_found
 
         self._available_services_with_batch_capabilities = ["srs", "comptox", "pubchem"]
         self._message_slugs_shown = []
@@ -597,6 +600,7 @@ class MoleculeResolver:
         request_type: Optional[str] = "get",
         accepted_status_codes: list[int] = [200],
         rejected_status_codes: list[int] = [404],
+        offline_status_codes: list[int] = [],
         max_retries: Optional[int] = 10,
         sleep_time: Union[int, float] = 2,
         allow_redirects: Optional[bool] = False,
@@ -704,6 +708,9 @@ class MoleculeResolver:
                 if n_try > max_retries:
                     if isinstance(error, requests.exceptions.ConnectionError):
                         raise error
+                    
+                    if response.status_code in offline_status_codes:
+                        raise requests.exceptions.ConnectionError('The service is probably offline.')
 
                     if response is not None:
                         print(
@@ -842,7 +849,7 @@ class MoleculeResolver:
             return None
 
         return Chem.MolToSmiles(
-            self.standardize_molecule(
+            self.standardize_mol(
                 mol,
                 disconnect_metals,
                 normalize,
@@ -853,7 +860,7 @@ class MoleculeResolver:
             )
         )
 
-    def standardize_molecule(
+    def standardize_mol(
         self,
         mol: Chem.rdchem.Mol,
         /,
@@ -927,7 +934,7 @@ class MoleculeResolver:
         if len(mol_fragments) > 1:
             all_mol_fragments = []
             for mol_fragment in mol_fragments:
-                standardized_mol_fragment = self.standardize_molecule(
+                standardized_mol_fragment = self.standardize_mol(
                     mol_fragment,
                     disconnect_metals,
                     normalize,
@@ -2248,7 +2255,12 @@ class MoleculeResolver:
                 self.combine_molecules(grouped_SMILES, cmps_to_combine)
             )
 
-        if len(final_molecules) == 1:
+
+        # until I have a better algorithm, take first molecule whenever
+        # one service returns more than one molecules
+        all_molecules_from_same_service = all([m.service == filtered_molecules[0].service for m in filtered_molecules])
+
+        if len(final_molecules) == 1 or all_molecules_from_same_service:
             return final_molecules[0]
         else:
             return None
@@ -2454,7 +2466,7 @@ class MoleculeResolver:
         if isinstance(mol_or_formula, str):
             mol_formula = mol_or_formula
         else:
-            temp_mol = self.standardize_molecule(mol_or_formula)
+            temp_mol = self.standardize_mol(mol_or_formula)
             mol_formula = rdMolDescriptors.CalcMolFormula(temp_mol)
 
         formula1 = self.formula_to_dictionary(mol_formula)
@@ -2735,7 +2747,6 @@ class MoleculeResolver:
         Notes:
             - This method is cached to improve performance for repeated calls with the same InChI.
             - Uses `get_from_InChI` to convert InChI to a molecule object.
-            - Standardizes the SMILES using `standardize_SMILES`.
             - Returns None if the InChI cannot be converted to a molecule.
         """
         mol = self.get_from_InChI(inchi)
@@ -2743,7 +2754,7 @@ class MoleculeResolver:
         if mol is None:
             return None
 
-        return self.standardize_SMILES(Chem.MolToSmiles(mol))
+        return Chem.MolToSmiles(mol)
 
     @cache
     def SMILES_to_InChI(self, smiles: str) -> Optional[str]:
@@ -2769,7 +2780,7 @@ class MoleculeResolver:
         if mol is None:
             return None
 
-        return Chem.MolToInchi(self.standardize_molecule(mol))
+        return Chem.MolToInchi(self.standardize_mol(mol))
 
     @cache
     def get_from_InChI(
@@ -3286,8 +3297,8 @@ class MoleculeResolver:
             mol1 = self.remove_isotopes(mol1)
             mol2 = self.remove_isotopes(mol2)
 
-        mol1 = self.standardize_molecule(mol1)
-        mol2 = self.standardize_molecule(mol2)
+        mol1 = self.standardize_mol(mol1)
+        mol2 = self.standardize_mol(mol2)
 
         if not differentiate_tautomers:
             mol1 = rdMolStandardize.CanonicalTautomer(mol1)
@@ -3665,7 +3676,7 @@ class MoleculeResolver:
             mol = Chem.MolFromMolBlock(molblock, sanitize=False)
         if not mol:
             return None
-        mol = self.standardize_molecule(mol)
+        
         return Chem.MolToSmiles(mol)
 
     def get_SMILES_from_image_file(
@@ -3743,7 +3754,7 @@ class MoleculeResolver:
 
         return SMILES
 
-    def show_molecule_and_pause(
+    def show_mol_and_pause(
         self,
         mol: Chem.rdchem.Mol,
         name: Optional[str] = None,
@@ -3790,7 +3801,7 @@ class MoleculeResolver:
 
         img.show()
 
-    def save_molecule_to_PNG(
+    def save_mol_to_PNG(
         self,
         mol: Chem.rdchem.Mol,
         filename: str,
@@ -4042,7 +4053,6 @@ class MoleculeResolver:
                             required_structure_type,
                         ):
                             SMILES = temp["smiles"]
-                            SMILES = self.standardize_SMILES(SMILES)
                         else:
                             SMILES_from_InChI = self.InChI_to_SMILES(temp["inchi"])
                             if self.check_SMILES(
@@ -4051,7 +4061,7 @@ class MoleculeResolver:
                                 required_charge,
                                 required_structure_type,
                             ):
-                                SMILES = self.standardize_SMILES(SMILES_from_InChI)
+                                SMILES = SMILES_from_InChI
 
                         additional_information = ""
                         if "warnings" in temp:
@@ -4196,7 +4206,6 @@ class MoleculeResolver:
                 SMILES,
                 strict=True,
             ):
-                smi = self.standardize_SMILES(smi)
                 if smi:
                     results[molecule_index] = [
                         Molecule(
@@ -4378,7 +4387,8 @@ class MoleculeResolver:
                     if not isinstance(temp["ListElement"], list):
                         temp_list = [temp["ListElement"]]
 
-                    for ChEBI_id in [item["chebiId"] for item in temp_list]:
+                    found_ChEBI_ids = [item["chebiId"] for item in temp_list]
+                    for ChEBI_id in found_ChEBI_ids:
                         molecule_response_text = self._resilient_request(
                             f"{CHEBI_URL}getCompleteEntity?chebiId={ChEBI_id}"
                         )
@@ -4443,7 +4453,6 @@ class MoleculeResolver:
         service: str,
         batch_size: Optional[int] = 1000,
         progressbar: Optional[bool] = False,
-        ignore_exceptions: Optional[bool] = False,
     ) -> tuple[dict[str, list[Optional[Molecule]]], list[str]]:
         """
         Retrieve molecules in batch mode from a specified service.
@@ -4456,7 +4465,6 @@ class MoleculeResolver:
             service (str): The name of the service to use for retrieval.
             batch_size (Optional[int]): Number of identifiers to process in each batch.
             progressbar (Optional[bool]): Display a progress bar during processing.
-            ignore_exceptions (Optional[bool]): Ignore exceptions during processing.
 
         Returns:
             tuple[dict[str, list[Optional[Molecule]]], list[str]]: A dictionary of results and a list of supported modes.
@@ -4657,15 +4665,15 @@ class MoleculeResolver:
                 )
 
                 if response_text is not None:
-                    original_response = json.loads(response_text)
+                    results = json.loads(response_text)
                     # sort and filter best results
-                    original_response = sorted(
-                        original_response, key=lambda x: x["rank"]
+                    results = sorted(
+                        results, key=lambda x: x["rank"]
                     )
-                    original_response = list(
+                    results = list(
                         filter(
-                            lambda x: x["rank"] == original_response[0]["rank"],
-                            original_response,
+                            lambda x: x["rank"] == results[0]["rank"],
+                            results,
                         )
                     )
 
@@ -4678,7 +4686,6 @@ class MoleculeResolver:
                             temp_substance = json.loads(substance_response_text)
 
                             temp_SMILES = temp_substance["smiles"]
-                            temp_SMILES = self.standardize_SMILES(temp_SMILES)
                             if not temp_SMILES:
                                 return
                             temp_synonyms = []
@@ -4722,14 +4729,14 @@ class MoleculeResolver:
                                 )
                             )
 
-                    if isinstance(original_response, list):
-                        for i in range(len(original_response)):
-                            temp = original_response[i]
+                    if isinstance(results, list):
+                        for i in range(len(results)):
+                            temp = results[i]
                             temp_dtxsid = temp["dtxsid"]
                             process_dtxsid(temp_dtxsid)
 
                     else:
-                        temp_dtxsid = original_response["dtxsid"]
+                        temp_dtxsid = results["dtxsid"]
                         process_dtxsid(temp_dtxsid)
 
         return self.filter_and_combine_molecules(
@@ -4820,8 +4827,9 @@ class MoleculeResolver:
                     response_text = self._resilient_request(
                         f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier, safe="")}',
                         kwargs={"timeout": 5},
-                        rejected_status_codes=[404, 500],
-                        max_retries=2,
+                        rejected_status_codes=[404],
+                        offline_status_codes=[500],
+                        max_retries=3,
                     )
                 except requests.exceptions.ConnectionError:
                     # I don't know why, but somtimes CTS is offline. This would make the module much slower as
@@ -5140,8 +5148,6 @@ class MoleculeResolver:
 
                             if "N/A" in SMILES or not self.is_valid_SMILES(SMILES):
                                 return
-
-                            SMILES = self.standardize_SMILES(SMILES)
 
                             # the rating is needed because for some substances it
                             # returns more than one row. It is used to get the best result later.
@@ -5848,7 +5854,6 @@ class MoleculeResolver:
 
                     for result in SMILES_results:
                         cid, this_SMILES = result.split("\t")
-                        this_SMILES = self.standardize_SMILES(this_SMILES)
                         SMILES[int(cid)] = this_SMILES
 
                 for molecule_index, original_identifier in zip(
@@ -6048,9 +6053,7 @@ class MoleculeResolver:
                             return
 
                         cid = compound["id"]["id"]["cid"]
-                        SMILES = self.standardize_SMILES(
-                            get_prop_value(compound, "SMILES", "Isomeric", str)
-                        )
+                        SMILES = get_prop_value(compound, "SMILES", "Isomeric", str)
                         SMILES_from_InChI = self.InChI_to_SMILES(
                             get_prop_value(compound, "InChI", "Standard", str)
                         )
@@ -6204,7 +6207,6 @@ class MoleculeResolver:
                             synonyms.extend(details["synonyms"])
 
                             SMILES = details["smile"]
-                            SMILES = self.standardize_SMILES(SMILES)
 
                             # sometimes the cas registry gives back wrong aromaticity results
                             # when searching by SMILES, this is to filter out most of them
@@ -6256,7 +6258,7 @@ class MoleculeResolver:
                 # prior to searching, so in a lot of cases it does not deliver a result even though the molecule is
                 # in the database, the service however does not suffer from this issue when searching by InChI
                 if mode == "smiles" and len(molecules) == 0:
-                    inchi = self.SMILES_to_InChI(identifier)
+                    inchi = self.SMILES_to_InChI(self.standardize_SMILES(identifier))
                     cmp = self.get_molecule_from_CAS_registry(
                         inchi,
                         "inchi",
@@ -6358,7 +6360,6 @@ class MoleculeResolver:
 
             ITN = result["internalTrackingNumber"]
             SMILES = result["smilesNotation"]
-            SMILES = self.standardize_SMILES(SMILES)
 
             if SMILES is None:
                 if isinstance(result["inchiNotation"], str):
@@ -6862,7 +6863,8 @@ class MoleculeResolver:
             >>> iupac_name = resolver.get_iupac_name_from_CIR("CCO")
             >>> print(iupac_name)
         """
-        # Implementation goes here (not provided)
+        result = self._get_info_from_CIR(SMILES, "iupac_name", ("smiles",))
+        return result[0] if result else None
 
     def get_molecule_from_CIR(
         self,
@@ -6897,7 +6899,6 @@ class MoleculeResolver:
             - The method uses different resolvers based on the input mode.
             - It retrieves SMILES representation from CIR using the _get_info_from_CIR method.
             - If a SMILES is found, it retrieves additional information like names and CAS numbers.
-            - The method standardizes the SMILES string using the standardize_SMILES method.
             - Synonyms and CAS numbers are filtered and sorted before being added to the Molecule object.
             - The resulting molecule is filtered based on the required formula, charge, and structure type if specified.
 
@@ -6941,7 +6942,7 @@ class MoleculeResolver:
                 if not SMILES:
                     return None
                 else:
-                    SMILES = self.standardize_SMILES(SMILES[0])
+                    SMILES = SMILES[0]
 
                 if SMILES:
                     CIR_names = self._get_info_from_CIR(
@@ -7037,7 +7038,7 @@ class MoleculeResolver:
 
                 mode_used = mode
                 if mode == "smiles":
-                    identifier = self.SMILES_to_InChI(identifier)
+                    identifier = self.SMILES_to_InChI(self.standardize_SMILES(identifier))
 
                 response_text = self._resilient_request(
                     f'https://webbook.nist.gov/cgi/cbook.cgi?{urllib.parse.quote(nist_modes[mode])}={urllib.parse.quote(identifier, safe="")}'
@@ -8038,7 +8039,7 @@ class MoleculeResolver:
                 temp_mol = self.get_from_SMILES(temptative_SMILES)
 
                 if temp_mol is not None:
-                    self.show_molecule_and_pause(temp_mol, temptative_synonyms[0])
+                    self.show_mol_and_pause(temp_mol, temptative_synonyms[0])
                 else:
                     print(
                         "Error: Image could not be gernerated from SMILES, this however does not mean always that the SMILES ist wrong."
@@ -8261,10 +8262,11 @@ class MoleculeResolver:
                         if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
                             SMILES_preferred = c[0][0]
                         else:
-                            temp = len(SMILES_with_highest_number_of_crosschecks)
-                            warnings.warn(
-                                f"\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n"
-                            )
+                            if self._show_warning_if_non_unique_structure_was_found:
+                                temp = len(SMILES_with_highest_number_of_crosschecks)
+                                warnings.warn(
+                                    f"\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n"
+                                )
             molec = self.combine_molecules(
                 SMILES_preferred, grouped_molecules[SMILES_preferred]
             )
