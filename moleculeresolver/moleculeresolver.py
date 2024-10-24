@@ -2774,7 +2774,6 @@ class MoleculeResolver:
 
         Notes:
             - Uses `get_from_SMILES` to create an RDKit molecule object from the SMILES.
-            - Standardizes the molecule using `standardize_molecule` before conversion.
             - This method is cached for performance optimization.
         """
         mol = self.get_from_SMILES(smiles)
@@ -2782,7 +2781,7 @@ class MoleculeResolver:
         if mol is None:
             return None
 
-        return Chem.MolToInchi(self.standardize_mol(mol))
+        return Chem.MolToInchi(mol)
 
     @cache
     def get_from_InChI(
