@@ -140,6 +140,7 @@ jobs:
           echo "If this was the main branch, I would push a new tag named $TAG_NAME"
           echo "should_release=false" >> $GITHUB_OUTPUT
         fi
+        sleep 30
 
     - name: Release
       uses: softprops/action-gh-release@v1
