@@ -142,9 +142,10 @@ jobs:
         fi
 
     - name: Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       if: ${{ steps.push_tag.outputs.should_release == 'true' }}
       with:
+        tag_name: ${{ steps.current.outputs.version }}
         files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
 
     outputs:
