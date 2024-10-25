@@ -151,7 +151,7 @@ jobs:
         files: dist/molecule_resolver-${{ steps.current.outputs.version }}.tar.gz
 
     outputs:
-      publish_pypi: steps.push_tag.outputs.should_release
+      publish_pypi: ${{ steps.push_tag.outputs.should_release }}
       publish_test_pypi: ${{ (steps.current.outputs.version != steps.published.outputs.version) && github.ref_name != 'main' }}
 
   # Publish the package to pypi
