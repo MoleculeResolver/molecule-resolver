@@ -861,6 +861,38 @@ class MoleculeResolver:
             )
         )
 
+    def convert_zwitterion_to_sulfynil(
+        self,
+        mol: Chem.rdchem.Mol):
+        """
+        Converts the zwitterionic form [S+][O-] in a given RDKit molecule to the sulfynil group O=S.
+
+        This function iterates over the atoms in the molecule to identify sulfur atoms with a positive charge
+        and their neighboring oxygen atoms with a negative charge. It then modifies the bond between these atoms
+        to a double bond and resets their formal charges to zero.
+
+        Parameters:
+        mol (rdkit.Chem.Mol): The RDKit molecule object to be modified.
+
+        Returns:
+        rdkit.Chem.Mol: The modified RDKit molecule object with the zwitterionic form converted to the sulfynil group.
+        """
+        # Iterate over atoms in the molecule
+        for atom in mol.GetAtoms():
+            # Check for sulfur atom with positive charge
+            if atom.GetSymbol() == 'S' and atom.GetFormalCharge() == 1:
+                # Iterate over neighbors to find the oxygen with negative charge
+                for neighbor in atom.GetNeighbors():
+                    if neighbor.GetSymbol() == 'O' and neighbor.GetFormalCharge() == -1:
+                        # Set the bond between S and O to double bond
+                        bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
+                        bond.SetBondType(Chem.rdchem.BondType.DOUBLE)
+                        
+                        # Reset charges
+                        atom.SetFormalCharge(0)
+                        neighbor.SetFormalCharge(0)
+        return mol
+    
     def standardize_mol(
         self,
         mol: Chem.rdchem.Mol,
@@ -962,9 +994,8 @@ class MoleculeResolver:
             mol = md.Disconnect(mol)
 
         if normalize:
-            # for some molecules this gives weird results. e.g. DMSO
-            if Chem.MolToSmiles(mol) not in ["CS(C)=O"]:
-                mol = rdMolStandardize.Normalize(mol)
+            # correction of smiles with sulfynil group from the zwitterionic form to the orginal representation
+            mol = self.convert_zwitterion_to_sulfynil(mol)
 
         if reionize:
             reionizer = rdMolStandardize.Reionizer()
