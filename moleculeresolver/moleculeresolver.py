@@ -994,6 +994,7 @@ class MoleculeResolver:
             mol = md.Disconnect(mol)
 
         if normalize:
+            mol = rdMolStandardize.Normalize(mol)
             # correction of smiles with sulfynil group from the zwitterionic form to the orginal representation
             mol = self.convert_zwitterion_to_sulfynil(mol)
 
