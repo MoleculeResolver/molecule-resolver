@@ -219,7 +219,8 @@ class MoleculeResolver:
         Args:
             available_service_API_keys (Optional[dict[str, Optional[str]]]): A dictionary of API keys for various services. Defaults to None.
 
-            molecule_cache_db_path (Optional[str]): Path to the molecule cache database. Defaults to None.
+            molecule_cache_db_path (Optional[str]): Path to the molecule cache database. Defaults to using the same cache for all MoleculeResolver instances
+            on a specific environment.
 
             molecule_cache_expiration (Optional[datetime]): Expiration time for cached molecules. Defaults to None.
 
@@ -1805,6 +1806,8 @@ class MoleculeResolver:
                 ["flouro", "fluoro"],
                 ["-[Nn]-", "-"],
                 ["([A-Za-z]{2,}),([A-Za-z]{2,})", r"\1, \2"],
+                ["′", "'"],
+                ["″", "''"]
             ]
 
         new_name = name
