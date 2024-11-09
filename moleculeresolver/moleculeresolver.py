@@ -5423,7 +5423,7 @@ class MoleculeResolver:
                         # non-isomeric SMILES are the same:
                         if mode == "smiles":
                             if not self.are_SMILES_equal(
-                                temp_SMILES, identifier, isomeric=False
+                                temp_SMILES, identifier, differentiate_isomers=False
                             ):
                                 continue
 
@@ -6217,7 +6217,7 @@ class MoleculeResolver:
                             # ensuring that at least non-isomeric SMILES are the same:
                             if mode == "smiles":
                                 if not self.are_SMILES_equal(
-                                    SMILES, identifier, isomeric=False
+                                    SMILES, identifier, differentiate_isomers=False
                                 ):
                                     continue
 
@@ -6272,7 +6272,7 @@ class MoleculeResolver:
                     )
                     if cmp is not None:
                         if self.are_SMILES_equal(
-                            cmp.SMILES, identifier, isomeric=False
+                            cmp.SMILES, identifier, differentiate_isomers=False
                         ):
                             cmp.mode = mode
                             molecules.append(cmp)
