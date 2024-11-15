@@ -1334,11 +1334,12 @@ class MoleculeResolver:
                         "required_structure_type must be one of the following: 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ion','mixture_neutrals_salts', 'mixture_neutrals_ions'"
                     )
 
-    def remove_non_printable_characters(self, string_input: str) -> str:
+    def replace_non_printable_characters(self, string_input: str) -> str:
         """
-        Removes all non-printable characters from the given string.
+        Replaces all non-printable characters from the given string.
 
-        This function iterates through each character in the input string and
+        This function replaces different white space types by a simple white space,
+        then it iterates through each character in the input string and
         keeps only the printable characters, effectively removing any non-printable
         characters such as control characters or certain Unicode characters.
 
@@ -1348,7 +1349,7 @@ class MoleculeResolver:
         Returns:
             str: A new string containing only the printable characters from the input.
         """
-
+        string_input = regex.sub(r'[\s\u200B\u2060\uFEFF]+', ' ', string_input)
         return "".join([c for c in string_input if c.isprintable()])
 
     @cache
@@ -1522,8 +1523,8 @@ class MoleculeResolver:
                 greek_letters, spelled_out_versions, strict=True
             ):
                 map_to_replace.append((greek_letter, spelled_out_version))
-
-        chemical_name = self.remove_non_printable_characters(chemical_name)
+    
+        chemical_name = self.replace_non_printable_characters(chemical_name)
         chemical_name = chemical_name.strip()
 
         if unescape_html:
@@ -1583,7 +1584,7 @@ class MoleculeResolver:
         """
         # heuristics used here are mainly to remove synonyms from pubchem
         synonyms = [
-            self.remove_non_printable_characters(synonym.strip())
+            self.replace_non_printable_characters(synonym.strip())
             for synonym in synonyms
             if synonym is not None
         ]
@@ -1720,7 +1721,7 @@ class MoleculeResolver:
             - Applies a series of regex-based transformations to standardize the name format.
             - Special handling is implemented for stereochemistry indicators (e.g., cis/trans, E/Z).
         """
-        name = self.remove_non_printable_characters(name.strip())
+        name = self.replace_non_printable_characters(name.strip())
         original_name = name
         names = [original_name]
         name = html.unescape(name)
