@@ -20,6 +20,7 @@ openpyxl = "^3.1.2"
 tqdm = "^4.66.1"
 urllib3 = "^2.0.6"
 xmltodict = "^0.13.0"
+py2opsin = "^1.1.0,<2.0.0"
 
 
 [tool.poetry.group.dev.dependencies]

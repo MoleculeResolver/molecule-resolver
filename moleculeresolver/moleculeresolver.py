@@ -27,6 +27,7 @@ import openpyxl
 from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts import yes_no_dialog
 import regex
+from py2opsin import py2opsin
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 from rdkit.Chem import Draw
@@ -292,8 +293,8 @@ class MoleculeResolver:
         self._message_slugs_shown = []
         self._session = None
         self._session_CompTox = None
-        self._java_path = self.get_java_path()
-        if self._java_path:
+        self._py2opsin_available = self.check_py2opsin()
+        if self._py2opsin_available:
             self._available_services_with_batch_capabilities.insert(0, "opsin")
         self._OPSIN_tempfolder = None
         self._supported_modes_by_services = {
@@ -3955,44 +3956,18 @@ class MoleculeResolver:
 
         return all_items
 
-    def get_java_path(self) -> Optional[str]:
+    def check_py2opsin(self) -> bool:
         """
-        Get the full path of the Java executable.
-
-        Determines the full path of the Java executable on the system, supporting Windows, Linux, and macOS platforms.
+        Checks if py2opsin is working, i.e. Java is installed.
 
         Returns:
-            Optional[str]: The full path to the Java executable if found, `None` otherwise.
-
-        Raises:
-            NotImplementedError: If the method is called on an unsupported operating system.
-
-        Notes:
-            - On Windows, uses the `'where'` command to locate Java.
-            - On Linux and macOS, uses the `'which'` command.
-            - Checks if the found Java paths actually exist on the file system.
-            - If multiple Java installations are found, the first valid path is returned.
-            - Returns `None` if Java is not found or if the `'where'`/`'which'` command fails.
+            bool: True is successful.
         """
-        if platform.system().lower() == "windows":
-            search_command = "where"
-        elif platform.system().lower() in ["linux", "darwin"]:
-            search_command = "which"
-        else:
-            raise NotImplementedError(
-                f"For the following OS, getting the full path of the java executable needs to be programmed: {platform.system()}"
-            )
-
-        output = subprocess.run([search_command, "java"], capture_output=True)
-        java_paths = output.stdout.decode("utf-8").strip().split(os.linesep)
-        java_paths = [
-            java_path for java_path in java_paths if os.path.exists(java_path)
-        ]
-
-        if output.returncode != 0 or len(java_paths) == 0:
-            return None
-        else:
-            return java_paths[0]
+        try:
+            py2opsin("methane")
+            return True
+        except FileNotFoundError:
+            return False
 
     def get_molecule_from_OPSIN(
         self,
@@ -4097,7 +4072,7 @@ class MoleculeResolver:
         """
         Convert a batch of chemical names to molecules using OPSIN in offline mode.
 
-        Uses OPSIN to convert a list of chemical names to molecular structures in batch mode.
+        Uses py2opsin to convert a list of chemical names to molecular structures in batch mode.
 
         Args:
             names (list[str]): A list of chemical names to be converted.
@@ -4106,19 +4081,20 @@ class MoleculeResolver:
         Returns:
             list[Optional[Molecule]]: A list of Molecule objects corresponding to the input names.
 
-        Raises:
-            FileNotFoundError: If the Java installation could not be found.
-            RuntimeError: If there was a problem parsing the OPSIN offline output file.
-
         Notes:
             - Checks a cache for previously processed molecules.
-            - Downloads the latest version of OPSIN if not already present.
-            - Runs OPSIN in offline mode using Java, processing all names in a single batch.
+            - Runs OPSIN in offline mode using py2opsin, processing all names in a single batch.
             - Standardizes the SMILES strings returned by OPSIN.
             - Each successfully converted molecule is stored with metadata.
             - Uses a temporary directory for OPSIN operations, cleaned up after use.
             - If allow_uninterpretable_stereo is True, it's noted in the molecule's additional_information.
         """
+        if not self._py2opsin_available:
+            raise RuntimeError(
+                "py2opsin is not available, likely because java could not be found." \
+                "Install it and/or add it to the path environment variable."
+            )
+
         self._check_parameters(
             identifiers=names,
             modes="name",
@@ -4126,84 +4102,18 @@ class MoleculeResolver:
             context="get_molecules_batch",
         )
 
-        if not self._java_path:
-            raise FileNotFoundError(
-                "The java installation could not be found. Either it is not installed or its location has not been added to the path environment variable."
-            )
-
-        def download_OPSIN_offline_and_convert_names(names: list[str], tempfolder: str):
-            if not os.path.exists(os.path.join(tempfolder, "opsin.jar")):
-                response_text = self._resilient_request(
-                    "https://api.github.com/repos/dan2097/opsin/releases/latest"
-                )
-                temp = json.loads(response_text)
-                for asset in temp["assets"]:
-                    if asset["name"].count("opsin-cli"):
-                        download_url = asset["browser_download_url"]
-                        with closing(urllib.request.urlopen(download_url)) as r:
-                            with open(os.path.join(tempfolder, "opsin.jar"), "wb") as f:
-                                for chunk in r:
-                                    f.write(chunk)
-
-            unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
-            input_file = os.path.join(tempfolder, f"input_{unique_id}.txt")
-            with open(input_file, "w", encoding="utf8") as f:
-                f.write("\n".join(names))
-
-            # in the future adding the parameter -s would allow getting more structures if the stereo information opsin cannot interpret can be ignored
-            cmd = [
-                self._java_path,
-                "-jar",
-                "opsin.jar",
-                "-osmi",
-                f"input_{unique_id}.txt",
-                f"output_{unique_id}.txt",
-            ]
-
-            if allow_uninterpretable_stereo:
-                cmd.insert(4, "--allowUninterpretableStereo")
-
-            _ = subprocess.run(
-                cmd,
-                capture_output=True,
-                cwd=tempfolder,
-            )
-
-            with open(os.path.join(tempfolder, f"output_{unique_id}.txt"), "r") as f:
-                output = f.read()
-
-            output_values = output.split("\n")
-            # I don't know in what situations, but in some OPSIN adds an empty line at the end of the output file.
-            if len(output_values) == len(names) + 1 and output_values[-1] == "":
-                output_values = output_values[:-1]
-
-            SMILES = [value.strip() for value in output_values]
-            if len(SMILES) != len(names):
-                raise RuntimeError(
-                    "There was a problem parsing the OPSIN offline output file."
-                )
-
-            return SMILES
-
         with self.query_molecule_cache_batchmode("opsin", "name", names) as (
             identifiers_to_search,
             indices_of_identifiers_to_search,
             results,
         ):
-            if len(identifiers_to_search) == 0:
-                return results
-
-            if self._OPSIN_tempfolder is None or not os.path.exists(
-                self._OPSIN_tempfolder.name
-            ):
-                with tempfile.TemporaryDirectory() as tempfolder:
-                    SMILES = download_OPSIN_offline_and_convert_names(
-                        identifiers_to_search, tempfolder
-                    )
-            else:
-                SMILES = download_OPSIN_offline_and_convert_names(
-                    identifiers_to_search, self._OPSIN_tempfolder.name
-                )
+            unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
+            input_file = os.path.join(self._OPSIN_tempfolder, f"input_{unique_id}.txt")
+            SMILES = py2opsin(
+                names,
+                allow_bad_stereo=allow_uninterpretable_stereo,
+                tmp_fpath=input_file,
+            )
 
             for molecule_index, name, smi in zip(
                 indices_of_identifiers_to_search,
