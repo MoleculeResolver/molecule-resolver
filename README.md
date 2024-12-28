@@ -12,6 +12,7 @@ The package is available on [pypi](https://pypi.org/project/molecule-resolver/):
 ```sh
 pip install molecule-resolver
 ```
+While the source code is available here: [https://github.com/MoleculeResolver/molecule-resolver](https://github.com/MoleculeResolver/molecule-resolver)
 
 ## Features
 
