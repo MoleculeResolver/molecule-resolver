@@ -1,5 +1,5 @@
 
-# moleculeresolver
+# MoleculeResolver
 
 The **moleculeresolver** was born out of the need to annotate large datasets with accurate structural information fast and to crosscheck whether given metadata (name, SMILES) agrees with each other. It also allows to efficiently compare whether structures are available in two large datasets. 
 
