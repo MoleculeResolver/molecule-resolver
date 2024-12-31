@@ -11,6 +11,7 @@ import os
 from PIL import ImageFont, ImageDraw
 import platform
 import requests
+import shutil
 import subprocess
 import tempfile
 import time
@@ -250,12 +251,14 @@ class MoleculeResolver:
         if "comptox" not in available_service_API_keys:
             available_service_API_keys["comptox"] = None
 
+        self._module_path = os.path.dirname(__file__)
         if not molecule_cache_db_path:
-            module_path = os.path.dirname(__file__)
-            molecule_cache_db_path = os.path.join(module_path, "molecule_cache.db")
+            molecule_cache_db_path = os.path.join(self._module_path, "molecule_cache.db")
 
         self.molecule_cache_db_path = molecule_cache_db_path
         self.molecule_cache_expiration = molecule_cache_expiration
+
+        self._OPSIN_executable_path = None
 
         self.available_service_API_keys = available_service_API_keys
 
@@ -307,7 +310,8 @@ class MoleculeResolver:
             "cts": [
                 "cas",
                 "smiles",
-            ],  # "name", I have taken out name because cts works less than 5% of the time
+              # "name", # I have taken out name because cts works less than 5% of the time
+            ],
             "nist": ["formula", "name", "cas", "smiles"],
             "opsin": ["name"],
             "pubchem": ["name", "cas", "smiles", "formula", "inchi", "inchikey", "cid"],
@@ -3066,7 +3070,7 @@ class MoleculeResolver:
 
         if not isinstance(InChI, str):
             return False
-        
+
         if not regex.search(self.InChI_regex_compiled, InChI):
             return False
 
@@ -3096,7 +3100,7 @@ class MoleculeResolver:
 
         if not isinstance(InChIKey, str):
             return False
-        
+
         if not regex.search(self.InChIKey_regex_compiled, InChIKey):
             return False
 
@@ -4151,6 +4155,110 @@ class MoleculeResolver:
         else:
             return java_paths[0]
 
+    def _get_and_run_OPSIN_executable(self, names: list[str], allow_uninterpretable_stereo: Optional[bool] = False) -> list[Optional[str]]:
+
+        if not self._OPSIN_executable_path or not os.path.exists(self._OPSIN_executable_path):
+            
+            # get bundled version
+            possible_OPSIN_executables = sorted(
+                [
+                    f
+                    for f in os.listdir(self._module_path)
+                    if f.startswith("opsin") and f.endswith(".jar")
+                ]
+            )
+            if possible_OPSIN_executables:
+                self._OPSIN_executable_path = os.path.join(self._module_path, possible_OPSIN_executables[-1])
+
+            # update_OPSIN_executable
+            response_text = self._resilient_request(
+                "https://api.github.com/repos/dan2097/opsin/releases/latest"
+            )
+
+            if response_text:
+                temp = json.loads(response_text)
+                
+                for asset in temp["assets"]:
+                    new_filename = asset["name"]
+                    if new_filename.startswith("opsin-cli") and new_filename.endswith(".jar"):
+
+                        download_url = asset["browser_download_url"]
+                        new_filename = download_url.split('/')[-1]
+                        if self._OPSIN_executable_path:
+                            if not self._OPSIN_executable_path.endswith(new_filename):
+                                os.remove(self._OPSIN_executable_path)
+                                self._OPSIN_executable_path = None
+                        
+                        if not self._OPSIN_executable_path:
+                            self._OPSIN_executable_path = os.path.join(self._module_path, new_filename)
+                            with closing(urllib.request.urlopen(download_url)) as r:
+                                with open(
+                                    self._OPSIN_executable_path, "wb"
+                                ) as f:
+                                    for chunk in r:
+                                        f.write(chunk)
+                        break
+            else:
+                if (
+                    "OPSIN_executable_not_available"
+                    not in self._message_slugs_shown
+                ):
+                    self._message_slugs_shown.append(
+                        "OPSIN_executable_not_available"
+                    )
+                    warnings.warn(
+                        "The newest version of the OPSIN executable could not be downloaded, "
+                        "the version shipped with MoleculeResolver will be used instead."
+                    )
+        
+        # execute opsin
+        if self._OPSIN_tempfolder is None or not os.path.exists(
+            self._OPSIN_tempfolder.name
+        ):
+            self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
+                prefix="OPSIN_tempfolder_"
+            )
+    
+        unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
+        input_file = os.path.join(self._OPSIN_tempfolder.name, f"input_{unique_id}.txt")
+        with open(input_file, "w", encoding="utf8") as f:
+            f.write("\n".join(names))
+
+        # in the future adding the parameter -s would allow getting more structures if the stereo information opsin cannot interpret can be ignored
+        cmd = [
+            self._java_path,
+            "-jar",
+            self._OPSIN_executable_path,
+            "-osmi",
+            f"input_{unique_id}.txt",
+            f"output_{unique_id}.txt",
+        ]
+
+        if allow_uninterpretable_stereo:
+            cmd.insert(4, "--allowUninterpretableStereo")
+
+        _ = subprocess.run(
+            cmd,
+            capture_output=True,
+            cwd=self._OPSIN_tempfolder.name,
+        )
+
+        with open(os.path.join(self._OPSIN_tempfolder.name, f"output_{unique_id}.txt"), "r") as f:
+            output = f.read()
+
+        output_values = output.split("\n")
+        # I don't know in what situations, but in some OPSIN adds an empty line at the end of the output file.
+        if len(output_values) == len(names) + 1 and output_values[-1] == "":
+            output_values = output_values[:-1]
+
+        SMILES = [value.strip() for value in output_values]
+        if len(SMILES) != len(names):
+            raise RuntimeError(
+                "There was a problem parsing the OPSIN offline output file."
+            )
+
+        return SMILES
+    
     def get_molecule_from_OPSIN(
         self,
         name: str,
@@ -4240,6 +4348,9 @@ class MoleculeResolver:
                                     additional_information=additional_information,
                                 )
                             )
+                else:
+                    # for single name, fall back to offline OPSIN
+                    molecules = self.get_molecule_from_OPSIN_batchmode([name])
 
         return self.filter_and_combine_molecules(
             molecules,
@@ -4272,9 +4383,7 @@ class MoleculeResolver:
             - Downloads the latest version of OPSIN if not already present.
             - Runs OPSIN in offline mode using Java, processing all names in a single batch.
             - Standardizes the SMILES strings returned by OPSIN.
-            - Each successfully converted molecule is stored with metadata.
             - Uses a temporary directory for OPSIN operations, cleaned up after use.
-            - If allow_uninterpretable_stereo is True, it's noted in the molecule's additional_information.
         """
         self._check_parameters(
             identifiers=names,
@@ -4288,60 +4397,6 @@ class MoleculeResolver:
                 "The java installation could not be found. Either it is not installed or its location has not been added to the path environment variable."
             )
 
-        def download_OPSIN_offline_and_convert_names(names: list[str], tempfolder: str):
-            if not os.path.exists(os.path.join(tempfolder, "opsin.jar")):
-                response_text = self._resilient_request(
-                    "https://api.github.com/repos/dan2097/opsin/releases/latest"
-                )
-                temp = json.loads(response_text)
-                for asset in temp["assets"]:
-                    if asset["name"].count("opsin-cli"):
-                        download_url = asset["browser_download_url"]
-                        with closing(urllib.request.urlopen(download_url)) as r:
-                            with open(os.path.join(tempfolder, "opsin.jar"), "wb") as f:
-                                for chunk in r:
-                                    f.write(chunk)
-
-            unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
-            input_file = os.path.join(tempfolder, f"input_{unique_id}.txt")
-            with open(input_file, "w", encoding="utf8") as f:
-                f.write("\n".join(names))
-
-            # in the future adding the parameter -s would allow getting more structures if the stereo information opsin cannot interpret can be ignored
-            cmd = [
-                self._java_path,
-                "-jar",
-                "opsin.jar",
-                "-osmi",
-                f"input_{unique_id}.txt",
-                f"output_{unique_id}.txt",
-            ]
-
-            if allow_uninterpretable_stereo:
-                cmd.insert(4, "--allowUninterpretableStereo")
-
-            _ = subprocess.run(
-                cmd,
-                capture_output=True,
-                cwd=tempfolder,
-            )
-
-            with open(os.path.join(tempfolder, f"output_{unique_id}.txt"), "r") as f:
-                output = f.read()
-
-            output_values = output.split("\n")
-            # I don't know in what situations, but in some OPSIN adds an empty line at the end of the output file.
-            if len(output_values) == len(names) + 1 and output_values[-1] == "":
-                output_values = output_values[:-1]
-
-            SMILES = [value.strip() for value in output_values]
-            if len(SMILES) != len(names):
-                raise RuntimeError(
-                    "There was a problem parsing the OPSIN offline output file."
-                )
-
-            return SMILES
-
         with self.query_molecule_cache_batchmode("opsin", "name", names) as (
             identifiers_to_search,
             indices_of_identifiers_to_search,
@@ -4350,17 +4405,7 @@ class MoleculeResolver:
             if len(identifiers_to_search) == 0:
                 return results
 
-            if self._OPSIN_tempfolder is None or not os.path.exists(
-                self._OPSIN_tempfolder.name
-            ):
-                with tempfile.TemporaryDirectory() as tempfolder:
-                    SMILES = download_OPSIN_offline_and_convert_names(
-                        identifiers_to_search, tempfolder
-                    )
-            else:
-                SMILES = download_OPSIN_offline_and_convert_names(
-                    identifiers_to_search, self._OPSIN_tempfolder.name
-                )
+            SMILES = self._get_and_run_OPSIN_executable(identifiers_to_search, allow_uninterpretable_stereo)
 
             for molecule_index, name, smi in zip(
                 indices_of_identifiers_to_search,
