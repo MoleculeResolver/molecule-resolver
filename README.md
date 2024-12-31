@@ -28,7 +28,7 @@ At this moment, the following services are used to get the best structure for a 
 In case you want to add an additional service, open an issue or a pull request.
 
 The MoleculeResolver does not offer all options/configurations for each service available with the specific related repos as it focusses on getting the structure based on the identifiers and doing so as accurate as possible while still being fast using parallelization under the hood.
-| Service                                                                 | Name | CAS | Formula | SMILES | InChI | InChIKey | CID | Batch Capabilities | Related Repos                                                                 |
+| Service                                                                 | Name | CAS | Formula | SMILES | InChI | InChIKey | CID | Batch search | Repos                                                                 |
 |-------------------------------------------------------------------------|------|-----|---------|--------|-------|----------|-----|--------------------|------------------------------------------------------------------------------|
 | [cas_registry](https://commonchemistry.cas.org/)                        | ✅   | ✅  | ❌      | ✅     | ✅    | ❌       | ❌  | ❌                 |  |
 | [chebi](https://www.ebi.ac.uk/chebi/)                                   | ✅   | ✅  | ✅      | ✅     | ✅    | ✅       | ❌  | ❌                 |                               |
