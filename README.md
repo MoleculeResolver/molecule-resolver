@@ -41,7 +41,7 @@ The MoleculeResolver does not offer all options/configurations for each service 
 | [pubchem](https://pubchem.ncbi.nlm.nih.gov/)</li></ul>                           | ✅   | ✅  | ✅      | ✅     | ✅    | ✅       | ✅  | ✅                 | - [PubChemPy](https://github.com/mcs07/PubChemPy "wrapper for the pubchem PUG API")                              |
 | [srs](https://cdxapps.epa.gov/oms-substance-registry-services/search)   | ✅   | ✅  | ❌      | ❌     | ❌    | ❌       | ❌  | ✅                 |                                                         |
 
-ChemSpider was not used as it is already included in CIR [[1]](https://matt-swain.com/blog/2012-03-20-cirpy-python-nci-chemical-identifier-resolver) [[2]](https://cactus.nci.nih.gov/blog/?p=1456) [[3]](https://github.com/mcs07/ChemSpiPy).
+ChemSpider was not used as it is already included in CIR [[1]](https://matt-swain.com/blog/2012-03-20-cirpy-python-nci-chemical-identifier-resolver) [[2]](https://cactus.nci.nih.gov/blog/?p=1456) [[3]](https://github.com/mcs07/ChemSpiPy). ChemIDplus and the Drug Information Portal were retired in 2022 [[4]](https://www.nlm.nih.gov/pubs/techbull/ja22/ja22_pubchem.html).
 
 ## 🚀 Usage
 
