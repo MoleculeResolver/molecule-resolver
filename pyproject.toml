@@ -17,7 +17,7 @@ regex = "^2023.10.3"
 rdkit = "^2023.3.3"
 requests = "^2.31.0"
 openpyxl = "^3.1.2"
-tqdm = "^4.66.1"
+tqdm = "^4.66.3"
 urllib3 = "^2.0.6"
 xmltodict = "^0.13.0"
 
