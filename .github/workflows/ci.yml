@@ -21,7 +21,7 @@ jobs:
     - name: Install python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.10'
 
     - name: Install poetry
       uses: Gr1N/setup-poetry@v8
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ["3.9", "3.10", "3.11"]
+        python: ["3.10", "3.11"]
 
     steps:
     - name: Checkout repository
@@ -85,7 +85,7 @@ jobs:
     - name: Install python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.10'
     
     - name: Download built package
       uses: actions/download-artifact@v3
