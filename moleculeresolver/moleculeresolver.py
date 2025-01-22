@@ -253,7 +253,9 @@ class MoleculeResolver:
 
         self._module_path = os.path.dirname(__file__)
         if not molecule_cache_db_path:
-            molecule_cache_db_path = os.path.join(self._module_path, "molecule_cache.db")
+            molecule_cache_db_path = os.path.join(
+                self._module_path, "molecule_cache.db"
+            )
 
         self.molecule_cache_db_path = molecule_cache_db_path
         self.molecule_cache_expiration = molecule_cache_expiration
@@ -310,7 +312,7 @@ class MoleculeResolver:
             "cts": [
                 "cas",
                 "smiles",
-              # "name", # I have taken out name because cts works less than 5% of the time
+                # "name", # I have taken out name because cts works less than 5% of the time
             ],
             "nist": ["formula", "name", "cas", "smiles"],
             "opsin": ["name"],
@@ -975,7 +977,7 @@ class MoleculeResolver:
 
             return standardize_mol
 
-        # based on datamol version on https://github.com/datamol-org/datamol
+        # based on MolVS https://github.com/mcs07/MolVS
         mol = copy.deepcopy(mol)
 
         if disconnect_metals:
@@ -1117,6 +1119,9 @@ class MoleculeResolver:
                 if not self.is_valid_InChI(identifier):
                     raise ValueError("You provided an invalid InChI.")
                 given_SMILES.append(self.InChI_to_SMILES(identifier))
+            elif mode == "inchikey":
+                if not self.is_valid_InChIKey(identifier):
+                    raise ValueError("You provided an invalid InChIKey.")
             elif mode == "smiles":
                 if not self.is_valid_SMILES(identifier):
                     raise ValueError("You provided an invalid SMILES.")
@@ -2072,7 +2077,13 @@ class MoleculeResolver:
         )
 
     def group_molecules_by_structure(
-        self, molecules: list[Molecule], group_also_by_services: Optional[bool] = True
+        self,
+        molecules: list[Molecule],
+        group_also_by_services: Optional[bool] = True,
+        differentiate_isomers: Optional[bool] = None,
+        differentiate_tautomers: Optional[bool] = None,
+        differentiate_isotopes: Optional[bool] = None,
+        check_for_resonance_structures: Optional[bool] = None,
     ) -> dict[str, list[Molecule]]:
         """
         Group a list of Molecule objects by their structural similarity.
@@ -2121,7 +2132,14 @@ class MoleculeResolver:
                 equal_SMILES = None
                 old_key = None
                 for key, grouped_molecule_mol in grouped_molecules_molecules.items():
-                    if self.are_equal(cmp_mol, grouped_molecule_mol):
+                    if self.are_equal(
+                        cmp_mol,
+                        grouped_molecule_mol,
+                        differentiate_isomers,
+                        differentiate_tautomers,
+                        differentiate_isotopes,
+                        check_for_resonance_structures,
+                    ):
                         if equal_SMILES is None:
                             equal_SMILES = grouped_molecules_SMILES[key]
                         equal_SMILES = sorted(
@@ -2249,7 +2267,7 @@ class MoleculeResolver:
 
     def filter_and_combine_molecules(
         self,
-        molecules: Union[list[Molecule], Molecule],
+        molecules: Union[list[Optional[Molecule]], Optional[Molecule]],
         required_formula: Optional[str] = None,
         required_charge: Optional[Union[int, str]] = None,
         required_structure_type: Optional[str] = None,
@@ -4155,10 +4173,14 @@ class MoleculeResolver:
         else:
             return java_paths[0]
 
-    def _get_and_run_OPSIN_executable(self, names: list[str], allow_uninterpretable_stereo: Optional[bool] = False) -> list[Optional[str]]:
+    def _get_and_run_OPSIN_executable(
+        self, names: list[str], allow_uninterpretable_stereo: Optional[bool] = False
+    ) -> list[Optional[str]]:
 
-        if not self._OPSIN_executable_path or not os.path.exists(self._OPSIN_executable_path):
-            
+        if not self._OPSIN_executable_path or not os.path.exists(
+            self._OPSIN_executable_path
+        ):
+
             # get bundled version
             possible_OPSIN_executables = sorted(
                 [
@@ -4168,7 +4190,9 @@ class MoleculeResolver:
                 ]
             )
             if possible_OPSIN_executables:
-                self._OPSIN_executable_path = os.path.join(self._module_path, possible_OPSIN_executables[-1])
+                self._OPSIN_executable_path = os.path.join(
+                    self._module_path, possible_OPSIN_executables[-1]
+                )
 
             # update_OPSIN_executable
             response_text = self._resilient_request(
@@ -4177,40 +4201,37 @@ class MoleculeResolver:
 
             if response_text:
                 temp = json.loads(response_text)
-                
+
                 for asset in temp["assets"]:
                     new_filename = asset["name"]
-                    if new_filename.startswith("opsin-cli") and new_filename.endswith(".jar"):
+                    if new_filename.startswith("opsin-cli") and new_filename.endswith(
+                        ".jar"
+                    ):
 
                         download_url = asset["browser_download_url"]
-                        new_filename = download_url.split('/')[-1]
+                        new_filename = download_url.split("/")[-1]
                         if self._OPSIN_executable_path:
                             if not self._OPSIN_executable_path.endswith(new_filename):
                                 os.remove(self._OPSIN_executable_path)
                                 self._OPSIN_executable_path = None
-                        
+
                         if not self._OPSIN_executable_path:
-                            self._OPSIN_executable_path = os.path.join(self._module_path, new_filename)
+                            self._OPSIN_executable_path = os.path.join(
+                                self._module_path, new_filename
+                            )
                             with closing(urllib.request.urlopen(download_url)) as r:
-                                with open(
-                                    self._OPSIN_executable_path, "wb"
-                                ) as f:
+                                with open(self._OPSIN_executable_path, "wb") as f:
                                     for chunk in r:
                                         f.write(chunk)
                         break
             else:
-                if (
-                    "OPSIN_executable_not_available"
-                    not in self._message_slugs_shown
-                ):
-                    self._message_slugs_shown.append(
-                        "OPSIN_executable_not_available"
-                    )
+                if "OPSIN_executable_not_available" not in self._message_slugs_shown:
+                    self._message_slugs_shown.append("OPSIN_executable_not_available")
                     warnings.warn(
                         "The newest version of the OPSIN executable could not be downloaded, "
                         "the version shipped with MoleculeResolver will be used instead."
                     )
-        
+
         # execute opsin
         if self._OPSIN_tempfolder is None or not os.path.exists(
             self._OPSIN_tempfolder.name
@@ -4218,7 +4239,7 @@ class MoleculeResolver:
             self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
                 prefix="OPSIN_tempfolder_"
             )
-    
+
         unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
         input_file = os.path.join(self._OPSIN_tempfolder.name, f"input_{unique_id}.txt")
         with open(input_file, "w", encoding="utf8") as f:
@@ -4243,7 +4264,9 @@ class MoleculeResolver:
             cwd=self._OPSIN_tempfolder.name,
         )
 
-        with open(os.path.join(self._OPSIN_tempfolder.name, f"output_{unique_id}.txt"), "r") as f:
+        with open(
+            os.path.join(self._OPSIN_tempfolder.name, f"output_{unique_id}.txt"), "r"
+        ) as f:
             output = f.read()
 
         output_values = output.split("\n")
@@ -4258,7 +4281,7 @@ class MoleculeResolver:
             )
 
         return SMILES
-    
+
     def get_molecule_from_OPSIN(
         self,
         name: str,
@@ -4333,24 +4356,32 @@ class MoleculeResolver:
                             ):
                                 SMILES = SMILES_from_InChI
 
-                        additional_information = ""
                         if "warnings" in temp:
                             additional_information = "WARNINGS: " + ", ".join(
                                 temp["warnings"]
                             )
 
-                        if SMILES:
-                            molecules.append(
-                                Molecule(
-                                    SMILES,
-                                    service="opsin",
-                                    mode="name",
-                                    additional_information=additional_information,
-                                )
-                            )
                 else:
-                    # for single name, fall back to offline OPSIN
-                    molecules = self.get_molecule_from_OPSIN_batchmode([name])
+                    # fall back to offline OPSIN
+                    SMILES = self._get_and_run_OPSIN_executable(
+                        [name], allow_uninterpretable_stereo=allow_warnings
+                    )
+                    additional_information = (
+                        ("allow_uninterpretable_stereo" if allow_warnings else ""),
+                    )
+                    if SMILES:
+                        SMILES = SMILES[0]
+
+                if SMILES:
+                    molecules.append(
+                        Molecule(
+                            SMILES,
+                            synonyms=[name],
+                            service="opsin",
+                            mode="name",
+                            additional_information=additional_information,
+                        )
+                    )
 
         return self.filter_and_combine_molecules(
             molecules,
@@ -4361,7 +4392,7 @@ class MoleculeResolver:
 
     def get_molecule_from_OPSIN_batchmode(
         self, names: list[str], allow_uninterpretable_stereo: Optional[bool] = False
-    ) -> list[Optional[Molecule]]:
+    ) -> list[Optional[list[Molecule]]]:
         """
         Convert a batch of chemical names to molecules using OPSIN in offline mode.
 
@@ -4372,7 +4403,9 @@ class MoleculeResolver:
             allow_uninterpretable_stereo (Optional[bool]): Allows OPSIN to ignore uninterpretable stereochemistry.
 
         Returns:
-            list[Optional[Molecule]]: A list of Molecule objects corresponding to the input names.
+            list[Optional[list[Molecule]]]: A list where each element corresponds to an input
+            identifier. Each element is either a list of Molecule objects (if found) or
+            None (if not found or invalid).
 
         Raises:
             FileNotFoundError: If the Java installation could not be found.
@@ -4405,7 +4438,9 @@ class MoleculeResolver:
             if len(identifiers_to_search) == 0:
                 return results
 
-            SMILES = self._get_and_run_OPSIN_executable(identifiers_to_search, allow_uninterpretable_stereo)
+            SMILES = self._get_and_run_OPSIN_executable(
+                identifiers_to_search, allow_uninterpretable_stereo
+            )
 
             for molecule_index, name, smi in zip(
                 indices_of_identifiers_to_search,
@@ -5463,7 +5498,7 @@ class MoleculeResolver:
                 n_try = 0
                 while True:
                     poll_response_text = self._resilient_request(
-                        f"{COMPTOX_URL}/status/{job_id}/?{self.get_CompTox_request_unique_id()}"
+                        f"{COMPTOX_URL}status/{job_id}?{self.get_CompTox_request_unique_id()}"
                     )
 
                     if poll_response_text.strip().lower() == "true":
@@ -5480,7 +5515,7 @@ class MoleculeResolver:
                 return download_url
 
             post_request_text = self._resilient_request(
-                f"{COMPTOX_URL}/?{self.get_CompTox_request_unique_id()}",
+                f"{COMPTOX_URL}?{self.get_CompTox_request_unique_id()}",
                 json=postdata,
                 request_type="post",
                 accepted_status_codes=[202],
@@ -8594,6 +8629,7 @@ class MoleculeResolver:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
 
         if try_to_choose_best_structure:
+
             SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
             if len(SMILES_with_highest_number_of_crosschecks) > 1:
                 # if SMILES are the same ignoring isomeric info, use the more specific one:
@@ -8627,25 +8663,23 @@ class MoleculeResolver:
                                     SMILES_map.append(SMILES)
                                     names_map.append(name)
 
-                        use_opsin_batch = False  # self._OPSIN_tempfolder is not None
-                        if use_opsin_batch:
-                            opsin_results = self.get_molecule_from_OPSIN_batchmode(
-                                names_map
+                        SMILES_found_by_opsin_from_synonyms = (
+                            self._get_and_run_OPSIN_executable(
+                                names_map, allow_uninterpretable_stereo=True
                             )
-                        else:
-                            opsin_results = [
-                                self.get_molecule_from_OPSIN(name) for name in names_map
-                            ]
+                        )
 
                         SMILES_preferred_by_opsin = []
                         for (
                             original_SMILES_found,
-                            molecule_found_by_opsin_from_synonym,
-                        ) in zip(SMILES_map, opsin_results, strict=True):
-                            if molecule_found_by_opsin_from_synonym:
+                            SMILES_found_by_opsin_from_synonym,
+                        ) in zip(
+                            SMILES_map, SMILES_found_by_opsin_from_synonyms, strict=True
+                        ):
+                            if SMILES_found_by_opsin_from_synonym:
                                 if (
                                     original_SMILES_found
-                                    == molecule_found_by_opsin_from_synonym.SMILES
+                                    == SMILES_found_by_opsin_from_synonym
                                 ):
                                     SMILES_preferred_by_opsin.append(
                                         original_SMILES_found
@@ -8660,24 +8694,7 @@ class MoleculeResolver:
                     if SMILES_preferred_by_opsin:
                         SMILES_preferred = SMILES_preferred_by_opsin
                     else:
-                        # usually when chebi does not agree with others chebi is wrong
-                        # this is used to our advantage here
-                        SMILES_not_from_chebi = []
-                        for (
-                            temptative_SMILES,
-                            temptative_molecules,
-                        ) in grouped_molecules.items():
-                            molecules_from_chebi = [
-                                t_mol
-                                for t_mol in temptative_molecules
-                                if "chebi" in t_mol.service
-                            ]
-                            if len(molecules_from_chebi) == 0:
-                                SMILES_not_from_chebi.extend(
-                                    [temptative_SMILES] * len(temptative_molecules)
-                                )
-
-                        c = collections.Counter(SMILES_not_from_chebi).most_common()
+                        c = []
                         if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
                             SMILES_preferred = c[0][0]
                         else:
@@ -8686,6 +8703,7 @@ class MoleculeResolver:
                                 warnings.warn(
                                     f"\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n"
                                 )
+
             molec = self.combine_molecules(
                 SMILES_preferred, grouped_molecules[SMILES_preferred]
             )
