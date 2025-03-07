@@ -4173,8 +4173,9 @@ class MoleculeResolver:
         else:
             return java_paths[0]
 
+    @cache
     def _get_and_run_OPSIN_executable(
-        self, names: list[str], allow_uninterpretable_stereo: Optional[bool] = False
+        self, names: tuple[str], allow_uninterpretable_stereo: Optional[bool] = False
     ) -> list[Optional[str]]:
 
         if not self._OPSIN_executable_path or not os.path.exists(
@@ -4196,7 +4197,8 @@ class MoleculeResolver:
 
             # update_OPSIN_executable
             response_text = self._resilient_request(
-                "https://api.github.com/repos/dan2097/opsin/releases/latest"
+                "https://api.github.com/repos/dan2097/opsin/releases/latest",
+                rejected_status_codes=[403, 404]
             )
 
             if response_text:
@@ -4364,7 +4366,7 @@ class MoleculeResolver:
                 else:
                     # fall back to offline OPSIN
                     SMILES = self._get_and_run_OPSIN_executable(
-                        [name], allow_uninterpretable_stereo=allow_warnings
+                        (name,), allow_uninterpretable_stereo=allow_warnings
                     )
                     additional_information = (
                         ("allow_uninterpretable_stereo" if allow_warnings else ""),
@@ -4439,7 +4441,7 @@ class MoleculeResolver:
                 return results
 
             SMILES = self._get_and_run_OPSIN_executable(
-                identifiers_to_search, allow_uninterpretable_stereo
+                tuple(identifiers_to_search), allow_uninterpretable_stereo
             )
 
             for molecule_index, name, smi in zip(
@@ -7622,7 +7624,7 @@ class MoleculeResolver:
         services_to_use: Optional[list[str]] = None,
         search_iupac_name: Optional[bool] = False,
         interactive: Optional[bool] = False,
-        minimum_number_of_cross_checks: Optional[int] = 1,
+        minimum_number_of_crosschecks: Optional[int] = 1,
         ignore_exceptions: Optional[bool] = False,
     ) -> tuple[list, list[int]]:
         """Finds salt molecules based on the provided identifiers and criteria.
@@ -7656,7 +7658,7 @@ class MoleculeResolver:
             interactive (Optional[bool]): If True, allows for interactive user input if necessary.
             Defaults to False.
 
-            minimum_number_of_cross_checks (Optional[int]): Minimum number of services
+            minimum_number_of_crosschecks (Optional[int]): Minimum number of services
             to cross-check for validity. Defaults to 1.
 
             ignore_exceptions (Optional[bool]): If True, ignores exceptions that may occur during
@@ -7696,10 +7698,10 @@ class MoleculeResolver:
         if required_structure_type is None:
             required_structure_type = "salt"
 
-        if minimum_number_of_cross_checks is None:
-            minimum_number_of_cross_checks = 1
+        if minimum_number_of_crosschecks is None:
+            minimum_number_of_crosschecks = 1
 
-        salt_info = self.find_single_molecule_cross_checked(
+        salt_info = self.find_single_molecule_crosschecked(
             identifiers,
             modes=modes,
             required_formula=required_formula,
@@ -7707,7 +7709,7 @@ class MoleculeResolver:
             required_structure_type=required_structure_type,
             services_to_use=services_to_use,
             search_iupac_name=search_iupac_name,
-            minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+            minimum_number_of_crosschecks=minimum_number_of_crosschecks,
             ignore_exceptions=ignore_exceptions,
         )
 
@@ -7759,14 +7761,14 @@ class MoleculeResolver:
                     ionic_mol = self.get_from_SMILES(ionic_SMILES)
                     ionic_charge = Chem.rdmolops.GetFormalCharge(ionic_mol)
 
-                    ionic_info = self.find_single_molecule_cross_checked(
+                    ionic_info = self.find_single_molecule_crosschecked(
                         ionic_SMILES,
                         modes="SMILES",
                         required_charge=ionic_charge,
                         required_structure_type="ion",
                         services_to_use=services_to_use,
                         search_iupac_name=search_iupac_name,
-                        minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+                        minimum_number_of_crosschecks=minimum_number_of_crosschecks,
                         ignore_exceptions=ignore_exceptions,
                     )
 
@@ -7813,14 +7815,14 @@ class MoleculeResolver:
                 synonym_parts = synonym.split(" ")
                 possible_cation_name = synonym_parts[0]
 
-                cation_info = self.find_single_molecule_cross_checked(
+                cation_info = self.find_single_molecule_crosschecked(
                     possible_cation_name,
                     modes=["name"],
                     required_charge="positive",
                     required_structure_type="ion",
                     services_to_use=services_to_use,
                     search_iupac_name=search_iupac_name,
-                    minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+                    minimum_number_of_crosschecks=minimum_number_of_crosschecks,
                     ignore_exceptions=ignore_exceptions,
                 )
 
@@ -7839,14 +7841,14 @@ class MoleculeResolver:
 
                 possible_anion_name = synonym_parts[1:]
 
-                anion_info = self.find_single_molecule_cross_checked(
+                anion_info = self.find_single_molecule_crosschecked(
                     possible_anion_name,
                     modes=["name"],
                     required_charge="negative",
                     required_structure_type="ion",
                     services_to_use=services_to_use,
                     search_iupac_name=search_iupac_name,
-                    minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+                    minimum_number_of_crosschecks=minimum_number_of_crosschecks,
                     ignore_exceptions=ignore_exceptions,
                 )
 
@@ -8534,7 +8536,7 @@ class MoleculeResolver:
             1,
         )
 
-    def find_single_molecule_cross_checked(
+    def find_single_molecule_crosschecked(
         self,
         identifiers: list[str],
         modes: Optional[list[str]] = ["name"],
@@ -8543,7 +8545,7 @@ class MoleculeResolver:
         required_structure_type: Optional[str] = None,
         services_to_use: Optional[list[str]] = None,
         search_iupac_name: Optional[bool] = False,
-        minimum_number_of_cross_checks: Optional[int] = 1,
+        minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
     ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
@@ -8560,7 +8562,7 @@ class MoleculeResolver:
             required_structure_type (Optional[str]): Required structure type. Defaults to None.
             services_to_use (Optional[list[str]]): List of services to use. If None, all available services are used.
             search_iupac_name (Optional[bool]): Whether to search for IUPAC names. Defaults to False.
-            minimum_number_of_cross_checks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
+            minimum_number_of_crosschecks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
             try_to_choose_best_structure (Optional[bool]): Whether to attempt to select the best structure. Defaults to True.
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
 
@@ -8570,7 +8572,7 @@ class MoleculeResolver:
             or None if no matching molecule is found.
 
         Raises:
-            ValueError: If minimum_number_of_cross_checks exceeds the number of services used.
+            ValueError: If minimum_number_of_crosschecks exceeds the number of services used.
 
         Notes:
             - The method searches across multiple services and cross-checks the results.
@@ -8583,11 +8585,11 @@ class MoleculeResolver:
         if services_to_use is None:
             services_to_use = self._available_services
 
-        if minimum_number_of_cross_checks is None:
-            minimum_number_of_cross_checks = 1
-        if not minimum_number_of_cross_checks <= len(services_to_use):
+        if minimum_number_of_crosschecks is None:
+            minimum_number_of_crosschecks = 1
+        if not minimum_number_of_crosschecks <= len(services_to_use):
             raise ValueError(
-                "The minimum_number_of_cross_checks exceeds the number of services that are used."
+                "The minimum_number_of_crosschecks exceeds the number of services that are used."
             )
 
         molecules = []
@@ -8619,12 +8621,12 @@ class MoleculeResolver:
             [len(v) for v in grouped_molecules.values()]
         )
 
-        if maximum_number_of_crosschecks_found < minimum_number_of_cross_checks:
+        if maximum_number_of_crosschecks_found < minimum_number_of_crosschecks:
             return None
 
         SMILES_with_highest_number_of_crosschecks = []
         for group_SMILES, group_molecules in grouped_molecules.items():
-            if len(group_molecules) >= minimum_number_of_cross_checks:
+            if len(group_molecules) >= minimum_number_of_crosschecks:
                 if len(group_molecules) == maximum_number_of_crosschecks_found:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
 
@@ -8665,7 +8667,7 @@ class MoleculeResolver:
 
                         SMILES_found_by_opsin_from_synonyms = (
                             self._get_and_run_OPSIN_executable(
-                                names_map, allow_uninterpretable_stereo=True
+                                tuple(names_map), allow_uninterpretable_stereo=True
                             )
                         )
 
@@ -8724,7 +8726,7 @@ class MoleculeResolver:
         required_structure_types: Optional[list[str]] = None,
         services_to_use: Optional[list[str]] = None,
         search_iupac_name: Optional[bool] = False,
-        minimum_number_of_cross_checks: Optional[int] = 1,
+        minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         progressbar: Optional[bool] = True,
         max_workers: Optional[int] = 5,
@@ -8759,7 +8761,7 @@ class MoleculeResolver:
             search_iupac_name (Optional[bool]): If True, attempts to search using the IUPAC name.
             Defaults to False.
 
-            minimum_number_of_cross_checks (Optional[int]): Minimum number of services
+            minimum_number_of_crosschecks (Optional[int]): Minimum number of services
             to cross-check for validity. Defaults to 1.
 
             try_to_choose_best_structure (Optional[bool]): If True, attempts to select the best
@@ -8874,7 +8876,7 @@ class MoleculeResolver:
             required_structure_types,
             strict=True,
         ):
-            if minimum_number_of_cross_checks is None:
+            if minimum_number_of_crosschecks is None:
                 args.append(
                     (
                         identifier,
@@ -8898,7 +8900,7 @@ class MoleculeResolver:
                         required_structure_type,
                         services_to_use,
                         search_iupac_name,
-                        minimum_number_of_cross_checks,
+                        minimum_number_of_crosschecks,
                         try_to_choose_best_structure,
                         ignore_exceptions,
                     )
@@ -8906,11 +8908,11 @@ class MoleculeResolver:
 
         print(message_getting_from_services)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            if not minimum_number_of_cross_checks:
+            if not minimum_number_of_crosschecks:
                 results = _find(executor.map(self.find_single_molecule, *zip(*args)))
             else:
                 results = _find(
-                    executor.map(self.find_single_molecule_cross_checked, *zip(*args))
+                    executor.map(self.find_single_molecule_crosschecked, *zip(*args))
                 )
 
         return results
