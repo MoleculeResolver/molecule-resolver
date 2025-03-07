@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "molecule-resolver"
-version = "0.3.3"
+version = "0.3.4"
 description = "A package to use several web services to find molecule structures, synonyms and CAS."
 authors = [
     "Simon Muller <simon.mueller@tuhh.de>",
@@ -11,7 +11,7 @@ readme = "README.md"
 packages = [{ include = "moleculeresolver" }]
 
 [tool.poetry.dependencies]
-python = "^3.10,<3.12"
+python = "^3.10,<3.14"
 prompt-toolkit = "^3.0.39"
 regex = "^2023.10.3"
 rdkit = "^2023.3.3"
