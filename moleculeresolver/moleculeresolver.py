@@ -1556,14 +1556,14 @@ class MoleculeResolver:
         if unescape_html:
             chemical_name = html.unescape(chemical_name)
 
-        for old, new in map_to_replace:
-            chemical_name = chemical_name.replace(old, new)
-
         if normalize:
             nfkd_form = unicodedata.normalize("NFKD", chemical_name)
             chemical_name = "".join(
                 [c for c in nfkd_form if not unicodedata.combining(c)]
             )
+
+        for old, new in map_to_replace:
+            chemical_name = chemical_name.replace(old, new)
 
         chemical_name = regex.sub(r"\s+", " ", chemical_name)
 
@@ -4198,7 +4198,7 @@ class MoleculeResolver:
             # update_OPSIN_executable
             response_text = self._resilient_request(
                 "https://api.github.com/repos/dan2097/opsin/releases/latest",
-                rejected_status_codes=[403, 404]
+                rejected_status_codes=[403, 404],
             )
 
             if response_text:
@@ -8665,11 +8665,9 @@ class MoleculeResolver:
                                     SMILES_map.append(SMILES)
                                     names_map.append(name)
 
-                        SMILES_found_by_opsin_from_synonyms = (
-                            self._get_and_run_OPSIN_executable(
-                                tuple(names_map), allow_uninterpretable_stereo=True
-                            )
-                        )
+                        SMILES_found_by_opsin_from_synonyms = [
+                            self.get_molecule_from_OPSIN(name) for name in names_map
+                        ]
 
                         SMILES_preferred_by_opsin = []
                         for (
@@ -8794,6 +8792,9 @@ class MoleculeResolver:
         # reinitialize session
         self._session = None
         self._init_session(pool_maxsize=max_workers * 2)
+
+        if isinstance(modes, str):
+            modes = [modes] * len(identifiers)
 
         if services_to_use is None:
             services_to_use = self._available_services
