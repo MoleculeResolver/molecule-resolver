@@ -933,7 +933,7 @@ class MoleculeResolver:
         uncharge: Optional[bool] = None,
         try_assign_sterochemistry: Optional[bool] = None,
         remove_atom_mapping_number: Optional[bool] = None,
-        use_rdkit_normalization_exceptions: Optional[bool] = True,
+        fix_rdkit_normalization_exceptions: Optional[bool] = True,
     ) -> Optional[Chem.rdchem.Mol]:
         """
         Standardize an RDKit molecule object.
@@ -1029,7 +1029,7 @@ class MoleculeResolver:
         if normalize:
             mol = rdMolStandardize.Normalize(mol)
             # fix rdkit normalization issues
-            if use_rdkit_normalization_exceptions:
+            if fix_rdkit_normalization_exceptions:
                 mol = self.convert_zwitterion_to_sulfynil(mol)
 
         if reionize:
