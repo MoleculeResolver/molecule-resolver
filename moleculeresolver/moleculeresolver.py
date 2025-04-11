@@ -886,13 +886,11 @@ class MoleculeResolver:
 
     def convert_zwitterion_to_sulfynil(
         self,
-        mol: Chem.rdchem.Mol):
+        mol: Chem.Mol
+    ) -> Chem.Mol:
         """
         Converts the zwitterionic form [S+][O-] in a given RDKit molecule to the sulfynil group O=S.
-
-        This function iterates over the atoms in the molecule to identify sulfur atoms with a positive charge
-        and their neighboring oxygen atoms with a negative charge. It then modifies the bond between these atoms
-        to a double bond and resets their formal charges to zero.
+        Matches are done via SMARTS, and modifications are applied directly.
 
         Parameters:
         mol (rdkit.Chem.Mol): The RDKit molecule object to be modified.
@@ -900,21 +898,40 @@ class MoleculeResolver:
         Returns:
         rdkit.Chem.Mol: The modified RDKit molecule object with the zwitterionic form converted to the sulfynil group.
         """
-        # Iterate over atoms in the molecule
-        for atom in mol.GetAtoms():
-            # Check for sulfur atom with positive charge
-            if atom.GetSymbol() == 'S' and atom.GetFormalCharge() == 1:
-                # Iterate over neighbors to find the oxygen with negative charge
-                for neighbor in atom.GetNeighbors():
-                    if neighbor.GetSymbol() == 'O' and neighbor.GetFormalCharge() == -1:
-                        # Set the bond between S and O to double bond
-                        bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
-                        bond.SetBondType(Chem.rdchem.BondType.DOUBLE)
-                        
-                        # Reset charges
-                        atom.SetFormalCharge(0)
-                        neighbor.SetFormalCharge(0)
-        return mol
+        pattern = Chem.MolFromSmarts('[S+]-[O-]')
+        matches = mol.GetSubstructMatches(pattern)
+        
+        if not matches:
+            return mol  # No zwitterionic pattern found, return molecule as-is
+
+        rw_mol = Chem.RWMol(mol)
+
+        for match in matches:
+            atom1 = rw_mol.GetAtomWithIdx(match[0])
+            atom2 = rw_mol.GetAtomWithIdx(match[1])
+
+            # Identify S+ and O- unambiguously
+            if atom1.GetSymbol() == 'S' and atom1.GetFormalCharge() == 1 and \
+            atom2.GetSymbol() == 'O' and atom2.GetFormalCharge() == -1:
+                s_idx, o_idx = match[0], match[1]
+            elif atom2.GetSymbol() == 'S' and atom2.GetFormalCharge() == 1 and \
+                atom1.GetSymbol() == 'O' and atom1.GetFormalCharge() == -1:
+                s_idx, o_idx = match[1], match[0]
+            else:
+                continue  # skip malformed matches
+
+            # Change bond to double
+            bond = rw_mol.GetBondBetweenAtoms(s_idx, o_idx)
+            if bond:
+                bond.SetBondType(Chem.rdchem.BondType.DOUBLE)
+
+            # Set formal charges to 0
+            rw_mol.GetAtomWithIdx(s_idx).SetFormalCharge(0)
+            rw_mol.GetAtomWithIdx(o_idx).SetFormalCharge(0)
+
+        # Sanitize the molecule to ensure valence and aromaticity are updated
+        Chem.SanitizeMol(rw_mol)
+        return rw_mol.GetMol()
     
     def standardize_mol(
         self,
@@ -926,6 +943,7 @@ class MoleculeResolver:
         uncharge: Optional[bool] = None,
         try_assign_sterochemistry: Optional[bool] = None,
         remove_atom_mapping_number: Optional[bool] = None,
+        convert_zwitterion_to_sulfynil: Optional[bool] = True,
     ) -> Optional[Chem.rdchem.Mol]:
         """
         Standardize an RDKit molecule object.
@@ -948,6 +966,8 @@ class MoleculeResolver:
 
             remove_atom_mapping_number (Optional[bool]): Whether to remove atom mapping numbers. Defaults to None.
 
+            convert_zwitterion_to_sulfynil (Optional[bool]): Whether to convert the zwitterionic form [S+][O-] to the sulfynil group O=S during normalization. Defaults to True.
+
         Returns:
             Optional[Chem.rdchem.Mol]: The standardized RDKit molecule, or None if standardization fails.
 
@@ -957,7 +977,7 @@ class MoleculeResolver:
         Notes:
             - If any standardization option is None, it defaults to the values set on class creation or default values.
             - For molecules with multiple fragments, each fragment is standardized separately.
-            - Special handling is implemented for certain molecules (e.g., DMSO) during normalization.
+            - Special handling is implemented for certain molecules (e.g., DMSO) during normalization converting the zwitterionic form [S+][O-] to the sulfynil group O=S.
             - Uses RDKit's standardization tools (e.g., MetalDisconnector, Normalize, Reionizer).
         """
         if mol is None:
@@ -1019,7 +1039,8 @@ class MoleculeResolver:
         if normalize:
             mol = rdMolStandardize.Normalize(mol)
             # correction of smiles with sulfynil group from the zwitterionic form to the orginal representation
-            mol = self.convert_zwitterion_to_sulfynil(mol)
+            if convert_zwitterion_to_sulfynil:
+                mol = self.convert_zwitterion_to_sulfynil(mol)
 
         if reionize:
             reionizer = rdMolStandardize.Reionizer()
