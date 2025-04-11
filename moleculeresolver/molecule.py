@@ -70,4 +70,6 @@ class Molecule:
                         {key: [m.to_dict("recursive") for m in value]}
                     )
                 d["found_molecules"] = new_found_molecules
+        else:
+            pass
         return d
