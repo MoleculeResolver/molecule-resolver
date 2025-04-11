@@ -5,3 +5,5 @@ __pycache__/
 moleculeresolver/molecule_cache.*
 .venv/
 *.db*
+debug.log
+*build/

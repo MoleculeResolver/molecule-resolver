@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "molecule-resolver"
-version = "0.2.1"
+version = "0.3.4"
 description = "A package to use several web services to find molecule structures, synonyms and CAS."
 authors = [
     "Simon Muller <simon.mueller@tuhh.de>",
@@ -11,13 +11,13 @@ readme = "README.md"
 packages = [{ include = "moleculeresolver" }]
 
 [tool.poetry.dependencies]
-python = "^3.9,<3.12"
+python = "^3.10,<3.14"
 prompt-toolkit = "^3.0.39"
 regex = "^2023.10.3"
-rdkit = "^2023.3.3"
+rdkit = ">=2023.3.3"
 requests = "^2.31.0"
 openpyxl = "^3.1.2"
-tqdm = "^4.66.1"
+tqdm = "^4.66.3"
 urllib3 = "^2.0.6"
 xmltodict = "^0.13.0"
 
@@ -25,6 +25,9 @@ xmltodict = "^0.13.0"
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
 pytest-mock = "^3.12.0"
+sphinx = "^8.1.3"
+sphinx-autobuild = "^2024.10.3"
+sphinx-autoapi = "^3.4.0"
 
 [build-system]
 requires = ["poetry-core"]

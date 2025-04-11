@@ -11,6 +11,7 @@ import os
 from PIL import ImageFont, ImageDraw
 import platform
 import requests
+import shutil
 import subprocess
 import tempfile
 import time
@@ -219,7 +220,8 @@ class MoleculeResolver:
         Args:
             available_service_API_keys (Optional[dict[str, Optional[str]]]): A dictionary of API keys for various services. Defaults to None.
 
-            molecule_cache_db_path (Optional[str]): Path to the molecule cache database. Defaults to None.
+            molecule_cache_db_path (Optional[str]): Path to the molecule cache database. Defaults to using the same cache for all MoleculeResolver instances
+            on a specific environment.
 
             molecule_cache_expiration (Optional[datetime]): Expiration time for cached molecules. Defaults to None.
 
@@ -249,12 +251,16 @@ class MoleculeResolver:
         if "comptox" not in available_service_API_keys:
             available_service_API_keys["comptox"] = None
 
+        self._module_path = os.path.dirname(__file__)
         if not molecule_cache_db_path:
-            module_path = os.path.dirname(__file__)
-            molecule_cache_db_path = os.path.join(module_path, "molecule_cache.db")
+            molecule_cache_db_path = os.path.join(
+                self._module_path, "molecule_cache.db"
+            )
 
         self.molecule_cache_db_path = molecule_cache_db_path
         self.molecule_cache_expiration = molecule_cache_expiration
+
+        self._OPSIN_executable_path = None
 
         self.available_service_API_keys = available_service_API_keys
 
@@ -285,7 +291,9 @@ class MoleculeResolver:
         self._differentiate_tautomers = differentiate_tautomers
         self._differentiate_isotopes = differentiate_isotopes
         self._check_for_resonance_structures = check_for_resonance_structures
-        self._show_warning_if_non_unique_structure_was_found = show_warning_if_non_unique_structure_was_found
+        self._show_warning_if_non_unique_structure_was_found = (
+            show_warning_if_non_unique_structure_was_found
+        )
 
         self._available_services_with_batch_capabilities = ["srs", "comptox", "pubchem"]
         self._message_slugs_shown = []
@@ -295,25 +303,37 @@ class MoleculeResolver:
         if self._java_path:
             self._available_services_with_batch_capabilities.insert(0, "opsin")
         self._OPSIN_tempfolder = None
-        self._supported_modes_by_services = {
+        self.supported_modes_by_services = {
             "cas_registry": ["name", "smiles", "inchi", "cas"],
             "chebi": ["name", "cas", "formula", "smiles", "inchi", "inchikey"],
             "chemeo": ["name", "cas", "smiles", "inchi", "inchikey"],
             "cir": ["formula", "name", "cas", "smiles", "inchi", "inchikey"],
             "comptox": ["name", "cas", "inchikey"],
-            "cts": ["name", "cas", "smiles"],
+            "cts": [
+                "cas",
+                "smiles",
+                # "name", # I have taken out name because cts works less than 5% of the time
+            ],
             "nist": ["formula", "name", "cas", "smiles"],
             "opsin": ["name"],
             "pubchem": ["name", "cas", "smiles", "formula", "inchi", "inchikey", "cid"],
             "srs": ["name", "cas"],
         }
-        self._available_services = sorted(
-            list(self._supported_modes_by_services.keys())
-        )
-        self._supported_modes = []
-        for modes in self._supported_modes_by_services.values():
-            self._supported_modes.extend(modes)
-        self._supported_modes = sorted(list(set(self._supported_modes)))
+        self._available_services = sorted(list(self.supported_modes_by_services.keys()))
+        self.supported_modes = []
+        self.supported_services_by_mode = {}
+        for service, service_modes in self.supported_modes_by_services.items():
+            self.supported_modes.extend(service_modes)
+            for mode in service_modes:
+                if mode not in self.supported_services_by_mode:
+                    self.supported_services_by_mode[mode] = []
+                self.supported_services_by_mode[mode].append(service)
+
+        self.supported_services_by_mode = {
+            k: sorted(self.supported_services_by_mode[k])
+            for k in sorted(self.supported_services_by_mode)
+        }
+        self.supported_modes = sorted(list(set(self.supported_modes)))
 
         self.CAS_regex_with_groups = regex.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
         self.CAS_regex = r"(\d{2,7}-\d{2}-\d)"
@@ -329,9 +349,10 @@ class MoleculeResolver:
         self.InChI_regex_compiled = regex.compile(
             r"^InChI=\dS?\/[0-9a-ik-zA-IK-Z]+\/[0-9a-ik-zA-IK-Z+\-\(\)\\\/,\?]*$"
         )
-        self.InChICode_regex_compiled = regex.compile(
+        self.InChIKey_regex_compiled = regex.compile(
             r"^[A-Z]{14}\-[A-Z]{8}[SN][A-Z]\-[A-Z]$"
         )
+
         self.chemeo_API_token_regex_compiled = regex.compile(r"[a-zA-Z0-9_]+")
         self.comptox_API_token_regex_compiled = regex.compile(r"[a-z0-9\-]+")
         self.html_tag_regex_compiled = regex.compile(r"<.*?>")
@@ -709,9 +730,11 @@ class MoleculeResolver:
                 if n_try > max_retries:
                     if isinstance(error, requests.exceptions.ConnectionError):
                         raise error
-                    
+
                     if response.status_code in offline_status_codes:
-                        raise requests.exceptions.ConnectionError("The service is probably offline.")
+                        raise requests.exceptions.ConnectionError(
+                            "The service is probably offline."
+                        )
 
                     if response is not None:
                         print(
@@ -986,7 +1009,7 @@ class MoleculeResolver:
 
             return standardize_mol
 
-        # based on datamol version on https://github.com/datamol-org/datamol
+        # based on MolVS https://github.com/mcs07/MolVS
         mol = copy.deepcopy(mol)
 
         if disconnect_metals:
@@ -1128,6 +1151,9 @@ class MoleculeResolver:
                 if not self.is_valid_InChI(identifier):
                     raise ValueError("You provided an invalid InChI.")
                 given_SMILES.append(self.InChI_to_SMILES(identifier))
+            elif mode == "inchikey":
+                if not self.is_valid_InChIKey(identifier):
+                    raise ValueError("You provided an invalid InChIKey.")
             elif mode == "smiles":
                 if not self.is_valid_SMILES(identifier):
                     raise ValueError("You provided an invalid SMILES.")
@@ -1229,11 +1255,11 @@ class MoleculeResolver:
             if context == "get_molecule" or context == "get_molecules_batch":
                 if not isinstance(modes, str):
                     raise TypeError("The mode parameter can only be a string.")
-                if modes not in self._supported_modes:
+                if modes not in self.supported_modes:
                     raise ValueError("The mode parameter can only be a supported mode.")
                 if (
                     services is not None
-                    and modes not in self._supported_modes_by_services[services]
+                    and modes not in self.supported_modes_by_services[services]
                 ):
                     raise ValueError(
                         f"The chosen mode ({modes}) is not compatible with the service {services}."
@@ -1365,11 +1391,12 @@ class MoleculeResolver:
                         "required_structure_type must be one of the following: 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ion','mixture_neutrals_salts', 'mixture_neutrals_ions'"
                     )
 
-    def remove_non_printable_characters(self, string_input: str) -> str:
+    def replace_non_printable_characters(self, string_input: str) -> str:
         """
-        Removes all non-printable characters from the given string.
+        Replaces all non-printable characters from the given string.
 
-        This function iterates through each character in the input string and
+        This function replaces different white space types by a simple white space,
+        then it iterates through each character in the input string and
         keeps only the printable characters, effectively removing any non-printable
         characters such as control characters or certain Unicode characters.
 
@@ -1379,7 +1406,7 @@ class MoleculeResolver:
         Returns:
             str: A new string containing only the printable characters from the input.
         """
-
+        string_input = regex.sub(r"[\s\u200B\u2060\uFEFF]+", " ", string_input)
         return "".join([c for c in string_input if c.isprintable()])
 
     @cache
@@ -1423,8 +1450,8 @@ class MoleculeResolver:
             - This method is cached for performance optimization.
 
         Example:
-            >>> clean_chemical_name("α-Pinene (97%)", spell_out_greek_characters=True)
-            'alpha-Pinene (97%)'
+            >>> clean_chemical_name("α-Pinene", spell_out_greek_characters=True)
+            'alpha-Pinene'
             >>> clean_chemical_name("Sodium chloride, ≥99%", for_filename=True)
             'sodiumchloride99'
         """
@@ -1538,6 +1565,7 @@ class MoleculeResolver:
         map_to_replace = [
             ("’", "'"),
             ("′", "'"),
+            ("‘", "'"),
             ("±", "+-"),
             ("→", "-->"),
             ("≥", ">="),
@@ -1554,20 +1582,20 @@ class MoleculeResolver:
             ):
                 map_to_replace.append((greek_letter, spelled_out_version))
 
-        chemical_name = self.remove_non_printable_characters(chemical_name)
+        chemical_name = self.replace_non_printable_characters(chemical_name)
         chemical_name = chemical_name.strip()
 
         if unescape_html:
             chemical_name = html.unescape(chemical_name)
-
-        for old, new in map_to_replace:
-            chemical_name = chemical_name.replace(old, new)
 
         if normalize:
             nfkd_form = unicodedata.normalize("NFKD", chemical_name)
             chemical_name = "".join(
                 [c for c in nfkd_form if not unicodedata.combining(c)]
             )
+
+        for old, new in map_to_replace:
+            chemical_name = chemical_name.replace(old, new)
 
         chemical_name = regex.sub(r"\s+", " ", chemical_name)
 
@@ -1614,7 +1642,7 @@ class MoleculeResolver:
         """
         # heuristics used here are mainly to remove synonyms from pubchem
         synonyms = [
-            self.remove_non_printable_characters(synonym.strip())
+            self.replace_non_printable_characters(synonym.strip())
             for synonym in synonyms
             if synonym is not None
         ]
@@ -1751,7 +1779,7 @@ class MoleculeResolver:
             - Applies a series of regex-based transformations to standardize the name format.
             - Special handling is implemented for stereochemistry indicators (e.g., cis/trans, E/Z).
         """
-        name = self.remove_non_printable_characters(name.strip())
+        name = self.replace_non_printable_characters(name.strip())
         original_name = name
         names = [original_name]
         name = html.unescape(name)
@@ -1759,7 +1787,21 @@ class MoleculeResolver:
         name_without_html_tags = self.html_tag_regex_compiled.sub("", name)
         if name != name_without_html_tags:
             if "()" not in name_without_html_tags:
+                name = name_without_html_tags
                 names.append(name_without_html_tags)
+
+        # eliminate trailing wrong apostrophe or prime, double prime
+        name = regex.sub(r"(?<!\d)([\"′″'‘’]+)$", "", name).strip()
+
+        temp_name = name
+        # sometimes names are like this 2,6,10-Trimethyldodecane (Farnesane)
+        m = regex.match("(.*?) \((\w*)\)$", name)
+        if m:
+            temp_name = m.group(1).strip()
+            names.append(temp_name)
+            names.append(m.group(2).strip())
+
+        temp = name
 
         # add
         # acid, alskjdalskjd acid
@@ -1804,6 +1846,7 @@ class MoleculeResolver:
         if suffixes_to_delete is None:
             suffixes_to_delete = [
                 "mixed isomers",
+                "and isomers",
                 "isomers",
                 "tautomers",
                 "dl and meso",
@@ -1837,6 +1880,9 @@ class MoleculeResolver:
                 ["flouro", "fluoro"],
                 ["-[Nn]-", "-"],
                 ["([A-Za-z]{2,}),([A-Za-z]{2,})", r"\1, \2"],
+                ["′", "'"],
+                ["″", "''"],
+                [r"[\[\]]", lambda match: "(" if match.group(0) == "[" else ")"],
             ]
 
         new_name = name
@@ -1854,7 +1900,7 @@ class MoleculeResolver:
             names.append(new_name)
 
         for suffix in suffixes_to_use_as_prefix:
-            m = regex.match(rf"(.*)[;,]+\s+\(?\s*{suffix}\s*\)?\s*-?\s*$", new_name)
+            m = regex.match(rf"(.*)[;,]*\s+\(?\s*{suffix}\s*\)?\s*-?\s*$", new_name)
             if m:
                 new_name = f"({suffix})-{m.group(1)}"
                 if new_name not in names:
@@ -1893,6 +1939,8 @@ class MoleculeResolver:
                             names.append(new_name)
 
         if names[0] != original_name:
+            if original_name in names:
+                names.remove(original_name)
             return names.insert(0, original_name)
         return names
 
@@ -2061,7 +2109,13 @@ class MoleculeResolver:
         )
 
     def group_molecules_by_structure(
-        self, molecules: list[Molecule], group_also_by_services: Optional[bool] = True
+        self,
+        molecules: list[Molecule],
+        group_also_by_services: Optional[bool] = True,
+        differentiate_isomers: Optional[bool] = None,
+        differentiate_tautomers: Optional[bool] = None,
+        differentiate_isotopes: Optional[bool] = None,
+        check_for_resonance_structures: Optional[bool] = None,
     ) -> dict[str, list[Molecule]]:
         """
         Group a list of Molecule objects by their structural similarity.
@@ -2110,7 +2164,14 @@ class MoleculeResolver:
                 equal_SMILES = None
                 old_key = None
                 for key, grouped_molecule_mol in grouped_molecules_molecules.items():
-                    if self.are_equal(cmp_mol, grouped_molecule_mol):
+                    if self.are_equal(
+                        cmp_mol,
+                        grouped_molecule_mol,
+                        differentiate_isomers,
+                        differentiate_tautomers,
+                        differentiate_isotopes,
+                        check_for_resonance_structures,
+                    ):
                         if equal_SMILES is None:
                             equal_SMILES = grouped_molecules_SMILES[key]
                         equal_SMILES = sorted(
@@ -2238,7 +2299,7 @@ class MoleculeResolver:
 
     def filter_and_combine_molecules(
         self,
-        molecules: Union[list[Molecule], Molecule],
+        molecules: Union[list[Optional[Molecule]], Optional[Molecule]],
         required_formula: Optional[str] = None,
         required_charge: Optional[Union[int, str]] = None,
         required_structure_type: Optional[str] = None,
@@ -2289,10 +2350,11 @@ class MoleculeResolver:
                 self.combine_molecules(grouped_SMILES, cmps_to_combine)
             )
 
-
         # until I have a better algorithm, take first molecule whenever
         # one service returns more than one molecules
-        all_molecules_from_same_service = all([m.service == filtered_molecules[0].service for m in filtered_molecules])
+        all_molecules_from_same_service = all(
+            [m.service == filtered_molecules[0].service for m in filtered_molecules]
+        )
 
         if len(final_molecules) == 1 or all_molecules_from_same_service:
             return final_molecules[0]
@@ -2976,7 +3038,7 @@ class MoleculeResolver:
         return Chem.MolToSmiles(mol, isomericSmiles=isomeric)
 
     @cache
-    def is_valid_SMILES_fast(self, SMILES: Optional[str]) -> bool:
+    def is_valid_SMILES_fast(self, SMILES: str) -> bool:
         """
         Quickly check if a string is a potentially valid SMILES representation.
 
@@ -2984,7 +3046,7 @@ class MoleculeResolver:
         could be a valid SMILES representation using regular expressions.
 
         Args:
-            SMILES (Optional[str]): The string to check.
+            SMILES (str): The string to check.
 
         Returns:
             bool: True if the string passes the preliminary SMILES validity check, False otherwise.
@@ -3007,7 +3069,7 @@ class MoleculeResolver:
         return True
 
     @cache
-    def is_valid_SMILES(self, SMILES: Optional[str]) -> bool:
+    def is_valid_SMILES(self, SMILES: str) -> bool:
         """
         Thoroughly check if a string is a valid SMILES representation.
 
@@ -3015,7 +3077,7 @@ class MoleculeResolver:
         SMILES representation by attempting to parse it into a molecule.
 
         Args:
-            SMILES (Optional[str]): The string to check.
+            SMILES (str): The string to check.
 
         Returns:
             bool: True if the string is a valid SMILES representation, False otherwise.
@@ -3033,7 +3095,7 @@ class MoleculeResolver:
         return self.get_from_SMILES(SMILES) is not None
 
     @cache
-    def is_valid_InChI(self, InChI: Optional[str]) -> bool:
+    def is_valid_InChI(self, InChI: str) -> bool:
         """
         Check if a string is a valid InChI representation.
 
@@ -3041,7 +3103,7 @@ class MoleculeResolver:
         and attempting to convert it to a molecule.
 
         Args:
-            InChI (Optional[str]): The string to check.
+            InChI (str): The string to check.
 
         Returns:
             bool: True if the string is a valid InChI representation, False otherwise.
@@ -3059,10 +3121,66 @@ class MoleculeResolver:
         if not isinstance(InChI, str):
             return False
 
-        if not regex.search(self.InChICode_regex_compiled, InChI):
+        if not regex.search(self.InChI_regex_compiled, InChI):
             return False
 
         return Chem.MolFromInchi(InChI) is not None
+
+    @cache
+    def is_valid_InChIKey(self, InChIKey: str) -> bool:
+        """
+        Check if a string is a valid InChIKey representation.
+
+        Determines if a string is a valid InChIKey representation by performing a format check.
+
+        Args:
+            InChIKey (str): The string to check.
+
+        Returns:
+            bool: True if the string is a valid InChIKeyy representation, False otherwise.
+
+        Notes:
+            - Returns False for None or non-string inputs.
+            - Checks if the string matches the expected InChIKey format using a regular expression.
+            - If the format check passes, returns True only if the format check passes.
+            - The method is cached for performance optimization.
+        """
+        if not InChIKey:
+            return False
+
+        if not isinstance(InChIKey, str):
+            return False
+
+        if not regex.search(self.InChIKey_regex_compiled, InChIKey):
+            return False
+
+        return True
+
+    @cache
+    def _get_close_digits_on_keyboard(self, d: str) -> list[str]:
+        """
+        Returns digits that are physically adjacent to d
+        on a QWERTY keyboard's top number row.
+
+        Args:
+            d (str): a digit
+
+        Returns:
+            list[str]: A list of close digits on the keyboard.
+        """
+        KEYBOARD_ADJ = {
+            "0": ["9"],
+            "1": ["2"],
+            "2": ["1", "3"],
+            "3": ["2", "4"],
+            "4": ["3", "5"],
+            "5": ["4", "6"],
+            "6": ["5", "7"],
+            "7": ["6", "8"],
+            "8": ["7", "9"],
+            "9": ["8", "0"],
+        }
+        return KEYBOARD_ADJ.get(d, [])
 
     @cache
     def is_valid_CAS(self, cas: Union[str, bool, None]) -> bool:
@@ -3119,6 +3237,71 @@ class MoleculeResolver:
             return True
         else:
             return False
+
+    @cache
+    def expand_CAS_heuristically(self, CAS: str, max_swaps: int = 2) -> list[str]:
+        """
+        Perform a BFS over keyboard-adjacent digit swaps to find valid CAS numbers
+        with the lowest amount of swaps, hopefully allowing to fix a CAS.
+
+        Each single-digit swap must replace the digit with a QWERTY-adjacent digit
+        from the top row (e.g., '3' can swap with '2' or '4'). The search will stop
+        once the minimal number of swaps resulting in a valid CAS is found, or
+        after exceeding `max_swaps`.
+
+        Args:
+            CAS (str): The input CAS string to be modified.
+            max_swaps (int, optional): The maximum number of swaps (BFS depth) to
+                explore. Defaults to 2.
+
+        Returns:
+            list[str]: A list of all valid CAS strings found at the minimal swap
+            distance. Returns an empty list if none are found within `max_swaps`.
+        """
+
+        if self.is_valid_CAS(CAS):
+            return [CAS]
+
+        digit_positions = [i for i, ch in enumerate(CAS) if ch.isdigit()]
+
+        queue = collections.deque([(CAS, 0)])
+        visited = {CAS}
+
+        valid_solutions = []
+        found_level = None
+
+        while queue:
+            current_str, dist = queue.popleft()
+
+            if found_level is not None and dist > found_level:
+                break
+
+            if dist >= max_swaps:
+                continue
+
+            for pos in digit_positions:
+                orig_digit = current_str[pos]
+                neighbors = self._get_close_digits_on_keyboard(orig_digit)
+
+                for nd in neighbors:
+                    new_str = current_str[:pos] + nd + current_str[pos + 1 :]
+
+                    if new_str in visited:
+                        continue
+                    visited.add(new_str)
+
+                    new_dist = dist + 1
+
+                    if self.is_valid_CAS(new_str):
+                        if found_level is None:
+                            found_level = new_dist
+                        if new_dist == found_level:
+                            valid_solutions.append(new_str)
+
+                    if found_level is None or new_dist <= found_level:
+                        queue.append((new_str, new_dist))
+
+        return valid_solutions
 
     @cache
     def are_InChIs_equal(
@@ -3688,13 +3871,13 @@ class MoleculeResolver:
             while change_was_made:
                 change_was_made = False
                 three_digit_blocks = [
-                    count_line[i: i + 3] for i in range(0, len(count_line), 3)
+                    count_line[i : i + 3] for i in range(0, len(count_line), 3)
                 ]
 
                 for i_block, three_digit_block in enumerate(three_digit_blocks):
                     if three_digit_block != "   " and three_digit_block[-1] == " ":
                         count_line = (
-                            count_line[: i_block * 3] + " " + count_line[i_block * 3:]
+                            count_line[: i_block * 3] + " " + count_line[i_block * 3 :]
                         )
                         change_was_made = True
                         break
@@ -3709,7 +3892,7 @@ class MoleculeResolver:
             mol = Chem.MolFromMolBlock(molblock, sanitize=False)
         if not mol:
             return None
-        
+
         return Chem.MolToSmiles(mol)
 
     def get_SMILES_from_image_file(
@@ -4022,6 +4205,117 @@ class MoleculeResolver:
         else:
             return java_paths[0]
 
+    @cache
+    def _get_and_run_OPSIN_executable(
+        self, names: tuple[str], allow_uninterpretable_stereo: Optional[bool] = False
+    ) -> list[Optional[str]]:
+
+        if not self._OPSIN_executable_path or not os.path.exists(
+            self._OPSIN_executable_path
+        ):
+
+            # get bundled version
+            possible_OPSIN_executables = sorted(
+                [
+                    f
+                    for f in os.listdir(self._module_path)
+                    if f.startswith("opsin") and f.endswith(".jar")
+                ]
+            )
+            if possible_OPSIN_executables:
+                self._OPSIN_executable_path = os.path.join(
+                    self._module_path, possible_OPSIN_executables[-1]
+                )
+
+            # update_OPSIN_executable
+            response_text = self._resilient_request(
+                "https://api.github.com/repos/dan2097/opsin/releases/latest",
+                rejected_status_codes=[403, 404],
+            )
+
+            if response_text:
+                temp = json.loads(response_text)
+
+                for asset in temp["assets"]:
+                    new_filename = asset["name"]
+                    if new_filename.startswith("opsin-cli") and new_filename.endswith(
+                        ".jar"
+                    ):
+
+                        download_url = asset["browser_download_url"]
+                        new_filename = download_url.split("/")[-1]
+                        if self._OPSIN_executable_path:
+                            if not self._OPSIN_executable_path.endswith(new_filename):
+                                os.remove(self._OPSIN_executable_path)
+                                self._OPSIN_executable_path = None
+
+                        if not self._OPSIN_executable_path:
+                            self._OPSIN_executable_path = os.path.join(
+                                self._module_path, new_filename
+                            )
+                            with closing(urllib.request.urlopen(download_url)) as r:
+                                with open(self._OPSIN_executable_path, "wb") as f:
+                                    for chunk in r:
+                                        f.write(chunk)
+                        break
+            else:
+                if "OPSIN_executable_not_available" not in self._message_slugs_shown:
+                    self._message_slugs_shown.append("OPSIN_executable_not_available")
+                    warnings.warn(
+                        "The newest version of the OPSIN executable could not be downloaded, "
+                        "the version shipped with MoleculeResolver will be used instead."
+                    )
+
+        # execute opsin
+        if self._OPSIN_tempfolder is None or not os.path.exists(
+            self._OPSIN_tempfolder.name
+        ):
+            self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
+                prefix="OPSIN_tempfolder_"
+            )
+
+        unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
+        input_file = os.path.join(self._OPSIN_tempfolder.name, f"input_{unique_id}.txt")
+        with open(input_file, "w", encoding="utf8") as f:
+            f.write("\n".join(names))
+
+        # in the future adding the parameter -s would allow getting more structures if the stereo information opsin cannot interpret can be ignored
+        cmd = [
+            self._java_path,
+            "-jar",
+            self._OPSIN_executable_path,
+            "-osmi",
+            f"input_{unique_id}.txt",
+            f"output_{unique_id}.txt",
+        ]
+
+        if allow_uninterpretable_stereo:
+            cmd.insert(4, "--allowUninterpretableStereo")
+
+        _ = subprocess.run(
+            cmd,
+            capture_output=True,
+            cwd=self._OPSIN_tempfolder.name,
+        )
+
+        with open(
+            os.path.join(self._OPSIN_tempfolder.name, f"output_{unique_id}.txt"), "r"
+        ) as f:
+            output = f.read()
+
+        output_values = output.split("\n")
+        # I don't know in what situations, but in some OPSIN adds an empty line at the end of the output file.
+        if len(output_values) == len(names) + 1 and output_values[-1] == "":
+            output_values = output_values[:-1]
+
+        SMILES = [value.strip() for value in output_values]
+        if len(SMILES) != len(names):
+            raise RuntimeError(
+                "There was a problem parsing the OPSIN offline output file."
+            )
+
+        return SMILES
+
     def get_molecule_from_OPSIN(
         self,
         name: str,
@@ -4096,21 +4390,32 @@ class MoleculeResolver:
                             ):
                                 SMILES = SMILES_from_InChI
 
-                        additional_information = ""
                         if "warnings" in temp:
                             additional_information = "WARNINGS: " + ", ".join(
                                 temp["warnings"]
                             )
 
-                        if SMILES:
-                            molecules.append(
-                                Molecule(
-                                    SMILES,
-                                    service="opsin",
-                                    mode="name",
-                                    additional_information=additional_information,
-                                )
-                            )
+                else:
+                    # fall back to offline OPSIN
+                    SMILES = self._get_and_run_OPSIN_executable(
+                        (name,), allow_uninterpretable_stereo=allow_warnings
+                    )
+                    additional_information = (
+                        ("allow_uninterpretable_stereo" if allow_warnings else ""),
+                    )
+                    if SMILES:
+                        SMILES = SMILES[0]
+
+                if SMILES:
+                    molecules.append(
+                        Molecule(
+                            SMILES,
+                            synonyms=[name],
+                            service="opsin",
+                            mode="name",
+                            additional_information=additional_information,
+                        )
+                    )
 
         return self.filter_and_combine_molecules(
             molecules,
@@ -4121,7 +4426,7 @@ class MoleculeResolver:
 
     def get_molecule_from_OPSIN_batchmode(
         self, names: list[str], allow_uninterpretable_stereo: Optional[bool] = False
-    ) -> list[Optional[Molecule]]:
+    ) -> list[Optional[list[Molecule]]]:
         """
         Convert a batch of chemical names to molecules using OPSIN in offline mode.
 
@@ -4132,7 +4437,9 @@ class MoleculeResolver:
             allow_uninterpretable_stereo (Optional[bool]): Allows OPSIN to ignore uninterpretable stereochemistry.
 
         Returns:
-            list[Optional[Molecule]]: A list of Molecule objects corresponding to the input names.
+            list[Optional[list[Molecule]]]: A list where each element corresponds to an input
+            identifier. Each element is either a list of Molecule objects (if found) or
+            None (if not found or invalid).
 
         Raises:
             FileNotFoundError: If the Java installation could not be found.
@@ -4143,9 +4450,7 @@ class MoleculeResolver:
             - Downloads the latest version of OPSIN if not already present.
             - Runs OPSIN in offline mode using Java, processing all names in a single batch.
             - Standardizes the SMILES strings returned by OPSIN.
-            - Each successfully converted molecule is stored with metadata.
             - Uses a temporary directory for OPSIN operations, cleaned up after use.
-            - If allow_uninterpretable_stereo is True, it's noted in the molecule's additional_information.
         """
         self._check_parameters(
             identifiers=names,
@@ -4159,60 +4464,6 @@ class MoleculeResolver:
                 "The java installation could not be found. Either it is not installed or its location has not been added to the path environment variable."
             )
 
-        def download_OPSIN_offline_and_convert_names(names: list[str], tempfolder: str):
-            if not os.path.exists(os.path.join(tempfolder, "opsin.jar")):
-                response_text = self._resilient_request(
-                    "https://api.github.com/repos/dan2097/opsin/releases/latest"
-                )
-                temp = json.loads(response_text)
-                for asset in temp["assets"]:
-                    if asset["name"].count("opsin-cli"):
-                        download_url = asset["browser_download_url"]
-                        with closing(urllib.request.urlopen(download_url)) as r:
-                            with open(os.path.join(tempfolder, "opsin.jar"), "wb") as f:
-                                for chunk in r:
-                                    f.write(chunk)
-
-            unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
-            input_file = os.path.join(tempfolder, f"input_{unique_id}.txt")
-            with open(input_file, "w", encoding="utf8") as f:
-                f.write("\n".join(names))
-
-            # in the future adding the parameter -s would allow getting more structures if the stereo information opsin cannot interpret can be ignored
-            cmd = [
-                self._java_path,
-                "-jar",
-                "opsin.jar",
-                "-osmi",
-                f"input_{unique_id}.txt",
-                f"output_{unique_id}.txt",
-            ]
-
-            if allow_uninterpretable_stereo:
-                cmd.insert(4, "--allowUninterpretableStereo")
-
-            _ = subprocess.run(
-                cmd,
-                capture_output=True,
-                cwd=tempfolder,
-            )
-
-            with open(os.path.join(tempfolder, f"output_{unique_id}.txt"), "r") as f:
-                output = f.read()
-
-            output_values = output.split("\n")
-            # I don't know in what situations, but in some OPSIN adds an empty line at the end of the output file.
-            if len(output_values) == len(names) + 1 and output_values[-1] == "":
-                output_values = output_values[:-1]
-
-            SMILES = [value.strip() for value in output_values]
-            if len(SMILES) != len(names):
-                raise RuntimeError(
-                    "There was a problem parsing the OPSIN offline output file."
-                )
-
-            return SMILES
-
         with self.query_molecule_cache_batchmode("opsin", "name", names) as (
             identifiers_to_search,
             indices_of_identifiers_to_search,
@@ -4221,17 +4472,9 @@ class MoleculeResolver:
             if len(identifiers_to_search) == 0:
                 return results
 
-            if self._OPSIN_tempfolder is None or not os.path.exists(
-                self._OPSIN_tempfolder.name
-            ):
-                with tempfile.TemporaryDirectory() as tempfolder:
-                    SMILES = download_OPSIN_offline_and_convert_names(
-                        identifiers_to_search, tempfolder
-                    )
-            else:
-                SMILES = download_OPSIN_offline_and_convert_names(
-                    identifiers_to_search, self._OPSIN_tempfolder.name
-                )
+            SMILES = self._get_and_run_OPSIN_executable(
+                tuple(identifiers_to_search), allow_uninterpretable_stereo
+            )
 
             for molecule_index, name, smi in zip(
                 indices_of_identifiers_to_search,
@@ -4334,7 +4577,7 @@ class MoleculeResolver:
             (Molecule(smi, service="pubchem"), y) for smi, y in counts.most_common()
         ]
 
-    def get_molecule_from_ChEBI(
+    def get_molecule_from_ChEBI_old(
         self,
         identifier: str,
         mode: str,
@@ -4479,6 +4722,217 @@ class MoleculeResolver:
             required_structure_type,
         )
 
+    def get_molecule_from_ChEBI(
+        self,
+        identifier: str,
+        mode: str,
+        required_formula: Optional[str] = None,
+        required_charge: Optional[int] = None,
+        required_structure_type: Optional[str] = None,
+    ) -> Optional[Molecule]:
+        """
+        Retrieve a molecule from ChEBI based on the provided identifier and mode.
+
+        Queries the ChEBI database to retrieve molecule information based on various identifiers.
+
+        Args:
+            identifier (str): The identifier to search for.
+            mode (str): The type of identifier (e.g., 'name', 'cas', 'formula', 'smiles', 'inchi', 'inchikey').
+            required_formula (Optional[str]): The expected molecular formula.
+            required_charge (Optional[int]): The expected molecular charge.
+            required_structure_type (Optional[str]): The expected structure type.
+
+        Returns:
+            Optional[Molecule]: A Molecule object if found and meets all requirements, None otherwise.
+        """
+        if required_formula is None:
+            if mode == "formula":
+                required_formula = identifier
+
+        self._check_parameters(
+            services="chebi",
+            modes=mode,
+            required_charges=required_charge,
+            required_structure_types=required_structure_type,
+            required_formulas=required_formula,
+        )
+
+        with self.query_molecule_cache("chebi", mode, identifier) as (
+            entry_available,
+            molecules,
+        ):
+            if not entry_available:
+                SOAP_ENDPOINT = (
+                    "http://www.ebi.ac.uk:80/webservices/chebi/2.0/webservice"
+                )
+                mode_mapping = {
+                    "name": "ALL NAMES",
+                    "cas": "REGISTRY NUMBERS",
+                    "formula": "FORMULA",
+                    "smiles": "SMILES",
+                    "inchi": "INCHI/INCHI KEY",
+                    "inchikey": "INCHI/INCHI KEY",
+                }
+                maximumResults = 1 if mode == "formula" else 5
+
+                # Construct SOAP request for getLiteEntity
+                soap_request = f"""
+                <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                                xmlns:chebi="https://www.ebi.ac.uk/webservices/chebi">
+                <soapenv:Header/>
+                <soapenv:Body>
+                    <chebi:getLiteEntity>
+                        <chebi:search>{identifier}</chebi:search>
+                        <chebi:searchCategory>{mode_mapping[mode]}</chebi:searchCategory>
+                        <chebi:maximumResults>{maximumResults}</chebi:maximumResults>
+                        <chebi:stars>ALL</chebi:stars>
+                    </chebi:getLiteEntity>
+                </soapenv:Body>
+                </soapenv:Envelope>
+                """
+                # chebi does not allow differentiating between inchi and inchicode
+                # so I am adding the functionality here
+                if mode == "inchi" and not self.InChI_regex_compiled.match(identifier):
+                    return None
+
+                if mode == "inchikey" and not self.InChIKey_regex_compiled.match(
+                    identifier
+                ):
+                    return None
+
+                search_response_text = self._resilient_request(
+                    SOAP_ENDPOINT,
+                    {
+                        "data": soap_request,
+                        "headers": {"Content-Type": "text/xml; charset=utf-8"},
+                    },
+                    request_type="post",
+                    rejected_status_codes=[404, 500],
+                )
+                if search_response_text is None:
+                    return None
+
+                root = xmltodict.parse(search_response_text)
+                if (
+                    root["S:Envelope"]["S:Body"]["getLiteEntityResponse"]["return"]
+                    is None
+                ):
+                    return None
+                temp_list = root["S:Envelope"]["S:Body"]["getLiteEntityResponse"][
+                    "return"
+                ]["ListElement"]
+                if not isinstance(temp_list, list):
+                    temp_list = [temp_list]
+                found_ChEBI_ids = [item["chebiId"] for item in temp_list]
+
+                # Construct SOAP request for getCompleteEntityByList
+                ids_xml = "".join(
+                    f"<chebi:ListOfChEBIIds>{chebi_id}</chebi:ListOfChEBIIds>"
+                    for chebi_id in found_ChEBI_ids
+                )
+                complete_entity_request = f"""
+                <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                                xmlns:chebi="https://www.ebi.ac.uk/webservices/chebi">
+                <soapenv:Header/>
+                <soapenv:Body>
+                    <chebi:getCompleteEntityByList>
+                        {ids_xml}
+                    </chebi:getCompleteEntityByList>
+                </soapenv:Body>
+                </soapenv:Envelope>
+                """
+                complete_response_text = self._resilient_request(
+                    SOAP_ENDPOINT,
+                    {"data": complete_entity_request},
+                    request_type="post",
+                )
+                if complete_response_text is None:
+                    return None
+
+                root = xmltodict.parse(complete_response_text)
+                try:
+                    entities = root["S:Envelope"]["S:Body"][
+                        "getCompleteEntityByListResponse"
+                    ]["return"]
+                    if not isinstance(entities, list):
+                        entities = [entities]
+                except KeyError:
+                    return None
+
+                SMILES = None
+                for entity in entities:
+                    if "smiles" in entity:
+                        SMILES = entity["smiles"]
+                    else:
+                        if "ChemicalStructures" in entity:
+                            if not isinstance(entity["ChemicalStructures"], list):
+                                entity["ChemicalStructures"] = [
+                                    entity["ChemicalStructures"]
+                                ]
+                            for structure in entity["ChemicalStructures"]:
+                                if structure["type"] == "mol":
+                                    mol = Chem.MolFromMolBlock(structure["structure"])
+                                    if mol:
+                                        SMILES = Chem.MolToSmiles(mol)
+                                        break
+
+                    if not SMILES:
+                        continue
+
+                    synonyms = []
+                    CAS = []
+
+                    if "chebiAsciiName" in entity:
+                        synonyms.append(entity["chebiAsciiName"])
+
+                    if "IupacNames" in entity:
+                        if not isinstance(entity["IupacNames"], list):
+                            entity["IupacNames"] = [entity["IupacNames"]]
+                        synonyms.extend(
+                            [synonym["data"] for synonym in entity["IupacNames"]]
+                        )
+
+                    if "Synonyms" in entity:
+                        temp = entity["Synonyms"]
+                        if not isinstance(temp, list):
+                            temp = [temp]
+                        synonyms.extend([synonym["data"] for synonym in temp])
+
+                    # Check if the lowercase identifier matches any synonym
+                    # chebi gives back lots of bad results with partial name matches
+                    if mode == "name":
+                        if identifier.lower() not in [
+                            synonym.lower() for synonym in synonyms
+                        ]:
+                            continue
+
+                    synonyms = self.filter_and_sort_synonyms(synonyms)
+
+                    if "RegistryNumbers" in entity:
+                        temp = entity["RegistryNumbers"]
+                        if not isinstance(temp, list):
+                            temp = [temp]
+                        CAS = self.filter_and_sort_CAS(
+                            [registry["data"] for registry in temp]
+                        )
+
+                    molecule = Molecule(
+                        SMILES,
+                        synonyms,
+                        CAS,
+                        entity["chebiId"].split(":")[1],
+                        mode,
+                        service="chebi",
+                    )
+                    molecules.append(molecule)
+
+        return self.filter_and_combine_molecules(
+            molecules,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+
     def get_molecules_using_batchmode_from(
         self,
         identifiers: list[list[str]],
@@ -4529,7 +4983,7 @@ class MoleculeResolver:
                 all_supported_modes.append(mode)
                 for mode in _modes
                 if mode not in all_supported_modes
-                and mode in self._supported_modes_by_services[service]
+                and mode in self.supported_modes_by_services[service]
             ]
 
         modes = new_modes
@@ -4700,9 +5154,7 @@ class MoleculeResolver:
                 if response_text is not None:
                     results = json.loads(response_text)
                     # sort and filter best results
-                    results = sorted(
-                        results, key=lambda x: x["rank"]
-                    )
+                    results = sorted(results, key=lambda x: x["rank"])
                     results = list(
                         filter(
                             lambda x: x["rank"] == results[0]["rank"],
@@ -4860,8 +5312,7 @@ class MoleculeResolver:
                     response_text = self._resilient_request(
                         f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier, safe="")}',
                         kwargs={"timeout": 5},
-                        rejected_status_codes=[404],
-                        offline_status_codes=[500],
+                        rejected_status_codes=[400, 404, 500],
                         max_retries=3,
                     )
                 except requests.exceptions.ConnectionError:
@@ -5081,7 +5532,7 @@ class MoleculeResolver:
                 n_try = 0
                 while True:
                     poll_response_text = self._resilient_request(
-                        f"{COMPTOX_URL}/status/{job_id}/?{self.get_CompTox_request_unique_id()}"
+                        f"{COMPTOX_URL}status/{job_id}?{self.get_CompTox_request_unique_id()}"
                     )
 
                     if poll_response_text.strip().lower() == "true":
@@ -5098,7 +5549,7 @@ class MoleculeResolver:
                 return download_url
 
             post_request_text = self._resilient_request(
-                f"{COMPTOX_URL}/?{self.get_CompTox_request_unique_id()}",
+                f"{COMPTOX_URL}?{self.get_CompTox_request_unique_id()}",
                 json=postdata,
                 request_type="post",
                 accepted_status_codes=[202],
@@ -5452,7 +5903,7 @@ class MoleculeResolver:
                         # non-isomeric SMILES are the same:
                         if mode == "smiles":
                             if not self.are_SMILES_equal(
-                                temp_SMILES, identifier, isomeric=False
+                                temp_SMILES, identifier, differentiate_isomers=False
                             ):
                                 continue
 
@@ -6246,7 +6697,7 @@ class MoleculeResolver:
                             # ensuring that at least non-isomeric SMILES are the same:
                             if mode == "smiles":
                                 if not self.are_SMILES_equal(
-                                    SMILES, identifier, isomeric=False
+                                    SMILES, identifier, differentiate_isomers=False
                                 ):
                                     continue
 
@@ -6301,7 +6752,7 @@ class MoleculeResolver:
                     )
                     if cmp is not None:
                         if self.are_SMILES_equal(
-                            cmp.SMILES, identifier, isomeric=False
+                            cmp.SMILES, identifier, differentiate_isomers=False
                         ):
                             cmp.mode = mode
                             molecules.append(cmp)
@@ -6817,7 +7268,7 @@ class MoleculeResolver:
             - There's a 1-second delay between requests to avoid overwhelming the CIR server.
             - The method can handle connection reset errors by reinitializing the session.
             - API: https://cactus.nci.nih.gov/chemical/structure_documentation
-            - API: https://search.r-project.org/CRAN/refmans/webchem/html/cir_query.html
+            - API: https://search.r-project.org/CRAN/refm<ans/webchem/html/cir_query.html
             - API: https://github.com/mcs07/CIRpy
 
         Example:
@@ -7071,7 +7522,9 @@ class MoleculeResolver:
 
                 mode_used = mode
                 if mode == "smiles":
-                    identifier = self.SMILES_to_InChI(self.standardize_SMILES(identifier))
+                    identifier = self.SMILES_to_InChI(
+                        self.standardize_SMILES(identifier)
+                    )
 
                 response_text = self._resilient_request(
                     f'https://webbook.nist.gov/cgi/cbook.cgi?{urllib.parse.quote(nist_modes[mode])}={urllib.parse.quote(identifier, safe="")}'
@@ -7203,7 +7656,7 @@ class MoleculeResolver:
         services_to_use: Optional[list[str]] = None,
         search_iupac_name: Optional[bool] = False,
         interactive: Optional[bool] = False,
-        minimum_number_of_cross_checks: Optional[int] = 1,
+        minimum_number_of_crosschecks: Optional[int] = 1,
         ignore_exceptions: Optional[bool] = False,
     ) -> tuple[list, list[int]]:
         """Finds salt molecules based on the provided identifiers and criteria.
@@ -7237,7 +7690,7 @@ class MoleculeResolver:
             interactive (Optional[bool]): If True, allows for interactive user input if necessary.
             Defaults to False.
 
-            minimum_number_of_cross_checks (Optional[int]): Minimum number of services
+            minimum_number_of_crosschecks (Optional[int]): Minimum number of services
             to cross-check for validity. Defaults to 1.
 
             ignore_exceptions (Optional[bool]): If True, ignores exceptions that may occur during
@@ -7277,10 +7730,10 @@ class MoleculeResolver:
         if required_structure_type is None:
             required_structure_type = "salt"
 
-        if minimum_number_of_cross_checks is None:
-            minimum_number_of_cross_checks = 1
+        if minimum_number_of_crosschecks is None:
+            minimum_number_of_crosschecks = 1
 
-        salt_info = self.find_single_molecule_cross_checked(
+        salt_info = self.find_single_molecule_crosschecked(
             identifiers,
             modes=modes,
             required_formula=required_formula,
@@ -7288,7 +7741,7 @@ class MoleculeResolver:
             required_structure_type=required_structure_type,
             services_to_use=services_to_use,
             search_iupac_name=search_iupac_name,
-            minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+            minimum_number_of_crosschecks=minimum_number_of_crosschecks,
             ignore_exceptions=ignore_exceptions,
         )
 
@@ -7340,14 +7793,14 @@ class MoleculeResolver:
                     ionic_mol = self.get_from_SMILES(ionic_SMILES)
                     ionic_charge = Chem.rdmolops.GetFormalCharge(ionic_mol)
 
-                    ionic_info = self.find_single_molecule_cross_checked(
+                    ionic_info = self.find_single_molecule_crosschecked(
                         ionic_SMILES,
                         modes="SMILES",
                         required_charge=ionic_charge,
                         required_structure_type="ion",
                         services_to_use=services_to_use,
                         search_iupac_name=search_iupac_name,
-                        minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+                        minimum_number_of_crosschecks=minimum_number_of_crosschecks,
                         ignore_exceptions=ignore_exceptions,
                     )
 
@@ -7394,14 +7847,14 @@ class MoleculeResolver:
                 synonym_parts = synonym.split(" ")
                 possible_cation_name = synonym_parts[0]
 
-                cation_info = self.find_single_molecule_cross_checked(
+                cation_info = self.find_single_molecule_crosschecked(
                     possible_cation_name,
                     modes=["name"],
                     required_charge="positive",
                     required_structure_type="ion",
                     services_to_use=services_to_use,
                     search_iupac_name=search_iupac_name,
-                    minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+                    minimum_number_of_crosschecks=minimum_number_of_crosschecks,
                     ignore_exceptions=ignore_exceptions,
                 )
 
@@ -7420,14 +7873,14 @@ class MoleculeResolver:
 
                 possible_anion_name = synonym_parts[1:]
 
-                anion_info = self.find_single_molecule_cross_checked(
+                anion_info = self.find_single_molecule_crosschecked(
                     possible_anion_name,
                     modes=["name"],
                     required_charge="negative",
                     required_structure_type="ion",
                     services_to_use=services_to_use,
                     search_iupac_name=search_iupac_name,
-                    minimum_number_of_cross_checks=minimum_number_of_cross_checks,
+                    minimum_number_of_crosschecks=minimum_number_of_crosschecks,
                     ignore_exceptions=ignore_exceptions,
                 )
 
@@ -7585,7 +8038,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CAS_registry(
                                 identifier,
                                 mode,
@@ -7607,7 +8060,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_pubchem(
                                 identifier,
                                 mode,
@@ -7629,7 +8082,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CIR(
                                 identifier,
                                 mode,
@@ -7639,6 +8092,7 @@ class MoleculeResolver:
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
+                                synonyms.extend(cmp.synonyms)
                                 additional_information = cmp.service
                                 mode_used = mode
                                 identifier_used = cmp.identifier
@@ -7647,7 +8101,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_OPSIN(
                                 identifier,
                                 required_formula,
@@ -7656,6 +8110,7 @@ class MoleculeResolver:
                             )
                             if cmp is not None:
                                 SMILES = cmp.SMILES
+                                synonyms.extend(cmp.synonyms)
                                 additional_information = cmp.additional_information
                                 mode_used = mode
                                 identifier_used = cmp.identifier
@@ -7664,7 +8119,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_ChEBI(
                                 identifier,
                                 mode,
@@ -7686,7 +8141,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_SRS(
                                 identifier,
                                 mode,
@@ -7708,7 +8163,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CompTox(
                                 identifier,
                                 mode,
@@ -7730,7 +8185,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_Chemeo(
                                 identifier,
                                 mode,
@@ -7752,7 +8207,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_CTS(
                                 identifier,
                                 mode,
@@ -7772,7 +8227,7 @@ class MoleculeResolver:
                     for identifier, mode in zip(
                         flattened_identifiers, flattened_modes, strict=True
                     ):
-                        if mode in self._supported_modes_by_services[service]:
+                        if mode in self.supported_modes_by_services[service]:
                             cmp = self.get_molecule_from_NIST(
                                 identifier,
                                 mode,
@@ -8113,7 +8568,7 @@ class MoleculeResolver:
             1,
         )
 
-    def find_single_molecule_cross_checked(
+    def find_single_molecule_crosschecked(
         self,
         identifiers: list[str],
         modes: Optional[list[str]] = ["name"],
@@ -8122,7 +8577,7 @@ class MoleculeResolver:
         required_structure_type: Optional[str] = None,
         services_to_use: Optional[list[str]] = None,
         search_iupac_name: Optional[bool] = False,
-        minimum_number_of_cross_checks: Optional[int] = 1,
+        minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
     ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
@@ -8139,7 +8594,7 @@ class MoleculeResolver:
             required_structure_type (Optional[str]): Required structure type. Defaults to None.
             services_to_use (Optional[list[str]]): List of services to use. If None, all available services are used.
             search_iupac_name (Optional[bool]): Whether to search for IUPAC names. Defaults to False.
-            minimum_number_of_cross_checks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
+            minimum_number_of_crosschecks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
             try_to_choose_best_structure (Optional[bool]): Whether to attempt to select the best structure. Defaults to True.
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
 
@@ -8149,7 +8604,7 @@ class MoleculeResolver:
             or None if no matching molecule is found.
 
         Raises:
-            ValueError: If minimum_number_of_cross_checks exceeds the number of services used.
+            ValueError: If minimum_number_of_crosschecks exceeds the number of services used.
 
         Notes:
             - The method searches across multiple services and cross-checks the results.
@@ -8162,11 +8617,11 @@ class MoleculeResolver:
         if services_to_use is None:
             services_to_use = self._available_services
 
-        if minimum_number_of_cross_checks is None:
-            minimum_number_of_cross_checks = 1
-        if not minimum_number_of_cross_checks <= len(services_to_use):
+        if minimum_number_of_crosschecks is None:
+            minimum_number_of_crosschecks = 1
+        if not minimum_number_of_crosschecks <= len(services_to_use):
             raise ValueError(
-                "The minimum_number_of_cross_checks exceeds the number of services that are used."
+                "The minimum_number_of_crosschecks exceeds the number of services that are used."
             )
 
         molecules = []
@@ -8198,16 +8653,17 @@ class MoleculeResolver:
             [len(v) for v in grouped_molecules.values()]
         )
 
-        if maximum_number_of_crosschecks_found < minimum_number_of_cross_checks:
+        if maximum_number_of_crosschecks_found < minimum_number_of_crosschecks:
             return None
 
         SMILES_with_highest_number_of_crosschecks = []
         for group_SMILES, group_molecules in grouped_molecules.items():
-            if len(group_molecules) >= minimum_number_of_cross_checks:
+            if len(group_molecules) >= minimum_number_of_crosschecks:
                 if len(group_molecules) == maximum_number_of_crosschecks_found:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
 
         if try_to_choose_best_structure:
+
             SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
             if len(SMILES_with_highest_number_of_crosschecks) > 1:
                 # if SMILES are the same ignoring isomeric info, use the more specific one:
@@ -8241,25 +8697,21 @@ class MoleculeResolver:
                                     SMILES_map.append(SMILES)
                                     names_map.append(name)
 
-                        use_opsin_batch = False  # self._OPSIN_tempfolder is not None
-                        if use_opsin_batch:
-                            opsin_results = self.get_molecule_from_OPSIN_batchmode(
-                                names_map
-                            )
-                        else:
-                            opsin_results = [
-                                self.get_molecule_from_OPSIN(name) for name in names_map
-                            ]
+                        SMILES_found_by_opsin_from_synonyms = [
+                            self.get_molecule_from_OPSIN(name) for name in names_map
+                        ]
 
                         SMILES_preferred_by_opsin = []
                         for (
                             original_SMILES_found,
-                            molecule_found_by_opsin_from_synonym,
-                        ) in zip(SMILES_map, opsin_results, strict=True):
-                            if molecule_found_by_opsin_from_synonym:
+                            SMILES_found_by_opsin_from_synonym,
+                        ) in zip(
+                            SMILES_map, SMILES_found_by_opsin_from_synonyms, strict=True
+                        ):
+                            if SMILES_found_by_opsin_from_synonym:
                                 if (
                                     original_SMILES_found
-                                    == molecule_found_by_opsin_from_synonym.SMILES
+                                    == SMILES_found_by_opsin_from_synonym
                                 ):
                                     SMILES_preferred_by_opsin.append(
                                         original_SMILES_found
@@ -8274,24 +8726,7 @@ class MoleculeResolver:
                     if SMILES_preferred_by_opsin:
                         SMILES_preferred = SMILES_preferred_by_opsin
                     else:
-                        # usually when chebi does not agree with others chebi is wrong
-                        # this is used to our advantage here
-                        SMILES_not_from_chebi = []
-                        for (
-                            temptative_SMILES,
-                            temptative_molecules,
-                        ) in grouped_molecules.items():
-                            molecules_from_chebi = [
-                                t_mol
-                                for t_mol in temptative_molecules
-                                if "chebi" in t_mol.service
-                            ]
-                            if len(molecules_from_chebi) == 0:
-                                SMILES_not_from_chebi.extend(
-                                    [temptative_SMILES] * len(temptative_molecules)
-                                )
-
-                        c = collections.Counter(SMILES_not_from_chebi).most_common()
+                        c = []
                         if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
                             SMILES_preferred = c[0][0]
                         else:
@@ -8300,6 +8735,7 @@ class MoleculeResolver:
                                 warnings.warn(
                                     f"\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n"
                                 )
+
             molec = self.combine_molecules(
                 SMILES_preferred, grouped_molecules[SMILES_preferred]
             )
@@ -8320,7 +8756,7 @@ class MoleculeResolver:
         required_structure_types: Optional[list[str]] = None,
         services_to_use: Optional[list[str]] = None,
         search_iupac_name: Optional[bool] = False,
-        minimum_number_of_cross_checks: Optional[int] = 1,
+        minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         progressbar: Optional[bool] = True,
         max_workers: Optional[int] = 5,
@@ -8355,7 +8791,7 @@ class MoleculeResolver:
             search_iupac_name (Optional[bool]): If True, attempts to search using the IUPAC name.
             Defaults to False.
 
-            minimum_number_of_cross_checks (Optional[int]): Minimum number of services
+            minimum_number_of_crosschecks (Optional[int]): Minimum number of services
             to cross-check for validity. Defaults to 1.
 
             try_to_choose_best_structure (Optional[bool]): If True, attempts to select the best
@@ -8388,6 +8824,9 @@ class MoleculeResolver:
         # reinitialize session
         self._session = None
         self._init_session(pool_maxsize=max_workers * 2)
+
+        if isinstance(modes, str):
+            modes = [modes] * len(identifiers)
 
         if services_to_use is None:
             services_to_use = self._available_services
@@ -8470,7 +8909,7 @@ class MoleculeResolver:
             required_structure_types,
             strict=True,
         ):
-            if minimum_number_of_cross_checks is None:
+            if minimum_number_of_crosschecks is None:
                 args.append(
                     (
                         identifier,
@@ -8494,7 +8933,7 @@ class MoleculeResolver:
                         required_structure_type,
                         services_to_use,
                         search_iupac_name,
-                        minimum_number_of_cross_checks,
+                        minimum_number_of_crosschecks,
                         try_to_choose_best_structure,
                         ignore_exceptions,
                     )
@@ -8502,11 +8941,11 @@ class MoleculeResolver:
 
         print(message_getting_from_services)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            if not minimum_number_of_cross_checks:
+            if not minimum_number_of_crosschecks:
                 results = _find(executor.map(self.find_single_molecule, *zip(*args)))
             else:
                 results = _find(
-                    executor.map(self.find_single_molecule_cross_checked, *zip(*args))
+                    executor.map(self.find_single_molecule_crosschecked, *zip(*args))
                 )
 
         return results

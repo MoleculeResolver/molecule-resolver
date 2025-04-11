@@ -392,14 +392,10 @@ class SqliteMoleculeCache:
 
                 if identifier_mode == "name":
                     identifier_clause = "identifier = ? COLLATE NOCASE"
-                    identifier_mode_clause = ""
-                    values = (service, identifier)
                 if identifier_mode == "cas":
                     identifier_clause = (
                         "identifier = ? "  # "cas_numbers.cas_number = ?"
                     )
-                    identifier_mode_clause = ""
-                    values = (service, identifier)
 
                 sql = f"""
                 SELECT molecules.id,
@@ -630,7 +626,7 @@ class SqliteMoleculeCache:
                     (self.expiration_datetime,),
                 )
 
-    def delete_by_service(self, service: str) -> None:
+    def delete_by_service(self, service: str, mode: Optional[str] = '%') -> None:
         """
         Delete all molecules associated with a specific service from the cache.
 
@@ -639,12 +635,13 @@ class SqliteMoleculeCache:
         """
         this_thread_connection = self.get_connection()
         with this_thread_connection:
-            this_thread_connection.execute(
-                """
+            sql = """
                 DELETE FROM molecules
-                WHERE service = ?
-            """,
-                (service,),
+                WHERE service = ? AND identifier_mode LIKE ?
+            """
+            this_thread_connection.execute(
+                sql,
+                (service, mode),
             )
 
     def recreate_all_tables(self) -> None:
