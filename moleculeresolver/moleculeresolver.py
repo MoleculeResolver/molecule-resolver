@@ -884,10 +884,7 @@ class MoleculeResolver:
             )
         )
 
-    def convert_zwitterion_to_sulfynil(
-        self,
-        mol: Chem.Mol
-    ) -> Chem.Mol:
+    def convert_zwitterion_to_sulfynil(self, mol: Chem.Mol) -> Chem.Mol:
         """
         Converts the zwitterionic form [S+][O-] in a given RDKit molecule to the sulfynil group O=S.
         Matches are done via SMARTS, and modifications are applied directly.
@@ -898,9 +895,9 @@ class MoleculeResolver:
         Returns:
         rdkit.Chem.Mol: The modified RDKit molecule object with the zwitterionic form converted to the sulfynil group.
         """
-        pattern = Chem.MolFromSmarts('[S+]-[O-]')
+        pattern = Chem.MolFromSmarts("[S+]-[O-]")
         matches = mol.GetSubstructMatches(pattern)
-        
+
         if not matches:
             return mol  # No zwitterionic pattern found, return molecule as-is
 
@@ -922,7 +919,7 @@ class MoleculeResolver:
         # Sanitize the molecule to ensure valence and aromaticity are updated
         Chem.SanitizeMol(rw_mol)
         return rw_mol.GetMol()
-    
+
     def standardize_mol(
         self,
         mol: Chem.rdchem.Mol,
@@ -4376,7 +4373,7 @@ class MoleculeResolver:
         ):
             if not entry_available:
                 response_text = self._resilient_request(
-                    f"https://opsin.ch.cam.ac.uk/opsin/{urllib.parse.quote(name)}"
+                    f"https://www.ebi.ac.uk/opsin/ws/{urllib.parse.quote(name)}.json"
                 )
 
                 if response_text is not None:
