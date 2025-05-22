@@ -1,9 +1,13 @@
+<p align="center">
+  <img src="MoleculeResolver.png" alt="MoleculeResolver" width="700">
+</p>
 
 # MoleculeResolver
 
 The **moleculeresolver** was born out of the need to annotate large datasets with accurate structural information fast and to crosscheck whether given metadata (name, SMILES) agrees with each other. It also allows to efficiently compare whether structures are available in two large datasets. 
 
 In short it's a Python module that allows you to retrieve molecular structures from multiple chemical databases, perform crosschecks to ensure data reliability, and standardize the best representation of molecules. It also provides functions for comparing molecules and sets of molecules based on specific configurations. This makes it a useful tool for researchers, chemists, or anyone working in computational chemistry / cheminformatics who needs to ensure they are working with the best available data for a molecule.
+
 
 ## Installation
 
