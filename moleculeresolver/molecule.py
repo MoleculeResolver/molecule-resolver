@@ -38,7 +38,7 @@ class Molecule:
     identifier: Optional[str] = ""
     found_molecules: Optional[list] = field(default_factory=list)
 
-    def to_dict(self, found_molecules: Optional[str] = None) -> Dict[str, Any]:
+    def to_dict(self, found_molecules: Optional[str] = 'recursive') -> Dict[str, Any]:
         """
         Convert the Molecule object to a dictionary.
 
@@ -46,7 +46,6 @@ class Molecule:
             found_molecules (Optional[str]): Determines how 'found_molecules' are handled.
                 - If 'remove', the 'found_molecules' field will be excluded.
                 - If 'recursive', 'found_molecules' will be recursively converted to dictionaries.
-                - If None, 'found_molecules' will be included as is.
 
         Returns:
             Dict[str, Any]: A dictionary representation of the Molecule object.

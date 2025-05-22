@@ -3,7 +3,7 @@
 
 The **moleculeresolver** was born out of the need to annotate large datasets with accurate structural information fast and to crosscheck whether given metadata (name, SMILES) agrees with each other. It also allows to efficiently compare whether structures are available in two large datasets. 
 
-In short it's a Python module that allows you to retrieve molecular structures from multiple chemical databases, perform crosschecks to ensure data reliability, and standardize the best representation of molecules. It also provides functions for comparing molecules and sets of molecules based on specific configurations. This makes it a useful tool for researchers, chemists, or anyone working in computational chemistry / cheminformatics who needs to ensure they are working with the best available data for a molecule. The tool
+In short it's a Python module that allows you to retrieve molecular structures from multiple chemical databases, perform crosschecks to ensure data reliability, and standardize the best representation of molecules. It also provides functions for comparing molecules and sets of molecules based on specific configurations. This makes it a useful tool for researchers, chemists, or anyone working in computational chemistry / cheminformatics who needs to ensure they are working with the best available data for a molecule.
 
 ## Installation
 
@@ -106,6 +106,10 @@ The `MoleculeResolver` class allows users to configure various options like:
 - **API Keys**: Set API keys for accessing different molecular databases. Currently only chemeo needs one.
 - **Standardization Options**: Choose how to handle molecular standardization (e.g., normalizing functional groups, disconnecting metals, handling isomers, etc.).
 - **Differentiation Settings**: Options for distinguishing between isomers, tautomers, and isotopes.
+
+## ⚠️ Warning
+
+**Inchi** is included in the set of valid identifiers for various [services](#services-used). You should be aware that using Inchi to get SMILES using RDKit is not the most robust approach. You can read more about it [here](https://github.com/rdkit/rdkit/issues/542).
 
 ## 🤝 Contributing
 
