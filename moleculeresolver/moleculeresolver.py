@@ -7614,7 +7614,7 @@ class MoleculeResolver:
             molecules, required_formula, required_charge, required_structure_type
         )
 
-    def find_salt_molecules(
+    def find_salt_molecules_and_stoichometric_coefficients(
         self,
         identifiers: list[str],
         modes: Optional[list[str]] = ["name"],
@@ -7635,7 +7635,7 @@ class MoleculeResolver:
         synonyms or provided SMILES strings.
 
         Args:
-            identifiers (list[str]): A list of identifiers for the molecules to search for.
+            identifiers (list[str]): A list of identifiers for the salt to search for.
 
             modes (Optional[list[str]]): The modes of identification for the identifiers.
             Defaults to ['name'].
@@ -7676,8 +7676,8 @@ class MoleculeResolver:
             NotImplementedError: If the functionality for salts with more than 2 ions is invoked.
 
         Example:
-            >>> find_salt_molecules(["NaCl", "K2SO4"], modes=['name'], required_charge=0)
-            ([(...molecule data...)], [...stoichiometric coefficients...])
+            >>> find_salt_molecules_and_stoichometric_coefficients(["NaCl", "sodium chloride"], modes=['name', 'name'], required_charge=0)
+            ([salt_molecule, cation_molecule, anion_molecule], [...stoichiometric coefficients...])
         """
         (
             flattened_identifiers,
@@ -7701,7 +7701,7 @@ class MoleculeResolver:
         if minimum_number_of_crosschecks is None:
             minimum_number_of_crosschecks = 1
 
-        salt_info = self.find_single_molecule_crosschecked(
+        salt_molecule = self.find_single_molecule_crosschecked(
             identifiers,
             modes=modes,
             required_formula=required_formula,
@@ -7713,8 +7713,8 @@ class MoleculeResolver:
             ignore_exceptions=ignore_exceptions,
         )
 
-        if salt_info[0] is None:
-            salt_info = (
+        if not salt_molecule:
+            salt_molecule = Molecule(
                 given_SMILES,
                 synonyms,
                 CAS,
@@ -7723,8 +7723,9 @@ class MoleculeResolver:
                 "manual",
                 1,
             )
+
             if interactive:
-                salt_info = self.find_single_molecule(
+                salt_molecule = self.find_single_molecule(
                     identifiers,
                     modes=modes,
                     required_formula=required_formula,
@@ -7738,11 +7739,12 @@ class MoleculeResolver:
 
         all_molecules = []
         stoichometric_coefficients = []
-        if salt_info[0] is not None:
-            all_molecules.append(salt_info)
+        if salt_molecule:
+            all_molecules.append(salt_molecule)
             stoichometric_coefficients.append(-1)
-            SMILES = salt_info[0]
+            SMILES = salt_molecule.SMILES
 
+            ionic_SMILES_list = []
             if self.is_valid_SMILES(SMILES):
                 if SMILES.count(".") > 0:
                     ionic_SMILES_list = SMILES.split(".")
@@ -7756,12 +7758,11 @@ class MoleculeResolver:
 
                 charge_sum = 0
                 for ionic_SMILES in ionic_SMILES_set:
-                    stoichometric_coefficients.append(SMILES.count(ionic_SMILES))
 
                     ionic_mol = self.get_from_SMILES(ionic_SMILES)
                     ionic_charge = Chem.rdmolops.GetFormalCharge(ionic_mol)
 
-                    ionic_info = self.find_single_molecule_crosschecked(
+                    ionic_molecule = self.find_single_molecule_crosschecked(
                         ionic_SMILES,
                         modes="SMILES",
                         required_charge=ionic_charge,
@@ -7772,18 +7773,18 @@ class MoleculeResolver:
                         ignore_exceptions=ignore_exceptions,
                     )
 
-                    if ionic_info[0] is None:
-                        ionic_info = (
+                    if not ionic_molecule:
+                        ionic_molecule = Molecule(
                             ionic_SMILES,
                             [],
                             [],
-                            f"given identifiers: {ionic_SMILES}",
+                            "taken from salt SMILES",
                             "smiles",
                             "manual",
                             1,
                         )
                         if interactive:
-                            ionic_info = self.find_single_molecule(
+                            ionic_molecule = self.find_single_molecule(
                                 ionic_SMILES,
                                 modes="SMILES",
                                 required_charge=ionic_charge,
@@ -7794,28 +7795,29 @@ class MoleculeResolver:
                                 ignore_exceptions=ignore_exceptions,
                             )
 
-                    if ionic_info[0] is not None:
-                        all_molecules.append(ionic_info)
-
+                    if ionic_molecule:
+                        stoichometric_coefficients.append(SMILES.count(ionic_SMILES))
                         charge_sum += stoichometric_coefficients[-1] * ionic_charge
+                        all_molecules.append(ionic_molecule)
 
                 if charge_sum != 0:
-                    all_molecules = [salt_info]
+                    all_molecules = [salt_molecule]
+                    stoichometric_coefficients = [-1]
 
         # not all molecules have been found
         if len(all_molecules) < 3:
-            cation_info = None
-            anion_info = None
+            cation_molecule = None
+            anion_molecule = None
             all_molecules = []
-            if salt_info[0] is not None:
-                all_molecules.append(salt_info)
+            if salt_molecule is not None:
+                all_molecules.append(salt_molecule)
                 stoichometric_coefficients = [-1]
 
             for synonym in synonyms:
                 synonym_parts = synonym.split(" ")
                 possible_cation_name = synonym_parts[0]
 
-                cation_info = self.find_single_molecule_crosschecked(
+                cation_molecule = self.find_single_molecule_crosschecked(
                     possible_cation_name,
                     modes=["name"],
                     required_charge="positive",
@@ -7826,22 +7828,21 @@ class MoleculeResolver:
                     ignore_exceptions=ignore_exceptions,
                 )
 
-                if cation_info[0] is None:
-                    if interactive:
-                        cation_info = self.find_single_molecule(
-                            possible_cation_name,
-                            modes=["name"],
-                            required_charge="positive",
-                            required_structure_type="ion",
-                            services_to_use=[],
-                            search_iupac_name=search_iupac_name,
-                            interactive=interactive,
-                            ignore_exceptions=ignore_exceptions,
-                        )
+                if not cation_molecule and interactive:
+                    cation_molecule = self.find_single_molecule(
+                        possible_cation_name,
+                        modes=["name"],
+                        required_charge="positive",
+                        required_structure_type="ion",
+                        services_to_use=[],
+                        search_iupac_name=search_iupac_name,
+                        interactive=interactive,
+                        ignore_exceptions=ignore_exceptions,
+                    )
 
-                possible_anion_name = synonym_parts[1:]
+                possible_anion_name = ' '.join(synonym_parts[1:])
 
-                anion_info = self.find_single_molecule_crosschecked(
+                anion_molecule = self.find_single_molecule_crosschecked(
                     possible_anion_name,
                     modes=["name"],
                     required_charge="negative",
@@ -7852,37 +7853,40 @@ class MoleculeResolver:
                     ignore_exceptions=ignore_exceptions,
                 )
 
-                if anion_info[0] is None:
-                    if interactive:
-                        anion_info = self.find_single_molecule(
-                            possible_anion_name,
-                            modes=["name"],
-                            required_charge="negative",
-                            required_structure_type="ion",
-                            services_to_use=[],
-                            search_iupac_name=search_iupac_name,
-                            interactive=interactive,
-                            ignore_exceptions=ignore_exceptions,
-                        )
+                if not anion_molecule and interactive:
+                    anion_molecule = self.find_single_molecule(
+                        possible_anion_name,
+                        modes=["name"],
+                        required_charge="negative",
+                        required_structure_type="ion",
+                        services_to_use=[],
+                        search_iupac_name=search_iupac_name,
+                        interactive=interactive,
+                        ignore_exceptions=ignore_exceptions,
+                    )
 
-                if cation_info[0] is not None and anion_info[0] is not None:
-                    all_molecules.append(cation_info)
-                    all_molecules.append(anion_info)
+                if cation_molecule and anion_molecule:
+                    all_molecules.append(cation_molecule)
+                    all_molecules.append(anion_molecule)
 
-                if len(all_molecules) > 2:
-                    break
+                if ionic_SMILES_list:
+                    if len(all_molecules) == len(set(ionic_SMILES_list)):
+                        break
+                else:
+                    if len(all_molecules) > 2:
+                        break
 
             if len(all_molecules) > 2:
                 if len(all_molecules) != 3:
                     raise NotImplementedError(
-                        "Functionality for salts with more than 2 ions has not been implemented."
+                        "Automatic searching for salts with more than 2 ions has not been implemented."
                     )
 
                 cation_charge = Chem.rdmolops.GetFormalCharge(
-                    self.get_from_SMILES(cation_info[0])
+                    self.get_from_SMILES(cation_molecule.SMILES)
                 )
                 anion_charge = Chem.rdmolops.GetFormalCharge(
-                    self.get_from_SMILES(anion_info[0])
+                    self.get_from_SMILES(anion_molecule.SMILES)
                 )
 
                 if cation_charge >= abs(anion_charge):
@@ -7905,9 +7909,11 @@ class MoleculeResolver:
                         stoichometric_coefficients.append(abs(cation_charge))
 
                 if stoichometric_coefficients[0] != -1:
-                    temp_smiles = stoichometric_coefficients[1] * [cation_info[0]]
-                    temp_smiles.extend(stoichometric_coefficients[2] * [anion_info[0]])
-                    salt_info = (
+                    temp_smiles = stoichometric_coefficients[1] * [cation_molecule[0]]
+                    temp_smiles.extend(
+                        stoichometric_coefficients[2] * [anion_molecule[0]]
+                    )
+                    salt_molecule = (
                         self.standardize_SMILES(".".join(temp_smiles)),
                         synonyms,
                         list(CAS),
@@ -7916,7 +7922,7 @@ class MoleculeResolver:
                         "automatic",
                         1,
                     )
-                    all_molecules.insert(0, salt_info)
+                    all_molecules.insert(0, salt_molecule)
                     stoichometric_coefficients.insert(0, -1)
 
         if len(all_molecules) < 3:
@@ -8249,9 +8255,7 @@ class MoleculeResolver:
                                     mode_used = mode
                                     identifier_used = identifier
                                     current_service = "pubchem"
-                                    additional_information = (
-                                        "get_SMILES_for_ion_from_partial_pubchem_search"
-                                    )
+                                    additional_information = "get_molecule_for_ion_from_partial_pubchem_search"
                                     SMILES = molecules[0][
                                         0
                                     ].SMILES  # get most likely candidate
