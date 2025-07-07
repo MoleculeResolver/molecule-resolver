@@ -683,8 +683,9 @@ class MoleculeResolver:
             user_agent_is_set = "user-agent" in [key.lower() for key in headers.keys()]
 
         if user_agent_is_set is False:
+            from moleculeresolver import __version__
             headers["user-agent"] = (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0"
+                f"MoleculeResolver/{__version__} (+https://github.com/MoleculeResolver/molecule-resolver)"
             )
 
         kwargs["headers"] = headers

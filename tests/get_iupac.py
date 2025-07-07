@@ -5,7 +5,11 @@ from copy import deepcopy
 from tqdm import tqdm
 
 def get_iupac(smiles: str):
-    html_doc = requests.get("https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/" + smiles + "/record/XML")
+    
+    headers = {
+        "user-agent":f"MoleculeResolver/test (+https://github.com/MoleculeResolver/molecule-resolver)"
+    }
+    html_doc = requests.get("https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/" + smiles + "/record/XML", headers=headers)
     if html_doc.status_code != 200:
         return 
     root = etree.XML(html_doc.text)
