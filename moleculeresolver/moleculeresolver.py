@@ -259,6 +259,10 @@ class MoleculeResolver:
 
         self.molecule_cache_db_path = molecule_cache_db_path
         self.molecule_cache_expiration = molecule_cache_expiration
+        
+        self.molecule_cache = SqliteMoleculeCache(
+            self.molecule_cache_db_path, self.molecule_cache_expiration
+        )
 
         self._OPSIN_executable_path = None
 
@@ -380,9 +384,10 @@ class MoleculeResolver:
         """
         self._disabling_rdkit_logger = disabling_rdkit_logger()
         self._disabling_rdkit_logger.__enter__()
-        self.molecule_cache = SqliteMoleculeCache(
-            self.molecule_cache_db_path, self.molecule_cache_expiration
-        )
+        if not self.molecule_cache:
+            self.molecule_cache = SqliteMoleculeCache(
+                self.molecule_cache_db_path, self.molecule_cache_expiration
+            )
         self.molecule_cache.__enter__()
         if "opsin" in self._available_services_with_batch_capabilities:
             self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
