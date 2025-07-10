@@ -6518,7 +6518,7 @@ class MoleculeResolver:
                     else:
 
                         def get_prop_value(
-                            _compound, label, name, conversion_funtion, all_names=False
+                            _compound, label, name, conversion_funtion, all_names=False, raise_error_if_not_found=True
                         ):
                             props_found = [
                                 prop["value"]
@@ -6536,8 +6536,14 @@ class MoleculeResolver:
                                     if prop["urn"]["label"] == label
                                 }
                             else:
-                                if len(props_found) != 1:
-                                    raise
+                                if len(props_found) == 0:
+                                    if raise_error_if_not_found:
+                                        raise ValueError('No value found for property "' + label + '"')
+                                    else:
+                                        return None
+                                elif len(props_found) > 1:
+                                    raise ValueError('Too many values found for property "' + label + '"')
+                                
                                 prop_vals = list(props_found[0].values())
 
                                 return conversion_funtion(prop_vals[0])
@@ -6551,7 +6557,9 @@ class MoleculeResolver:
                             return
 
                         cid = compound["id"]["id"]["cid"]
-                        SMILES = get_prop_value(compound, "SMILES", "Isomeric", str)
+                        SMILES = get_prop_value(compound, "SMILES", "Isomeric", str, raise_error_if_not_found=False)
+                        if not SMILES:
+                            SMILES = get_prop_value(compound, "SMILES", "Absolute", str, raise_error_if_not_found=False)
                         SMILES_from_InChI = self.InChI_to_SMILES(
                             get_prop_value(compound, "InChI", "Standard", str)
                         )
