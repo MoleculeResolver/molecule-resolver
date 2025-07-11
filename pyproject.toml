@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "molecule-resolver"
-version = "0.3.7"
+version = "0.3.8"
 description = "A package to use several web services to find molecule structures, synonyms and CAS."
 authors = [
     "Simon Muller <simon.mueller@tuhh.de>",
