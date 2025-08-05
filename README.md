@@ -131,7 +131,7 @@ DOI: [10.1186/s13321-025-01064-7](https://doi.org/10.1186/s13321-025-01064-7)
 ```bibtex
 @article{Muller2025MoleculeResolver,
   author       = {Müller, Simon},
-  title        = {How to crack a SMILES: automatic cross‑checked chemical structure resolution across multiple services using MoleculeResolver},
+  title        = {How to crack a SMILES: automatic crosschecked chemical structure resolution across multiple services using MoleculeResolver},
   journal      = {Journal of Cheminformatics},
   year         = {2025},
   volume       = {17},
