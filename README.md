@@ -124,7 +124,7 @@ Contributions are welcome! If you have suggestions for improving the Molecule Re
 If you use MoleculeResolver in your research, please cite as follows:
 
 **Müller, S.**  
-*How to crack a SMILES: automatic cross‑checked chemical structure resolution across multiple services using MoleculeResolver*  
+*How to crack a SMILES: automatic crosschecked chemical structure resolution across multiple services using MoleculeResolver*  
 **Journal of Cheminformatics**, 17:117 (2025).  
 DOI: [10.1186/s13321-025-01064-7](https://doi.org/10.1186/s13321-025-01064-7)
 
