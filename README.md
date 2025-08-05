@@ -119,3 +119,24 @@ The `MoleculeResolver` class allows users to configure various options like:
 
 Contributions are welcome! If you have suggestions for improving the Molecule Resolver or want to add new features, feel free to submit an issue or a pull request on GitHub.
 
+## 📚 Citing
+
+If you use MoleculeResolver in your research, please cite as follows:
+
+**Müller, S.**  
+*How to crack a SMILES: automatic cross‑checked chemical structure resolution across multiple services using MoleculeResolver*  
+**Journal of Cheminformatics**, 17:117 (2025).  
+DOI: [10.1186/s13321-025-01064-7](https://doi.org/10.1186/s13321-025-01064-7)
+
+```bibtex
+@article{Muller2025MoleculeResolver,
+  author       = {Müller, Simon},
+  title        = {How to crack a SMILES: automatic cross‑checked chemical structure resolution across multiple services using MoleculeResolver},
+  journal      = {Journal of Cheminformatics},
+  year         = {2025},
+  volume       = {17},
+  page         = {117},
+  doi          = {10.1186/s13321-025-01064-7},
+  url          = {https://doi.org/10.1186/s13321-025-01064-7}
+}
+
