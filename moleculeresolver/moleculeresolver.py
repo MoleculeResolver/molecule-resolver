@@ -7843,7 +7843,7 @@ class MoleculeResolver:
                 CAS,
                 "given identifiers: " + ", ".join(flattened_identifiers),
                 ", ".join(flattened_modes),
-                "manual",
+                "automatic",
                 1,
             )
 
@@ -8047,6 +8047,14 @@ class MoleculeResolver:
                     )
                     all_molecules.insert(0, salt_molecule)
                     stoichometric_coefficients.insert(0, -1)
+
+                if not salt_molecule.SMILES:
+                    salt_SMILES_parts = []
+                    for stoichometric_coefficient, molecule in zip(stoichometric_coefficients, all_molecules):
+                        if stoichometric_coefficient > 0:
+                            salt_SMILES_parts.extend([molecule.SMILES] * stoichometric_coefficient)
+
+                    salt_molecule.SMILES = self.standardize_SMILES('.'.join(salt_SMILES_parts))
 
         if len(all_molecules) < 3:
             stoichometric_coefficients = []
