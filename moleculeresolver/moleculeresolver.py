@@ -361,6 +361,25 @@ class MoleculeResolver:
         self.comptox_API_token_regex_compiled = regex.compile(r"[a-z0-9\-]+")
         self.html_tag_regex_compiled = regex.compile(r"<.*?>")
 
+        self.tighten_commas_on_N_regex_compiled = regex.compile(
+            r"\b(?:N'*,? ?)+\-|\b(?:N\d*,? ?)+\-|\b(?:\d'*,? ?)+\-"
+        )
+        tighten_commas_on_enclosed_numbers_patterns = [
+            r"\((?:\d[A-Za-z0-9']{0,3},? ?)*\)",
+            r"\-(?:\d[A-Za-z0-9']{0,3},? ?)*\-",
+            r"\((?:\d[A-Za-z0-9']{0,3},? ?)*\-",
+            r"\-(?:\d[A-Za-z0-9']{0,3},? ?)*\)",
+            r"\-(?:\d[A-Za-z0-9']{0,3},? ?)*\(",
+            r"\[(?:\d[A-Za-z0-9'\-:]{0,4},? ?)*\]",
+        ]
+
+        self.tighten_commas_on_enclosed_numbers_regex_compiled_list = [
+            regex.compile(p) for p in tighten_commas_on_enclosed_numbers_patterns
+        ]
+        self.tighten_commas_at_the_beginning_of_the_name_regex_compiled = regex.compile(
+            r"\b[A-za-z]+, ((?:(?:\d)[A-Za-z0-9']{0,3},? ?)+)|^((?:\d[A-Za-z0-9']{0,3},? ?)+)\-"
+        )
+
         self._init_session()
 
     def __enter__(self) -> "MoleculeResolver":
@@ -391,7 +410,7 @@ class MoleculeResolver:
         self.molecule_cache.__enter__()
         if "opsin" in self._available_services_with_batch_capabilities:
             self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
-                prefix="OPSIN_tempfolder_"
+                prefix="OPSIN_tempfolder_", ignore_cleanup_errors=True
             )
         return self
 
@@ -689,6 +708,7 @@ class MoleculeResolver:
 
         if user_agent_is_set is False:
             from moleculeresolver import __version__
+
             headers["user-agent"] = (
                 f"MoleculeResolver/{__version__} (+https://github.com/MoleculeResolver/molecule-resolver)"
             )
@@ -1427,9 +1447,12 @@ class MoleculeResolver:
     def clean_chemical_name(
         self,
         chemical_name: str,
-        normalize: Optional[bool] = True,
-        unescape_html: Optional[bool] = True,
         spell_out_greek_characters: Optional[bool] = False,
+        replace_non_printable_characters: Optional[bool] = True,
+        unescape_html: Optional[bool] = True,
+        normalize: Optional[bool] = True,
+        tighten_commas: Optional[bool] = True,
+        collapse_spaces: Optional[bool] = True,
         for_filename: Optional[bool] = False,
     ) -> str:
         """
@@ -1469,6 +1492,9 @@ class MoleculeResolver:
             >>> clean_chemical_name("Sodium chloride, ≥99%", for_filename=True)
             'sodiumchloride99'
         """
+
+        chemical_name = chemical_name.strip()
+
         greek_letters = [
             "α",
             "β",
@@ -1596,8 +1622,8 @@ class MoleculeResolver:
             ):
                 map_to_replace.append((greek_letter, spelled_out_version))
 
-        chemical_name = self.replace_non_printable_characters(chemical_name)
-        chemical_name = chemical_name.strip()
+        if replace_non_printable_characters:
+            chemical_name = self.replace_non_printable_characters(chemical_name)
 
         if unescape_html:
             chemical_name = html.unescape(chemical_name)
@@ -1608,10 +1634,30 @@ class MoleculeResolver:
                 [c for c in nfkd_form if not unicodedata.combining(c)]
             )
 
+        def replace_found_group(match):
+            group_index_to_replace = 1 if match.group(1) else 2
+            group_to_replace = match.group(group_index_to_replace).replace(", ", ",")
+            return match.group(0).replace(
+                match.group(group_index_to_replace), group_to_replace
+            )
+
+        if tighten_commas:
+            for pattern in [
+                self.tighten_commas_on_N_regex_compiled
+            ] + self.tighten_commas_on_enclosed_numbers_regex_compiled_list:
+                chemical_name = pattern.sub(
+                    lambda match: match.group(0).replace(", ", ","), chemical_name
+                )
+
+            chemical_name = self.tighten_commas_at_the_beginning_of_the_name_regex_compiled.sub(
+                replace_found_group, chemical_name
+            )
+
         for old, new in map_to_replace:
             chemical_name = chemical_name.replace(old, new)
 
-        chemical_name = regex.sub(r"\s+", " ", chemical_name)
+        if collapse_spaces:
+            chemical_name = regex.sub(r"\s+", " ", chemical_name)
 
         if for_filename:
             chemical_name = regex.sub(r"[^\w\s]", "", chemical_name.lower())
@@ -1814,8 +1860,6 @@ class MoleculeResolver:
             temp_name = m.group(1).strip()
             names.append(temp_name)
             names.append(m.group(2).strip())
-
-        temp = name
 
         # add
         # acid, alskjdalskjd acid
@@ -4285,7 +4329,7 @@ class MoleculeResolver:
             self._OPSIN_tempfolder.name
         ):
             self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
-                prefix="OPSIN_tempfolder_"
+                prefix="OPSIN_tempfolder_", ignore_cleanup_errors=True
             )
 
         unique_id = str(uuid.uuid4())  # needed for multiple runs in parallel
@@ -5584,7 +5628,7 @@ class MoleculeResolver:
                     download_url, return_response=True
                 )
                 with (
-                    tempfile.TemporaryDirectory() as temp_dir,
+                    tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir,
                     warnings.catch_warnings(),
                 ):
                     warnings.simplefilter("ignore")
@@ -6518,7 +6562,12 @@ class MoleculeResolver:
                     else:
 
                         def get_prop_value(
-                            _compound, label, name, conversion_funtion, all_names=False, raise_error_if_not_found=True
+                            _compound,
+                            label,
+                            name,
+                            conversion_funtion,
+                            all_names=False,
+                            raise_error_if_not_found=True,
                         ):
                             props_found = [
                                 prop["value"]
@@ -6538,12 +6587,20 @@ class MoleculeResolver:
                             else:
                                 if len(props_found) == 0:
                                     if raise_error_if_not_found:
-                                        raise ValueError('No value found for property "' + label + '"')
+                                        raise ValueError(
+                                            'No value found for property "'
+                                            + label
+                                            + '"'
+                                        )
                                     else:
                                         return None
                                 elif len(props_found) > 1:
-                                    raise ValueError('Too many values found for property "' + label + '"')
-                                
+                                    raise ValueError(
+                                        'Too many values found for property "'
+                                        + label
+                                        + '"'
+                                    )
+
                                 prop_vals = list(props_found[0].values())
 
                                 return conversion_funtion(prop_vals[0])
@@ -6557,9 +6614,21 @@ class MoleculeResolver:
                             return
 
                         cid = compound["id"]["id"]["cid"]
-                        SMILES = get_prop_value(compound, "SMILES", "Isomeric", str, raise_error_if_not_found=False)
+                        SMILES = get_prop_value(
+                            compound,
+                            "SMILES",
+                            "Isomeric",
+                            str,
+                            raise_error_if_not_found=False,
+                        )
                         if not SMILES:
-                            SMILES = get_prop_value(compound, "SMILES", "Absolute", str, raise_error_if_not_found=False)
+                            SMILES = get_prop_value(
+                                compound,
+                                "SMILES",
+                                "Absolute",
+                                str,
+                                raise_error_if_not_found=False,
+                            )
                         SMILES_from_InChI = self.InChI_to_SMILES(
                             get_prop_value(compound, "InChI", "Standard", str)
                         )
@@ -7894,7 +7963,7 @@ class MoleculeResolver:
                         ignore_exceptions=ignore_exceptions,
                     )
 
-                possible_anion_name = ' '.join(synonym_parts[1:])
+                possible_anion_name = " ".join(synonym_parts[1:])
 
                 anion_molecule = self.find_single_molecule_crosschecked(
                     possible_anion_name,
