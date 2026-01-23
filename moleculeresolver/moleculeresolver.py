@@ -5649,11 +5649,12 @@ class MoleculeResolver:
 
                         row_values = [cell.value for cell in row]
                         synonyms = []
-                        identifier = row_values[0].strip()
-                        if row_values[1]:
-                            synonyms = [v.strip() for v in row_values[1].split("|")]
+                        if row_values[0]:
+                            identifier = row_values[0].strip()
+                            if row_values[1]:
+                                synonyms = [v.strip() for v in row_values[1].split("|")]
 
-                        synonyms_by_identifier_lower[identifier.lower()] = synonyms
+                            synonyms_by_identifier_lower[identifier.lower()] = synonyms
 
                     temp_results_by_identifier = {}
 
