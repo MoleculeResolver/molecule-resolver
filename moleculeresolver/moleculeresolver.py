@@ -259,7 +259,7 @@ class MoleculeResolver:
 
         self.molecule_cache_db_path = molecule_cache_db_path
         self.molecule_cache_expiration = molecule_cache_expiration
-        
+
         self.molecule_cache = SqliteMoleculeCache(
             self.molecule_cache_db_path, self.molecule_cache_expiration
         )
@@ -1649,8 +1649,10 @@ class MoleculeResolver:
                     lambda match: match.group(0).replace(", ", ","), chemical_name
                 )
 
-            chemical_name = self.tighten_commas_at_the_beginning_of_the_name_regex_compiled.sub(
-                replace_found_group, chemical_name
+            chemical_name = (
+                self.tighten_commas_at_the_beginning_of_the_name_regex_compiled.sub(
+                    replace_found_group, chemical_name
+                )
             )
 
         for old, new in map_to_replace:
@@ -1801,7 +1803,7 @@ class MoleculeResolver:
 
     def expand_name_heuristically(
         self,
-        name: str,
+        name: Union[str, list[str]],
         prefixes_to_delete: Optional[list[str]] = None,
         suffixes_to_use_as_prefix: Optional[list[str]] = None,
         suffixes_to_delete: Optional[list[str]] = None,
@@ -1839,6 +1841,18 @@ class MoleculeResolver:
             - Applies a series of regex-based transformations to standardize the name format.
             - Special handling is implemented for stereochemistry indicators (e.g., cis/trans, E/Z).
         """
+        if isinstance(name, list):
+            return [
+                self.expand_name_heuristically(
+                    v,
+                    prefixes_to_delete,
+                    suffixes_to_use_as_prefix,
+                    suffixes_to_delete,
+                    parts_to_delete,
+                    maps_to_replace,
+                )
+                for v in name
+            ]
         name = self.replace_non_printable_characters(name.strip())
         original_name = name
         names = [original_name]
@@ -1904,7 +1918,9 @@ class MoleculeResolver:
         if suffixes_to_delete is None:
             suffixes_to_delete = [
                 "mixed isomers",
+                "(mixed isomers)",
                 "and isomers",
+                ", isomers",
                 "isomers",
                 "tautomers",
                 "dl and meso",
@@ -1916,6 +1932,8 @@ class MoleculeResolver:
                 "\.\+/-\.",
                 "\.\+-\.",
                 "cis and trans",
+                "; (cis+trans)",
+                ", endo and exo",
                 "-d2",
             ]
 
@@ -3297,7 +3315,9 @@ class MoleculeResolver:
             return False
 
     @cache
-    def expand_CAS_heuristically(self, CAS: str, max_swaps: int = 2) -> list[str]:
+    def expand_CAS_heuristically(
+        self, CAS: Union[str, list[str]], max_swaps: int = 2
+    ) -> list[str]:
         """
         Perform a BFS over keyboard-adjacent digit swaps to find valid CAS numbers
         with the lowest amount of swaps, hopefully allowing to fix a CAS.
@@ -3316,6 +3336,8 @@ class MoleculeResolver:
             list[str]: A list of all valid CAS strings found at the minimal swap
             distance. Returns an empty list if none are found within `max_swaps`.
         """
+        if isinstance(CAS, list):
+            return [self.expand_CAS_heuristically(v, max_swaps) for v in CAS]
 
         if self.is_valid_CAS(CAS):
             return [CAS]
@@ -4267,6 +4289,11 @@ class MoleculeResolver:
     def _get_and_run_OPSIN_executable(
         self, names: tuple[str], allow_uninterpretable_stereo: Optional[bool] = False
     ) -> list[Optional[str]]:
+
+        if not self._java_path:
+            raise FileNotFoundError(
+                "The java installation could not be found. Either it is not installed or its location has not been added to the path environment variable."
+            )
 
         if not self._OPSIN_executable_path or not os.path.exists(
             self._OPSIN_executable_path
@@ -6257,7 +6284,7 @@ class MoleculeResolver:
 
         def get_results(download_url):
             found_results = {}
-            n_try = 5
+            n_try = 0
             while True:
                 try:
                     with closing(urllib.request.urlopen(download_url)) as r:
@@ -6275,7 +6302,7 @@ class MoleculeResolver:
                     if n_try > 5:
                         raise e
                     n_try += 1
-                    time.sleep(3)
+                    time.sleep(5)
 
             return found_results
 
@@ -8051,11 +8078,17 @@ class MoleculeResolver:
 
                 if not salt_molecule.SMILES:
                     salt_SMILES_parts = []
-                    for stoichometric_coefficient, molecule in zip(stoichometric_coefficients, all_molecules):
+                    for stoichometric_coefficient, molecule in zip(
+                        stoichometric_coefficients, all_molecules
+                    ):
                         if stoichometric_coefficient > 0:
-                            salt_SMILES_parts.extend([molecule.SMILES] * stoichometric_coefficient)
+                            salt_SMILES_parts.extend(
+                                [molecule.SMILES] * stoichometric_coefficient
+                            )
 
-                    salt_molecule.SMILES = self.standardize_SMILES('.'.join(salt_SMILES_parts))
+                    salt_molecule.SMILES = self.standardize_SMILES(
+                        ".".join(salt_SMILES_parts)
+                    )
 
         if len(all_molecules) < 3:
             stoichometric_coefficients = []
@@ -8930,7 +8963,12 @@ class MoleculeResolver:
         self._init_session(pool_maxsize=max_workers * 2)
 
         if isinstance(modes, str):
-            modes = [modes] * len(identifiers)
+            temp_modes = []
+            for identifier in identifiers:
+                if not isinstance(identifier, list):
+                    identifier = [identifier]
+                temp_modes.append([modes] * len(identifier))
+            modes = temp_modes
 
         if services_to_use is None:
             services_to_use = self._available_services
