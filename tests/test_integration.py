@@ -46,14 +46,15 @@ class MoleculeResolverPatched(MoleculeResolver):
         self,
         url: str,
         kwargs: Optional[dict[str, Any]] = None,
-        request_type: str = "get",
+        request_type: Optional[str] = "get",
         accepted_status_codes: list[int] = [200],
         rejected_status_codes: list[int] = [404],
-        max_retries: int = 10,
+        offline_status_codes: list[int] = [],
+        max_retries: Optional[int] = 10,
         sleep_time: Union[int, float] = 2,
-        allow_redirects: bool = False,
-        json: Any = None,
-        return_response: bool = False,
+        allow_redirects: Optional[bool] = False,
+        json: Optional[str] = None,
+        return_response: Optional[bool] = False,
     ) -> Optional[str]:
         if self.json_path is not None and url in self.json_data:
             res =  self.json_data[url]
@@ -64,6 +65,7 @@ class MoleculeResolverPatched(MoleculeResolver):
                 request_type,
                 accepted_status_codes,
                 rejected_status_codes,
+                offline_status_codes,
                 max_retries,
                 sleep_time,
                 allow_redirects,
