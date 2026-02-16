@@ -6491,7 +6491,7 @@ class MoleculeResolver:
                                 }
                             else:
                                 if len(props_found) != 1:
-                                    raise
+                                    raise ValueError(f"Expected exactly 1 property, found {len(props_found)}")
                                 prop_vals = list(props_found[0].values())
 
                                 return conversion_funtion(prop_vals[0])
