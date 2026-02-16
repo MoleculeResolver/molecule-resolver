@@ -4280,10 +4280,27 @@ class MoleculeResolver:
             java_path for java_path in java_paths if os.path.exists(java_path)
         ]
 
-        if output.returncode != 0 or len(java_paths) == 0:
+        valid_java_paths = []
+
+        for java_path in java_paths:
+            if not os.path.exists(java_path):
+                continue
+
+            try:
+                subprocess.run(
+                    [java_path, "-version"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=True,
+                )
+                valid_java_paths.append(java_path)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+
+        if output.returncode != 0 or len(valid_java_paths) == 0:
             return None
         else:
-            return java_paths[0]
+            return valid_java_paths[0]
 
     @cache
     def _get_and_run_OPSIN_executable(
