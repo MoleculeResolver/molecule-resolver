@@ -138,102 +138,103 @@ class TestServices:
                 data["SMILES"],
             )
 
-    # def test_pubchem(self, data):
-    #     with MoleculeResolver() as mr:
+    def test_pubchem(self, data):
+        with MoleculeResolverPatched(json_path=self.json_path) as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_pubchem,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_comptox(self, data):
+        with MoleculeResolverPatched(json_path=self.json_path) as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CompTox,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    def test_cts(self, data):
+        with MoleculeResolverPatched(json_path=self.json_path) as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CTS,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
+
+    # Need API key
+    # def test_chemeo(self, data):
+    #     with MoleculeResolverPatched(json_path=self.json_path) as mr:
     #         iupac_name = data["iupac_name"]
     #         self._test_service(
-    #             mr.get_molecule_from_pubchem,
+    #             mr.get_molecule_from_Chemeo,
     #             iupac_name,
     #             SMILES,
     #             data["SMILES"],
     #             {"mode": "name"},
     #         )
 
-    # def test_comptox(self, data):
-    #     with MoleculeResolver() as mr:
-    #         iupac_name = data["iupac_name"]
-    #         self._test_service(
-    #             mr.get_molecule_from_CompTox,
-    #             iupac_name,
-    #             SMILES,
-    #             data["SMILES"],
-    #             {"mode": "name"},
-    #         )
+    def test_cas(self, data):
+        with MoleculeResolverPatched(json_path=self.json_path) as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CAS_registry,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
 
-    # def test_cts(self, data):
-    #     with MoleculeResolver() as mr:
-    #         iupac_name = data["iupac_name"]
-    #         self._test_service(
-    #             mr.get_molecule_from_CTS,
-    #             iupac_name,
-    #             SMILES,
-    #             data["SMILES"],
-    #             {"mode": "name"},
-    #         )
+    def test_cir(self, data):
+        with MoleculeResolverPatched(json_path=self.json_path) as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_CIR,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
 
-    # # Need API key
-    # # def test_chemeo(self, data):
-    # #     with MoleculeResolver() as mr:
-    # #         iupac_name = data["iupac_name"]
-    # #         self._test_service(
-    # #             mr.get_molecule_from_Chemeo,
-    # #             iupac_name,
-    # #             SMILES,
-    # #             data["SMILES"],
-    # #             {"mode": "name"},
-    # #         )
+    def test_nist(self, data):
+        with MoleculeResolverPatched(json_path=self.json_path) as mr:
+            iupac_name = data["iupac_name"]
+            self._test_service(
+                mr.get_molecule_from_NIST,
+                iupac_name,
+                SMILES,
+                data["SMILES"],
+                {"mode": "name"},
+            )
 
-    # def test_cas(self, data):
-    #     with MoleculeResolver() as mr:
-    #         iupac_name = data["iupac_name"]
-    #         self._test_service(
-    #             mr.get_molecule_from_CAS_registryx,
-    #             iupac_name,
-    #             SMILES,
-    #             data["SMILES"],
-    #             {"mode": "name"},
-    #         )
-
-    # def test_cir(self, data):
-    #     with MoleculeResolver() as mr:
-    #         iupac_name = data["iupac_name"]
-    #         self._test_service(
-    #             mr.get_molecule_from_CIR,
-    #             iupac_name,
-    #             SMILES,
-    #             data["SMILES"],
-    #             {"mode": "name"},
-    #         )
-
-    # def test_nist(self, data):
-    #     with MoleculeResolver() as mr:
-    #         iupac_name = data["iupac_name"]
-    #         self._test_service(
-    #             mr.get_molecule_from_NIST,
-    #             iupac_name,
-    #             SMILES,
-    #             data["SMILES"],
-    #             {"mode": "name"},
-    #         )
-
+    # ChEBI test disabled - benchmark data doesn't have chebi_id field
     # def test_chebi(self, data):
-    #     with MoleculeResolver() as mr:
+    #     with MoleculeResolverPatched(json_path=self.json_path) as mr:
     #         iupac_name = data["iupac_name"]
     #         self._test_service(
     #             mr.get_molecule_from_ChEBI, iupac_name, "chebi_id", data["chebi_id"]
     #         )
 
 
-# def test_opsin_batchmode():
-#     names = [d["iupac_name"] for d in benchmark.values()]
-#     smiles = [d["SMILES"] for d in benchmark.values()]
-#     with MoleculeResolver() as mr:
-#         res = mr.get_molecule_from_OPSIN_batchmode(names)
-#     for i, r in enumerate(res):
-#         if r[0].SMILES == smiles[i]:
-#             continue
-#         else:
-#             raise ValueError("Expected " + smiles[i] + " but got " + r.SMILES)
+def test_opsin_batchmode():
+    names = [d["iupac_name"] for d in benchmark.values()]
+    smiles = [d["SMILES"] for d in benchmark.values()]
+    with MoleculeResolver() as mr:
+        res = mr.get_molecule_from_OPSIN_batchmode(names)
+    for i, r in enumerate(res):
+        if r[0].SMILES == smiles[i]:
+            continue
+        else:
+            raise ValueError("Expected " + smiles[i] + " but got " + r[0].SMILES)
 
 
 def generate_data(json_path, overwrite_json: bool = False):
