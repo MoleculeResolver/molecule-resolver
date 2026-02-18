@@ -4294,6 +4294,7 @@ class MoleculeResolver:
                     check=True,
                 )
                 valid_java_paths.append(java_path)
+                break
             except (subprocess.CalledProcessError, FileNotFoundError):
                 continue
 
@@ -7556,9 +7557,13 @@ class MoleculeResolver:
                     "cas": ("cas_number", "name_by_cir"),
                 }
 
-                SMILES = self._get_info_from_CIR(
-                    identifier, "smiles", resolvers_by_mode[mode], 1
-                )
+                if mode == "smiles":
+                    SMILES = identifier
+                else:
+                    SMILES = self._get_info_from_CIR(
+                        identifier, "smiles", resolvers_by_mode[mode], 1
+                    )
+
                 if not SMILES:
                     return None
                 else:
@@ -7568,6 +7573,9 @@ class MoleculeResolver:
                     CIR_names = self._get_info_from_CIR(
                         identifier, "names", resolvers_by_mode[mode]
                     )
+                    if not CIR_names and mode == "smiles":
+                        return None
+                    
                     synonyms = self.filter_and_sort_synonyms(
                         CIR_names if CIR_names else []
                     )
