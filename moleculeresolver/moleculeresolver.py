@@ -7558,7 +7558,7 @@ class MoleculeResolver:
                 }
 
                 if mode == "smiles":
-                    SMILES = identifier
+                    SMILES = [identifier]
                 else:
                     SMILES = self._get_info_from_CIR(
                         identifier, "smiles", resolvers_by_mode[mode], 1
