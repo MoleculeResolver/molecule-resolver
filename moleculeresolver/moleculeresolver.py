@@ -1766,7 +1766,7 @@ class MoleculeResolver:
                     )  # filter CAS numbers
                     # filter names with 3 consecutive numbers or containing some keywords
                     match2 = regex.search(
-                        r"\d{3}|\bin\b|\bgrade\b|\bsolution\b|\bstandard\b|\bstabilized\b|\bdimer\b|\bfor\b|\btablet\b|\btotal\b|\bcode\b|\bNo\.\b|\banhydrous\b",
+                        r"\d{3}|\bin\b|\bC\d+\s*\-\s*C?\d+\b|\bInChI=\b|\bgrade\b|\bsolution\b|\bstandard\b|\bstabilized\b|\bdimer\b|\bfor\b|\btablet\b|\btotal\b|\bcode\b|\bNo\.\b|\banhydrous\b",
                         synonym,
                         regex.IGNORECASE,
                     )
@@ -7420,18 +7420,30 @@ class MoleculeResolver:
         CIR_URL = "https://cactus.nci.nih.gov/chemical/structure/"
         # info can be e.g. smiles, iupac_name
         try:
-            resolver_info = ""
+            resolvers_to_use_info = ""
             if resolvers_to_use:
-                resolver_info = f'?resolver={",".join(resolvers_to_use)}'
-            # although the documentation says otherwise it returns a 500 response even if it should return 404
+                resolvers_to_use_info = f'?resolver={",".join(resolvers_to_use)}'
+            # unfortunately it is not documented that using a text only response instead of xml
+            # leads to an internal server error if the identifier is not found
+            # calling it with an xml request  gets rid of almost all problems with CIR
+            # also leading to less banning due to not causing these issues
             response_text = self._resilient_request(
-                f"{CIR_URL}{urllib.parse.quote(structure_identifier)}/{representation}{resolver_info}",
+                f"{CIR_URL}{urllib.parse.quote(structure_identifier)}/{representation}/xml{resolvers_to_use_info}",
                 rejected_status_codes=[404, 500],
             )
-            time.sleep(1)
             if not response_text:
                 return None
-            response_values = response_text.split("\n")
+
+            root = xmltodict.parse(response_text)
+            response_values = []
+            if "data" in root["request"]:
+                if isinstance(root["request"]["data"]["item"], dict):
+                    root["request"]["data"]["item"] = [root["request"]["data"]["item"]]
+
+                response_values = [
+                    v["#text"].strip() for v in root["request"]["data"]["item"]
+                ]
+
             if response_values:
                 if expected_number_of_results is not None:
                     if len(response_values) != expected_number_of_results:
@@ -7575,7 +7587,7 @@ class MoleculeResolver:
                     )
                     if not CIR_names and mode == "smiles":
                         return None
-                    
+
                     synonyms = self.filter_and_sort_synonyms(
                         CIR_names if CIR_names else []
                     )
