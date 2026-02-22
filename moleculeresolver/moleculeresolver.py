@@ -245,11 +245,15 @@ class MoleculeResolver:
         if not available_service_API_keys:
             available_service_API_keys = {}
 
+        if "cas_registry" not in available_service_API_keys:
+            available_service_API_keys["cas_registry"] = None
+
         if "chemeo" not in available_service_API_keys:
             available_service_API_keys["chemeo"] = None
 
-        if "comptox" not in available_service_API_keys:
-            available_service_API_keys["comptox"] = None
+        # currently not used
+        # if "comptox" not in available_service_API_keys:
+        #     available_service_API_keys["comptox"] = None
 
         self._module_path = os.path.dirname(__file__)
         if not molecule_cache_db_path:
@@ -357,8 +361,9 @@ class MoleculeResolver:
             r"^[A-Z]{14}\-[A-Z]{8}[SN][A-Z]\-[A-Z]$"
         )
 
-        self.chemeo_API_token_regex_compiled = regex.compile(r"[a-zA-Z0-9_]+")
-        self.comptox_API_token_regex_compiled = regex.compile(r"[a-z0-9\-]+")
+        self.chemeo_API_token_regex_compiled = regex.compile(r"^[a-zA-Z0-9_]+$")
+        self.cas_registry_API_token_regex_compiled = regex.compile(r"^[a-zA-Z0-9]+$")
+        self.comptox_API_token_regex_compiled = regex.compile(r"^[a-z0-9\-]+$")
         self.html_tag_regex_compiled = regex.compile(r"<.*?>")
 
         self.tighten_commas_on_N_regex_compiled = regex.compile(
@@ -736,15 +741,15 @@ class MoleculeResolver:
                 if response.status_code in accepted_status_codes:
                     if return_response:
                         return response
-                    response_text = response.content.decode("utf8", errors="ignore")
-                    response_text = response_text.replace("\u200b", "")
-                    # find encoding errors
-                    if response_text != response.text:
-                        if response_text.count(r"\u") + response_text.count(r"\x") > 0:
-                            raise UnicodeEncodeError(
-                                "Wrong character encoding was used."
-                            )
-                    return response_text
+                    # response_text = response.content.decode("utf8", errors="ignore")
+                    # response_text = response_text.replace("\u200b", "")
+                    # # find encoding errors
+                    # if response_text != response.text:
+                    #     if response_text.count(r"\u") + response_text.count(r"\x") > 0:
+                    #         raise UnicodeEncodeError(
+                    #             "Wrong character encoding was used."
+                    #         )
+                    return response.text
                 elif response.status_code in rejected_status_codes:
                     return None
                 else:
@@ -4680,7 +4685,7 @@ class MoleculeResolver:
             (Molecule(smi, service="pubchem"), y) for smi, y in counts.most_common()
         ]
 
-    def get_molecule_from_ChEBI_old(
+    def get_molecule_from_ChEBI(
         self,
         identifier: str,
         mode: str,
@@ -4709,7 +4714,6 @@ class MoleculeResolver:
         Notes:
             - Checks a cache for previously retrieved molecules.
             - Uses the ChEBI web services API to query the database.
-            - Retrieves up to 5 results for formula searches; otherwise, retrieves 1 result.
             - Extracts SMILES, synonyms, CAS numbers, and ChEBI ID.
             - Filters results based on required formula, charge, and structure type.
             - Combines multiple matching molecules into a single result if necessary.
@@ -4732,298 +4736,87 @@ class MoleculeResolver:
             molecules,
         ):
             if not entry_available:
-                CHEBI_URL = "https://www.ebi.ac.uk/webservices/chebi/2.0/test/"
-                mode_mapping = {
-                    "name": "ALL+NAMES",
-                    "cas": "REGISTRY+NUMBERS",
-                    "formula": "FORMULA",
-                    "smiles": "SMILES",
-                    "inchi": "INCHI%2FINCHI+KEY",
-                    "inchikey": "INCHI%2FINCHI+KEY",
+                ChEBI_ENDPOINT = "https://www.ebi.ac.uk/chebi/backend/api/public"
+
+                mode_mapping_advanced_search = {
+                    "name": "name",
+                    "cas": "database_references",
+                    "inchi": "inchi",
+                    "inchikey": "inchikey",
+                    "formula": "formula",
                 }
-                maximumResults = 5 if mode == "formula" else 1
-                search_response_text = self._resilient_request(
-                    f'{CHEBI_URL}getLiteEntity?search={urllib.parse.quote(identifier, safe="")}&searchCategory={mode_mapping[mode]}&maximumResults={maximumResults}&starsCategory=ALL'
-                )
 
-                SMILES = None
-                synonyms = []
-                CAS = []
-                ChEBI_id = None
+                if mode in mode_mapping_advanced_search:
 
-                if search_response_text is not None:
-                    root = xmltodict.parse(search_response_text)
-                    if "getLiteEntityResponse" not in root["S:Envelope"]["S:Body"]:
+                    data = {
+                        "text_search_specification": {
+                            "and_specification": [
+                                {
+                                    "text": identifier,
+                                    "category": mode_mapping_advanced_search[mode],
+                                }
+                            ]
+                        }
+                    }
+                    if mode == "formula":
+                        {
+                            "formula_specification": {
+                                "and_specification": [{"term": identifier}]
+                            }
+                        }
+                    search_response_text = self._resilient_request(
+                        f"{ChEBI_ENDPOINT}/advanced_search/?three_star_only=false&has_structure=true&page=1&size=1&download=false",
+                        request_type="post",
+                        json=data,
+                    )
+                else:
+                    search_response_text = self._resilient_request(
+                        f"{ChEBI_ENDPOINT}/structure_search/?smiles=CCO&search_type=similarity&similarity=1&three_star_only=false&page=1&size=3&download=false"
+                    )
+
+                if not search_response_text:
+                    return None
+                else:
+                    temp_results = json.loads(search_response_text)
+
+                    if not temp_results["results"]:
                         return None
 
-                    temp = root["S:Envelope"]["S:Body"]["getLiteEntityResponse"][
-                        "return"
-                    ]
-                    if not temp:
-                        return None
-
-                    temp_list = temp["ListElement"]
-                    if not isinstance(temp["ListElement"], list):
-                        temp_list = [temp["ListElement"]]
-
-                    found_ChEBI_ids = [item["chebiId"] for item in temp_list]
-                    for ChEBI_id in found_ChEBI_ids:
-                        molecule_response_text = self._resilient_request(
-                            f"{CHEBI_URL}getCompleteEntity?chebiId={ChEBI_id}"
-                        )
-
-                        if molecule_response_text is not None:
-                            root = xmltodict.parse(molecule_response_text)
-                            molecule = root["S:Envelope"]["S:Body"][
-                                "getCompleteEntityResponse"
-                            ]["return"]
-
-                            if "smiles" not in molecule:
-                                continue
-                            SMILES = molecule["smiles"]
-
-                            if "IupacNames" in molecule:
-                                if isinstance(molecule["IupacNames"], list):
-                                    synonyms.extend(
-                                        [
-                                            synonym["data"]
-                                            for synonym in molecule["IupacNames"]
-                                        ]
-                                    )
-                                elif isinstance(molecule["IupacNames"], dict):
-                                    synonyms.append(molecule["IupacNames"]["data"])
-                            if "Synonyms" in molecule:
-                                temp = molecule["Synonyms"]
-                                if not isinstance(molecule["Synonyms"], list):
-                                    temp = [temp]
-                                synonyms.extend([synonym["data"] for synonym in temp])
-
-                            synonyms = self.filter_and_sort_synonyms(synonyms)
-
-                            if "RegistryNumbers" in molecule:
-                                temp = molecule["RegistryNumbers"]
-                                if not isinstance(molecule["RegistryNumbers"], list):
-                                    temp = [molecule["RegistryNumbers"]]
-                                CAS = self.filter_and_sort_CAS(
-                                    [synonym["data"] for synonym in temp]
-                                )
-
-                            molecule = Molecule(
-                                SMILES,
-                                synonyms,
-                                CAS,
-                                ChEBI_id.split(":")[1],
-                                mode,
-                                service="chebi",
-                            )
-                            molecules.append(molecule)
-
-        return self.filter_and_combine_molecules(
-            molecules,
-            required_formula,
-            required_charge,
-            required_structure_type,
-        )
-
-    def get_molecule_from_ChEBI(
-        self,
-        identifier: str,
-        mode: str,
-        required_formula: Optional[str] = None,
-        required_charge: Optional[int] = None,
-        required_structure_type: Optional[str] = None,
-    ) -> Optional[Molecule]:
-        """
-        Retrieve a molecule from ChEBI based on the provided identifier and mode.
-
-        Queries the ChEBI database to retrieve molecule information based on various identifiers.
-
-        Args:
-            identifier (str): The identifier to search for.
-            mode (str): The type of identifier (e.g., 'name', 'cas', 'formula', 'smiles', 'inchi', 'inchikey').
-            required_formula (Optional[str]): The expected molecular formula.
-            required_charge (Optional[int]): The expected molecular charge.
-            required_structure_type (Optional[str]): The expected structure type.
-
-        Returns:
-            Optional[Molecule]: A Molecule object if found and meets all requirements, None otherwise.
-        """
-        if required_formula is None:
-            if mode == "formula":
-                required_formula = identifier
-
-        self._check_parameters(
-            services="chebi",
-            modes=mode,
-            required_charges=required_charge,
-            required_structure_types=required_structure_type,
-            required_formulas=required_formula,
-        )
-
-        with self.query_molecule_cache("chebi", mode, identifier) as (
-            entry_available,
-            molecules,
-        ):
-            if not entry_available:
-                SOAP_ENDPOINT = (
-                    "http://www.ebi.ac.uk:80/webservices/chebi/2.0/webservice"
-                )
-                mode_mapping = {
-                    "name": "ALL NAMES",
-                    "cas": "REGISTRY NUMBERS",
-                    "formula": "FORMULA",
-                    "smiles": "SMILES",
-                    "inchi": "INCHI/INCHI KEY",
-                    "inchikey": "INCHI/INCHI KEY",
-                }
-                maximumResults = 1 if mode == "formula" else 5
-
-                # Construct SOAP request for getLiteEntity
-                soap_request = f"""
-                <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-                                xmlns:chebi="https://www.ebi.ac.uk/webservices/chebi">
-                <soapenv:Header/>
-                <soapenv:Body>
-                    <chebi:getLiteEntity>
-                        <chebi:search>{identifier}</chebi:search>
-                        <chebi:searchCategory>{mode_mapping[mode]}</chebi:searchCategory>
-                        <chebi:maximumResults>{maximumResults}</chebi:maximumResults>
-                        <chebi:stars>ALL</chebi:stars>
-                    </chebi:getLiteEntity>
-                </soapenv:Body>
-                </soapenv:Envelope>
-                """
-                # chebi does not allow differentiating between inchi and inchicode
-                # so I am adding the functionality here
-                if mode == "inchi" and not self.InChI_regex_compiled.match(identifier):
-                    return None
-
-                if mode == "inchikey" and not self.InChIKey_regex_compiled.match(
-                    identifier
-                ):
-                    return None
-
-                search_response_text = self._resilient_request(
-                    SOAP_ENDPOINT,
-                    {
-                        "data": soap_request,
-                        "headers": {"Content-Type": "text/xml; charset=utf-8"},
-                    },
-                    request_type="post",
-                    rejected_status_codes=[404, 500],
-                )
-                if search_response_text is None:
-                    return None
-
-                root = xmltodict.parse(search_response_text)
-                if (
-                    root["S:Envelope"]["S:Body"]["getLiteEntityResponse"]["return"]
-                    is None
-                ):
-                    return None
-                temp_list = root["S:Envelope"]["S:Body"]["getLiteEntityResponse"][
-                    "return"
-                ]["ListElement"]
-                if not isinstance(temp_list, list):
-                    temp_list = [temp_list]
-                found_ChEBI_ids = [item["chebiId"] for item in temp_list]
-
-                # Construct SOAP request for getCompleteEntityByList
-                ids_xml = "".join(
-                    f"<chebi:ListOfChEBIIds>{chebi_id}</chebi:ListOfChEBIIds>"
-                    for chebi_id in found_ChEBI_ids
-                )
-                complete_entity_request = f"""
-                <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-                                xmlns:chebi="https://www.ebi.ac.uk/webservices/chebi">
-                <soapenv:Header/>
-                <soapenv:Body>
-                    <chebi:getCompleteEntityByList>
-                        {ids_xml}
-                    </chebi:getCompleteEntityByList>
-                </soapenv:Body>
-                </soapenv:Envelope>
-                """
-                complete_response_text = self._resilient_request(
-                    SOAP_ENDPOINT,
-                    {"data": complete_entity_request},
-                    request_type="post",
-                )
-                if complete_response_text is None:
-                    return None
-
-                root = xmltodict.parse(complete_response_text)
-                try:
-                    entities = root["S:Envelope"]["S:Body"][
-                        "getCompleteEntityByListResponse"
-                    ]["return"]
-                    if not isinstance(entities, list):
-                        entities = [entities]
-                except KeyError:
-                    return None
-
-                SMILES = None
-                for entity in entities:
-                    if "smiles" in entity:
-                        SMILES = entity["smiles"]
-                    else:
-                        if "ChemicalStructures" in entity:
-                            if not isinstance(entity["ChemicalStructures"], list):
-                                entity["ChemicalStructures"] = [
-                                    entity["ChemicalStructures"]
-                                ]
-                            for structure in entity["ChemicalStructures"]:
-                                if structure["type"] == "mol":
-                                    mol = Chem.MolFromMolBlock(structure["structure"])
-                                    if mol:
-                                        SMILES = Chem.MolToSmiles(mol)
-                                        break
-
-                    if not SMILES:
-                        continue
-
+                    ChEBI_ID = temp_results["results"][0]["_id"]
+                    entity_response_text = self._resilient_request(
+                        f"{ChEBI_ENDPOINT}/compound/{ChEBI_ID}/?format=json"
+                    )
+                    entity = json.loads(entity_response_text)
+                    SMILES = entity["default_structure"]["smiles"]
                     synonyms = []
-                    CAS = []
-
-                    if "chebiAsciiName" in entity:
-                        synonyms.append(entity["chebiAsciiName"])
-
-                    if "IupacNames" in entity:
-                        if not isinstance(entity["IupacNames"], list):
-                            entity["IupacNames"] = [entity["IupacNames"]]
+                    if "IUPAC NAME" in entity["names"]:
                         synonyms.extend(
-                            [synonym["data"] for synonym in entity["IupacNames"]]
+                            [v["name"] for v in entity["names"]["IUPAC NAME"]]
                         )
-
-                    if "Synonyms" in entity:
-                        temp = entity["Synonyms"]
-                        if not isinstance(temp, list):
-                            temp = [temp]
-                        synonyms.extend([synonym["data"] for synonym in temp])
-
-                    # Check if the lowercase identifier matches any synonym
-                    # chebi gives back lots of bad results with partial name matches
-                    if mode == "name":
-                        if identifier.lower() not in [
-                            synonym.lower() for synonym in synonyms
-                        ]:
-                            continue
+                    if "SYNONYM" in entity["names"]:
+                        synonyms.extend([v["name"] for v in entity["names"]["SYNONYM"]])
+                    if "BRAND NAME" in entity["names"]:
+                        synonyms.extend(
+                            [v["name"] for v in entity["names"]["BRAND NAME"]]
+                        )
 
                     synonyms = self.filter_and_sort_synonyms(synonyms)
 
-                    if "RegistryNumbers" in entity:
-                        temp = entity["RegistryNumbers"]
-                        if not isinstance(temp, list):
-                            temp = [temp]
-                        CAS = self.filter_and_sort_CAS(
-                            [registry["data"] for registry in temp]
-                        )
+                    CAS = []
+                    if "database_accessions" in entity:
+                        if "CAS" in entity["database_accessions"]:
+                            CAS = self.filter_and_sort_CAS(
+                                [
+                                    v["accession_number"]
+                                    for v in entity["database_accessions"]["CAS"]
+                                ]
+                            )
 
                     molecule = Molecule(
                         SMILES,
                         synonyms,
                         CAS,
-                        entity["chebiId"].split(":")[1],
+                        str(entity["id"]),
                         mode,
                         service="chebi",
                     )
@@ -5266,56 +5059,61 @@ class MoleculeResolver:
                     )
 
                     def process_dtxsid(temp_dtxsid):
-                        substance_response_text = self._resilient_request(
-                            f"{COMPTOX_URL}ccdapp2/chemical-detail/search/by-dsstoxsid/?id={urllib.parse.quote(temp_dtxsid)}"
+                        details_result = self._resilient_request(
+                            f"https://comptox.epa.gov/dashboard/chemical/details/{urllib.parse.quote(temp_dtxsid)}"
+                        )
+                        synonyms_result = self._resilient_request(
+                            f"https://comptox.epa.gov/dashboard-api/ccdapp2/chemical-synonym/search/by-dtxsid?id={urllib.parse.quote(temp_dtxsid)}"
                         )
 
-                        if substance_response_text is not None:
-                            temp_substance = json.loads(substance_response_text)
-
-                            temp_SMILES = temp_substance["smiles"]
-                            if not temp_SMILES:
-                                return
-                            temp_synonyms = []
-                            temp_CAS = []
-
-                            if "casrn" in temp_substance:
-                                temp_CAS.append(temp_substance["casrn"])
-
-                            if "preferredName" in temp_substance:
-                                if temp_substance["preferredName"] is not None:
-                                    temp_synonyms.append(
-                                        temp_substance["preferredName"]
-                                    )
-                            if "acdIupacName" in temp_substance:
-                                if temp_substance["acdIupacName"] is not None:
-                                    temp_synonyms.append(temp_substance["acdIupacName"])
-                            if "wikipediaName" in temp_substance:
-                                if temp_substance["wikipediaName"] is not None:
-                                    temp_synonyms.append(
-                                        temp_substance["wikipediaName"]
-                                    )
-
-                            if mode == "name":
-                                temp_synonyms.append(identifier)
-
-                            QC_LEVEL_str = ""
-                            if "qcLevel" in temp_substance:
-                                if temp_substance["qcLevel"]:
-                                    QC_LEVEL_str = (
-                                        f'|QC_LEVEL:{float(temp_substance["qcLevel"])}'
-                                    )
-                            temp_synonyms = self.filter_and_sort_synonyms(temp_synonyms)
-                            molecules.append(
-                                Molecule(
-                                    temp_SMILES,
-                                    temp_synonyms,
-                                    temp_CAS,
-                                    temp_dtxsid + QC_LEVEL_str,
-                                    mode,
-                                    service="comptox",
-                                )
+                        temp_SMILES = regex.findall(
+                            r'smiles\s*:\s*"(.*?)"', details_result
+                        )
+                        if not len(temp_SMILES) == 1:
+                            raise ValueError(
+                                "Comptox changed their layout. We need to do something about it."
                             )
+
+                        temp_SMILES = temp_SMILES[0]
+                        temp_synonyms_all = json.loads(synonyms_result)
+                        temp_synonyms = [
+                            v["synonym"]
+                            for v in temp_synonyms_all["data"]
+                            if v["quality"] != "Deleted"
+                        ]
+                        temp_CAS = self.filter_and_sort_CAS(temp_synonyms)
+                        for name_quality in ["Valid", "Good", "Other"]:
+                            temp_synonyms = [
+                                v["synonym"]
+                                for v in temp_synonyms_all["data"]
+                                if v["quality"] == name_quality
+                            ]
+                            temp_synonyms = [
+                                v for v in temp_synonyms if v not in temp_CAS
+                            ]
+                            if temp_synonyms:
+                                break
+
+                        if mode == "name":
+                            temp_synonyms.append(identifier)
+
+                        QC_LEVEL_str = ""
+                        qc_level_info = regex.findall(
+                            r'qcLevelDesc\s*:\s*"\s*Level\s*(\d):', details_result
+                        )
+                        if qc_level_info:
+                            QC_LEVEL_str = f"|QC_LEVEL:{qc_level_info[0]}"
+                        temp_synonyms = self.filter_and_sort_synonyms(temp_synonyms)
+                        molecules.append(
+                            Molecule(
+                                temp_SMILES,
+                                temp_synonyms,
+                                temp_CAS,
+                                temp_dtxsid + QC_LEVEL_str,
+                                mode,
+                                service="comptox",
+                            )
+                        )
 
                     if isinstance(results, list):
                         for i in range(len(results)):
@@ -5917,16 +5715,11 @@ class MoleculeResolver:
             molecules,
         ):
             if not entry_available:
-                valid_token_found = (
-                    self.available_service_API_keys["chemeo"] is not None
+                valid_token_found = isinstance(
+                    self.available_service_API_keys["chemeo"], str
+                ) and self.chemeo_API_token_regex_compiled.match(
+                    self.available_service_API_keys["chemeo"]
                 )
-                if valid_token_found:
-                    valid_token_found = isinstance(
-                        self.available_service_API_keys["chemeo"], str
-                    )
-                    valid_token_found = self.chemeo_API_token_regex_compiled.match(
-                        self.available_service_API_keys["chemeo"]
-                    )
 
                 if not valid_token_found:
                     if "chemeo_API_token_missing" not in self._message_slugs_shown:
@@ -5947,8 +5740,12 @@ class MoleculeResolver:
                 request_text = self._resilient_request(
                     f'{CHEMEO_URL}convert/{temp_mode}/{urllib.parse.quote(identifier, safe="")}',
                     kwargs={"headers": API_bearer_headers},
-                    rejected_status_codes=[403, 404],
+                    accepted_status_codes=[200, 403],
+                    rejected_status_codes=[404],
                 )
+
+                if "Forbidden" in request_text:
+                    raise ValueError("The API token given for chemeo is not valid.")
 
                 if (
                     request_text is not None
@@ -6797,6 +6594,26 @@ class MoleculeResolver:
             molecules,
         ):
             if not entry_available:
+                valid_token_found = isinstance(
+                    self.available_service_API_keys["cas_registry"], str
+                ) and self.chemeo_API_token_regex_compiled.match(
+                    self.available_service_API_keys["cas_registry"]
+                )
+
+                if not valid_token_found:
+                    if (
+                        "cas_registry_API_token_missing"
+                        not in self._message_slugs_shown
+                    ):
+                        self._message_slugs_shown.append(
+                            "cas_registry_API_token_missing"
+                        )
+                        warnings.warn(
+                            "cas_registry requires a valid API token to allow search. After registering please insert the token in the corresponding variable when initializing the class instance."
+                        )
+
+                    return None
+
                 CAS_URL = "https://commonchemistry.cas.org/api/"
                 SMILES = None
                 synonyms = []
@@ -6805,19 +6622,41 @@ class MoleculeResolver:
 
                 search_response_text = self._resilient_request(
                     f'{CAS_URL}search?q={urllib.parse.quote(identifier, safe="")}',
-                    {"headers": {"accept": "application/json"}},
-                    rejected_status_codes=[403, 404],
+                    {
+                        "headers": {
+                            "X-API-KEY": self.available_service_API_keys[
+                                "cas_registry"
+                            ],
+                            "accept": "application/json",
+                        }
+                    },
+                    accepted_status_codes=[200, 403],
+                    rejected_status_codes=[],
                 )
 
                 if search_response_text is not None:
                     results = json.loads(search_response_text)
+                    if "message" in results:
+                        if "API key required" in results["message"]:
+                            raise ValueError(
+                                "The API token given for cas_registry is not valid."
+                            )
+
                     results = results["results"]
 
                     for result in results:
                         CAS = result["rn"]
                         detail_response_text = self._resilient_request(
                             f"{CAS_URL}detail?cas_rn={urllib.parse.quote(CAS)}",
-                            {"headers": {"accept": "application/json"}},
+                            {
+                                "headers": {
+                                    "X-API-KEY": self.available_service_API_keys[
+                                        "cas_registry"
+                                    ],
+                                    "accept": "application/json",
+                                }
+                            },
+                            rejected_status_codes=[],
                         )
                         if detail_response_text is not None:
                             details = json.loads(detail_response_text)
