@@ -11,7 +11,6 @@ import os
 from PIL import ImageFont, ImageDraw
 import platform
 import requests
-import shutil
 import subprocess
 import tempfile
 import time
@@ -29,6 +28,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts import yes_no_dialog
 import regex
 from rdkit import Chem
+from rdkit import rdBase
 from rdkit.Chem import Descriptors
 from rdkit.Chem import Draw
 from rdkit.Chem import rdmolops
@@ -38,7 +38,6 @@ from rdkit.Chem.rdchem import ResonanceMolSupplierCallback
 from tqdm import tqdm
 import urllib3
 import xmltodict
-from moleculeresolver.rdkitmods import disabling_rdkit_logger
 from moleculeresolver.molecule import Molecule
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
 
@@ -406,7 +405,7 @@ class MoleculeResolver:
                 2. Initializes the molecule cache.
                 3. Sets up a temporary folder for OPSIN if it's available.
         """
-        self._disabling_rdkit_logger = disabling_rdkit_logger()
+        self._disabling_rdkit_logger = rdBase.BlockLogs()
         self._disabling_rdkit_logger.__enter__()
         if not self.molecule_cache:
             self.molecule_cache = SqliteMoleculeCache(
@@ -449,7 +448,6 @@ class MoleculeResolver:
             or exception_traceback is not None
         )
 
-        self._disabling_rdkit_logger.__exit__(None, None, None)
         self.molecule_cache.__exit__(None, None, None)
         self._disabling_rdkit_logger.__exit__(None, None, None)
         if self._OPSIN_tempfolder and not error_ocurred:
@@ -1904,42 +1902,42 @@ class MoleculeResolver:
 
         if prefixes_to_delete is None:
             prefixes_to_delete = [
-                "±",
-                "\+\,-",
-                "\+/-",
-                "\+-",
-                "\.\+\,-\.",
-                "\.\+/-\.",
-                "\.\+-\.",
-                "(dl)",
-                "DL",
-                "RS",
-                "\(<\+\->\)\-",
-                "\(2H\d+\)",
-                "\[2H\d+\]",
-                "[Nn]-",
+                r"±",
+                r"\+\,-",
+                r"\+/-",
+                r"\+-",
+                r"\.\+\,-\.",
+                r"\.\+/-\.",
+                r"\.\+-\.",
+                r"(dl)",
+                r"DL",
+                r"RS",
+                r"\(<\+\->\)\-",
+                r"\(2H\d+\)",
+                r"\[2H\d+\]",
+                r"[Nn]-",
             ]
 
         if suffixes_to_delete is None:
             suffixes_to_delete = [
-                "mixed isomers",
-                "(mixed isomers)",
-                "and isomers",
-                ", isomers",
-                "isomers",
-                "tautomers",
-                "dl and meso",
-                "±",
-                "\+\,-",
-                "\+/-",
-                "\+-",
-                "\.\+\,-\.",
-                "\.\+/-\.",
-                "\.\+-\.",
-                "cis and trans",
-                "; (cis+trans)",
-                ", endo and exo",
-                "-d2",
+                r"mixed isomers",
+                r"(mixed isomers)",
+                r"and isomers",
+                r", isomers",
+                r"isomers",
+                r"tautomers",
+                r"dl and meso",
+                r"±",
+                r"\+\,-",
+                r"\+/-",
+                r"\+-",
+                r"\.\+\,-\.",
+                r"\.\+/-\.",
+                r"\.\+-\.",
+                r"cis and trans",
+                r"; (cis+trans)",
+                r", endo and exo",
+                r"-d2",
             ]
 
         if suffixes_to_use_as_prefix is None:
@@ -1958,11 +1956,11 @@ class MoleculeResolver:
                 [r"(.*)(\((?:Z|E)\)-)(.*)", r"\2\1\3"],
                 [r"«|»", r""],
                 [r"- -", "-"],
-                ["flouro", "fluoro"],
-                ["-[Nn]-", "-"],
-                ["([A-Za-z]{2,}),([A-Za-z]{2,})", r"\1, \2"],
-                ["′", "'"],
-                ["″", "''"],
+                [r"flouro", r"fluoro"],
+                [r"-[Nn]-", r"-"],
+                [r"([A-Za-z]{2,}),([A-Za-z]{2,})", r"\1, \2"],
+                [r"′", r"'"],
+                [r"″", r"''"],
                 [r"[\[\]]", lambda match: "(" if match.group(0) == "[" else ")"],
             ]
 
@@ -5069,10 +5067,15 @@ class MoleculeResolver:
                         temp_SMILES = regex.findall(
                             r'smiles\s*:\s*"(.*?)"', details_result
                         )
-                        if not len(temp_SMILES) == 1:
+                        temp_empty_SMILES = regex.findall(
+                            r'smiles\s*:\s*(h)', details_result
+                        )
+                        if len(temp_SMILES) + len(temp_empty_SMILES) != 1:
                             raise ValueError(
                                 "Comptox changed their layout. We need to do something about it."
                             )
+                        if temp_empty_SMILES:
+                            return None
 
                         temp_SMILES = temp_SMILES[0]
                         temp_synonyms_all = json.loads(synonyms_result)
