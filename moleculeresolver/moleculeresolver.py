@@ -7602,7 +7602,7 @@ class MoleculeResolver:
                 if response_text is not None:
                     relevant_response_text = self.normalize_html(response_text)
                     relevant_response_text = regex.findall(
-                        '<main id="main">(.*)</main>', relevant_response_text
+                        r'<main id="main">(.*)</main>', relevant_response_text
                     )
                     if len(relevant_response_text) != 1:
                         raise RuntimeError("The format of the page might have changed.")
@@ -7610,14 +7610,14 @@ class MoleculeResolver:
 
                     if (
                         not regex.search(
-                            "<h1>.*(Not Found|no)\s*</h1>", relevant_response_text
+                            r"<h1>.*(Not Found|no)\s*</h1>", relevant_response_text
                         )
                         and not regex.search(
-                            "<h1>.*No Matching Names Found\s*</h1>",
+                            r"<h1>.*No Matching Names Found\s*</h1>",
                             relevant_response_text,
                         )
                         and not regex.search(
-                            "<h1>.*No Matching Species Found\s*</h1>",
+                            r"<h1>.*No Matching Species Found\s*</h1>",
                             relevant_response_text,
                         )
                         and "no matching entries" not in relevant_response_text
