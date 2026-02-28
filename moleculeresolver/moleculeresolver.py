@@ -405,17 +405,9 @@ class MoleculeResolver:
                 2. Initializes the molecule cache.
                 3. Sets up a temporary folder for OPSIN if it's available.
         """
-        self._disabling_rdkit_logger = rdBase.BlockLogs()
-        self._disabling_rdkit_logger.__enter__()
-        if not self.molecule_cache:
-            self.molecule_cache = SqliteMoleculeCache(
-                self.molecule_cache_db_path, self.molecule_cache_expiration
-            )
-        self.molecule_cache.__enter__()
-        if "opsin" in self._available_services_with_batch_capabilities:
-            self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
-                prefix="OPSIN_tempfolder_", ignore_cleanup_errors=True
-            )
+        self._enter_rdkit_log_context()
+        self._enter_molecule_cache_context()
+        self._create_opsin_tempfolder()
         return self
 
     def _enter_rdkit_log_context(self) -> None:
@@ -479,10 +471,7 @@ class MoleculeResolver:
             or exception_traceback is not None
         )
 
-        self.molecule_cache.__exit__(None, None, None)
-        self._disabling_rdkit_logger.__exit__(None, None, None)
-        if self._OPSIN_tempfolder and not error_ocurred:
-            self._OPSIN_tempfolder.cleanup()
+        self._teardown_runtime_contexts(error_ocurred=error_ocurred)
 
     @contextmanager
     def query_molecule_cache(
