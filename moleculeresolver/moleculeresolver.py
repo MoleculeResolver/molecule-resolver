@@ -39,6 +39,11 @@ from tqdm import tqdm
 import urllib3
 import xmltodict
 from moleculeresolver.molecule import Molecule
+from moleculeresolver.resolution import (
+    build_structure_group_candidates,
+    score_structure_groups,
+    select_best_scored_structure,
+)
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
 
 
@@ -8679,78 +8684,14 @@ class MoleculeResolver:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
 
         if try_to_choose_best_structure:
-
-            SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
-            if len(SMILES_with_highest_number_of_crosschecks) > 1:
-                # if SMILES are the same ignoring isomeric info, use the more specific one:
-                unique_non_isomeric_SMILES = set(
-                    [
-                        self.to_SMILES(self.get_from_SMILES(smi), isomeric=False)
-                        for smi in SMILES_with_highest_number_of_crosschecks
-                    ]
-                )
-                if len(unique_non_isomeric_SMILES) == 1:
-                    SMILES_preferred = sorted(
-                        SMILES_with_highest_number_of_crosschecks, key=len
-                    )[-1]
-                else:
-                    # trust opsin algorithm: if not sure and opsin available
-                    SMILES_preferred_by_opsin = None
-                    for SMILES in SMILES_with_highest_number_of_crosschecks:
-                        for molecule in grouped_molecules[SMILES]:
-                            if molecule.mode == "name" and molecule.service == "opsin":
-                                SMILES_preferred_by_opsin = SMILES
-
-                    # if opsin result not available, or searched by another mode
-                    # try getting all structures from the names and see if they agree
-                    # with the SMILES found
-                    if not SMILES_preferred_by_opsin:
-                        SMILES_map = []
-                        names_map = []
-                        for SMILES in SMILES_with_highest_number_of_crosschecks:
-                            for molecule in grouped_molecules[SMILES]:
-                                for name in molecule.synonyms:
-                                    SMILES_map.append(SMILES)
-                                    names_map.append(name)
-
-                        SMILES_found_by_opsin_from_synonyms = [
-                            self.get_molecule_from_OPSIN(name) for name in names_map
-                        ]
-
-                        SMILES_preferred_by_opsin = []
-                        for (
-                            original_SMILES_found,
-                            SMILES_found_by_opsin_from_synonym,
-                        ) in zip(
-                            SMILES_map, SMILES_found_by_opsin_from_synonyms, strict=True
-                        ):
-                            if SMILES_found_by_opsin_from_synonym:
-                                if (
-                                    original_SMILES_found
-                                    == SMILES_found_by_opsin_from_synonym
-                                ):
-                                    SMILES_preferred_by_opsin.append(
-                                        original_SMILES_found
-                                    )
-
-                        SMILES_preferred_by_opsin = set(SMILES_preferred_by_opsin)
-                        if len(SMILES_preferred_by_opsin) == 1:
-                            SMILES_preferred_by_opsin = SMILES_preferred_by_opsin.pop()
-                        else:
-                            SMILES_preferred_by_opsin = None
-
-                    if SMILES_preferred_by_opsin:
-                        SMILES_preferred = SMILES_preferred_by_opsin
-                    else:
-                        c = []
-                        if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
-                            SMILES_preferred = c[0][0]
-                        else:
-                            if self._show_warning_if_non_unique_structure_was_found:
-                                temp = len(SMILES_with_highest_number_of_crosschecks)
-                                warnings.warn(
-                                    f"\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n"
-                                )
+            candidate_groups = {
+                smiles: grouped_molecules[smiles]
+                for smiles in SMILES_with_highest_number_of_crosschecks
+            }
+            candidates = build_structure_group_candidates(self, candidate_groups)
+            scored_candidates = score_structure_groups(candidates)
+            best_scored_candidate = select_best_scored_structure(scored_candidates)
+            SMILES_preferred = best_scored_candidate.smiles
 
             molec = self.combine_molecules(
                 SMILES_preferred, grouped_molecules[SMILES_preferred]
