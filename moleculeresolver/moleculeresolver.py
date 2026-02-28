@@ -8593,8 +8593,10 @@ class MoleculeResolver:
         return sorted(
             candidate_evidence,
             key=lambda evidence: (
+                -evidence.total_score,
                 -evidence.service_agreement_count,
                 -evidence.identifier_concordance_count,
+                -evidence.synonym_overlap_count,
                 evidence.smiles,
             ),
         )
@@ -8612,6 +8614,20 @@ class MoleculeResolver:
             identifiers = sorted(
                 {molecule.identifier for molecule in molecules if molecule.identifier}
             )
+            normalized_synonyms = [
+                synonym.strip().casefold()
+                for molecule in molecules
+                for synonym in molecule.synonyms
+                if synonym
+            ]
+            synonym_overlap_count = len(normalized_synonyms) - len(
+                set(normalized_synonyms)
+            )
+            score_breakdown = {
+                "service_agreement": len(service_names) * 100,
+                "identifier_concordance": len(identifiers) * 20,
+                "synonym_overlap": synonym_overlap_count * 5,
+            }
             evidence.append(
                 CandidateEvidence(
                     smiles=smiles,
@@ -8619,6 +8635,9 @@ class MoleculeResolver:
                     service_names=service_names,
                     identifiers=identifiers,
                     identifier_concordance_count=len(identifiers),
+                    synonym_overlap_count=synonym_overlap_count,
+                    score_breakdown=score_breakdown,
+                    total_score=sum(score_breakdown.values()),
                 )
             )
         return self._rank_candidate_evidence(evidence)
