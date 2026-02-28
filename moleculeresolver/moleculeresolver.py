@@ -40,6 +40,19 @@ import urllib3
 import xmltodict
 from moleculeresolver.molecule import Molecule
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
+from moleculeresolver.services import (
+    CASRegistryServiceAdapter,
+    CIRServiceAdapter,
+    CTSServiceAdapter,
+    ChEBIServiceAdapter,
+    ChemeoServiceAdapter,
+    CompToxServiceAdapter,
+    NISTServiceAdapter,
+    OPSINServiceAdapter,
+    PubChemServiceAdapter,
+    SRSServiceAdapter,
+    ServiceAdapterRegistry,
+)
 
 
 class EmptyResonanceMolSupplierCallback(ResonanceMolSupplierCallback):
@@ -341,6 +354,8 @@ class MoleculeResolver:
             for k in sorted(self.supported_services_by_mode)
         }
         self.supported_modes = sorted(list(set(self.supported_modes)))
+        self._service_adapters = ServiceAdapterRegistry()
+        self._register_default_service_adapters()
 
         self.CAS_regex_with_groups = regex.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
         self.CAS_regex = r"(\d{2,7}-\d{2}-\d)"
@@ -452,6 +467,45 @@ class MoleculeResolver:
         self._disabling_rdkit_logger.__exit__(None, None, None)
         if self._OPSIN_tempfolder and not error_ocurred:
             self._OPSIN_tempfolder.cleanup()
+
+    def _register_default_service_adapters(self) -> None:
+        """Register built-in adapters used by find_single_molecule."""
+        adapters = [
+            CASRegistryServiceAdapter(),
+            ChEBIServiceAdapter(),
+            ChemeoServiceAdapter(),
+            CIRServiceAdapter(),
+            CompToxServiceAdapter(),
+            CTSServiceAdapter(),
+            NISTServiceAdapter(),
+            OPSINServiceAdapter(),
+            PubChemServiceAdapter(),
+            SRSServiceAdapter(),
+        ]
+        for adapter in adapters:
+            self._service_adapters.register(adapter)
+
+    def _resolve_service_with_adapter(
+        self,
+        service: str,
+        flattened_identifiers: list[str],
+        flattened_modes: list[str],
+        required_formula: Optional[str],
+        required_charge: Optional[int],
+        required_structure_type: Optional[str],
+    ):
+        """Resolve one service by delegating to its configured adapter."""
+        adapter = self._service_adapters.get(service)
+        if adapter is None:
+            return None
+        return adapter.resolve(
+            self,
+            flattened_identifiers,
+            flattened_modes,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
 
     @contextmanager
     def query_molecule_cache(
@@ -8052,219 +8106,24 @@ class MoleculeResolver:
         try:
             for service in services_to_use:
                 current_service = service
-                if service == "cas_registry":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CAS_registry(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS = set(
-                                    cmp.CAS
-                                )  # overwrite CAS with data from the CAS registry
-                                additional_information = cmp.service
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "pubchem":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_pubchem(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "cir":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CIR(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                additional_information = cmp.service
-                                mode_used = mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "opsin":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_OPSIN(
-                                identifier,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                additional_information = cmp.additional_information
-                                mode_used = mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "chebi":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_ChEBI(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "srs":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_SRS(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "comptox":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CompTox(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "chemeo":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_Chemeo(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "cts":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CTS(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = "cts"
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "nist":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_NIST(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-
-                if SMILES is not None:
+                adapter_result = self._resolve_service_with_adapter(
+                    service,
+                    flattened_identifiers,
+                    flattened_modes,
+                    required_formula,
+                    required_charge,
+                    required_structure_type,
+                )
+                if adapter_result is not None:
+                    SMILES = adapter_result.molecule.SMILES
+                    synonyms.extend(adapter_result.synonyms)
+                    additional_information = adapter_result.additional_information
+                    mode_used = adapter_result.mode_used
+                    identifier_used = adapter_result.identifier_used
+                    if service == "cas_registry":
+                        CAS = adapter_result.cas
+                    else:
+                        CAS.update(adapter_result.cas)
                     break
 
             if SMILES is None:
