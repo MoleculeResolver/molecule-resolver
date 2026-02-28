@@ -39,6 +39,7 @@ from tqdm import tqdm
 import urllib3
 import xmltodict
 from moleculeresolver.molecule import Molecule
+from moleculeresolver.resolution import CandidateEvidence, ResolutionResult
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
 
 
@@ -8584,6 +8585,60 @@ class MoleculeResolver:
             1,
         )
 
+    @staticmethod
+    def _rank_candidate_evidence(
+        candidate_evidence: list[CandidateEvidence],
+    ) -> list[CandidateEvidence]:
+        """Rank candidate evidence by agreement and concordance."""
+        return sorted(
+            candidate_evidence,
+            key=lambda evidence: (
+                -evidence.service_agreement_count,
+                -evidence.identifier_concordance_count,
+                evidence.smiles,
+            ),
+        )
+
+    def _build_candidate_evidence(
+        self,
+        grouped_molecules: dict[str, list[Molecule]],
+    ) -> list[CandidateEvidence]:
+        """Create base evidence objects with service and identifier concordance."""
+        evidence = []
+        for smiles, molecules in grouped_molecules.items():
+            service_names = sorted(
+                {molecule.service for molecule in molecules if molecule.service}
+            )
+            identifiers = sorted(
+                {molecule.identifier for molecule in molecules if molecule.identifier}
+            )
+            evidence.append(
+                CandidateEvidence(
+                    smiles=smiles,
+                    service_agreement_count=len(service_names),
+                    service_names=service_names,
+                    identifiers=identifiers,
+                    identifier_concordance_count=len(identifiers),
+                )
+            )
+        return self._rank_candidate_evidence(evidence)
+
+    def _build_resolution_result(
+        self,
+        best_molecule: Optional[Molecule],
+        grouped_molecules: dict[str, list[Molecule]],
+        selected_smiles: Optional[str],
+        selection_reason: str,
+    ) -> ResolutionResult:
+        """Build full include_evidence payload from grouped candidate molecules."""
+        return ResolutionResult(
+            best_molecule=best_molecule,
+            ranked_candidates=self._build_candidate_evidence(grouped_molecules),
+            grouped_by_structure=grouped_molecules,
+            selected_smiles=selected_smiles,
+            selection_reason=selection_reason,
+        )
+
     def find_single_molecule_crosschecked(
         self,
         identifiers: list[str],
@@ -8596,7 +8651,8 @@ class MoleculeResolver:
         minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
-    ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
+        include_evidence: bool = False,
+    ) -> Union[Optional[Molecule], list[Optional[Molecule]], ResolutionResult]:
         """Finds a single molecule with cross-checking across multiple services.
 
         This method searches for a molecule using the provided identifiers and modes,
@@ -8613,6 +8669,7 @@ class MoleculeResolver:
             minimum_number_of_crosschecks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
             try_to_choose_best_structure (Optional[bool]): Whether to attempt to select the best structure. Defaults to True.
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
+            include_evidence (bool): If True, return ResolutionResult with evidence payload.
 
         Returns:
             Union[Optional[Molecule], list[Optional[Molecule]]]: A single Molecule object if a best structure is chosen,
@@ -8756,12 +8813,27 @@ class MoleculeResolver:
                 SMILES_preferred, grouped_molecules[SMILES_preferred]
             )
             molec.found_molecules.append(grouped_molecules)
+            if include_evidence:
+                return self._build_resolution_result(
+                    best_molecule=molec,
+                    grouped_molecules=grouped_molecules,
+                    selected_smiles=SMILES_preferred,
+                    selection_reason="best_structure_selected",
+                )
             return molec
         else:
-            return [
+            unresolved_molecules = [
                 self.combine_molecules(SMILES, grouped_molecules[SMILES])
                 for SMILES in SMILES_with_highest_number_of_crosschecks
             ]
+            if include_evidence:
+                return self._build_resolution_result(
+                    best_molecule=None,
+                    grouped_molecules=grouped_molecules,
+                    selected_smiles=None,
+                    selection_reason="multiple_structures_tied",
+                )
+            return unresolved_molecules
 
     def find_multiple_molecules_parallelized(
         self,
