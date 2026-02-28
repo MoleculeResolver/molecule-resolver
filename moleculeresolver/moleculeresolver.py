@@ -7974,6 +7974,15 @@ class MoleculeResolver:
 
         return all_molecules, stoichometric_coefficients
 
+    @staticmethod
+    def _validate_resolution_mode(resolution_mode: str) -> None:
+        """Validate the chosen resolution mode."""
+        valid_modes = {"legacy", "consensus", "strict_isomer"}
+        if resolution_mode not in valid_modes:
+            raise ValueError(
+                "resolution_mode can only be one of: 'legacy', 'consensus', 'strict_isomer'."
+            )
+
     def find_single_molecule(
         self,
         identifiers: list[str],
@@ -7985,6 +7994,7 @@ class MoleculeResolver:
         search_iupac_name: Optional[bool] = False,
         interactive: Optional[bool] = False,
         ignore_exceptions: Optional[bool] = False,
+        resolution_mode: str = "legacy",
     ) -> Optional[Molecule]:
         """Searches for a single molecule across multiple chemical databases and services.
 
@@ -8012,6 +8022,9 @@ class MoleculeResolver:
 
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during the search. Defaults to False.
 
+            resolution_mode (str): Resolution mode. Included for API consistency and
+            future expansion. Accepted values are "legacy", "consensus", "strict_isomer".
+
         Returns:
             Optional[Molecule]: A Molecule object if found, None otherwise.
 
@@ -8025,6 +8038,7 @@ class MoleculeResolver:
         """
         if services_to_use is None:
             services_to_use = self._available_services
+        self._validate_resolution_mode(resolution_mode)
 
         (
             flattened_identifiers,
@@ -8596,6 +8610,7 @@ class MoleculeResolver:
         minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
+        resolution_mode: str = "legacy",
     ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
         """Finds a single molecule with cross-checking across multiple services.
 
@@ -8613,6 +8628,8 @@ class MoleculeResolver:
             minimum_number_of_crosschecks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
             try_to_choose_best_structure (Optional[bool]): Whether to attempt to select the best structure. Defaults to True.
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
+            resolution_mode (str): Resolution mode. Accepted values are "legacy",
+            "consensus", "strict_isomer".
 
         Returns:
             Union[Optional[Molecule], list[Optional[Molecule]]]: A single Molecule object if a best structure is chosen,
@@ -8632,6 +8649,7 @@ class MoleculeResolver:
         """
         if services_to_use is None:
             services_to_use = self._available_services
+        self._validate_resolution_mode(resolution_mode)
 
         if minimum_number_of_crosschecks is None:
             minimum_number_of_crosschecks = 1
@@ -8652,6 +8670,7 @@ class MoleculeResolver:
                 services_to_use=[service],
                 search_iupac_name=search_iupac_name,
                 ignore_exceptions=ignore_exceptions,
+                resolution_mode=resolution_mode,
             )
 
             molecules.append(molecule)
@@ -8777,6 +8796,7 @@ class MoleculeResolver:
         progressbar: Optional[bool] = True,
         max_workers: Optional[int] = 5,
         ignore_exceptions: bool = True,
+        resolution_mode: str = "legacy",
     ) -> list[Optional[Molecule]]:
         """Finds multiple molecules in parallel based on provided identifiers and criteria.
 
@@ -8822,6 +8842,9 @@ class MoleculeResolver:
             ignore_exceptions (Optional[bool]): If True, ignores exceptions that may occur during
             the search process. Defaults to True.
 
+            resolution_mode (str): Resolution mode. Accepted values are "legacy",
+            "consensus", "strict_isomer".
+
         Returns:
             list[Optional[Molecule]]: A list of found molecules, where each molecule is represented
             as an instance of the Molecule class, or None if not found.
@@ -8840,6 +8863,7 @@ class MoleculeResolver:
         # reinitialize session
         self._session = None
         self._init_session(pool_maxsize=max_workers * 2)
+        self._validate_resolution_mode(resolution_mode)
 
         if isinstance(modes, str):
             temp_modes = []
@@ -8942,6 +8966,7 @@ class MoleculeResolver:
                         search_iupac_name,
                         False,
                         ignore_exceptions,
+                        resolution_mode,
                     )
                 )
             else:
@@ -8957,6 +8982,7 @@ class MoleculeResolver:
                         minimum_number_of_crosschecks,
                         try_to_choose_best_structure,
                         ignore_exceptions,
+                        resolution_mode,
                     )
                 )
 
