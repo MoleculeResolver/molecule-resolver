@@ -8270,6 +8270,38 @@ class MoleculeResolver:
 
         return all_molecules, stoichometric_coefficients
 
+    @staticmethod
+    def _validate_resolution_mode(resolution_mode: str) -> None:
+        """Validate the chosen resolution mode."""
+        valid_modes = {"legacy", "consensus", "strict_isomer"}
+        if resolution_mode not in valid_modes:
+            raise ValueError(
+                "resolution_mode can only be one of: 'legacy', 'consensus', 'strict_isomer'."
+            )
+
+    def _collect_opsin_isomer_matches(
+        self,
+        grouped_molecules: dict[str, list[Molecule]],
+        candidate_smiles: list[str],
+    ) -> dict[str, bool]:
+        """Check whether candidate groups have at least one OPSIN-confirmed isomeric match."""
+        matches = {smiles: False for smiles in candidate_smiles}
+        for smiles in candidate_smiles:
+            target_smiles = self.standardize_SMILES(smiles)
+            names = set()
+            for molecule in grouped_molecules[smiles]:
+                names.update(molecule.synonyms)
+
+            for name in names:
+                opsin_candidate = self.get_molecule_from_OPSIN(name)
+                if opsin_candidate is None:
+                    continue
+                opsin_smiles = self.standardize_SMILES(opsin_candidate.SMILES)
+                if opsin_smiles == target_smiles:
+                    matches[smiles] = True
+                    break
+        return matches
+
     def find_single_molecule(
         self,
         identifiers: list[str],
@@ -8282,6 +8314,7 @@ class MoleculeResolver:
         interactive: Optional[bool] = False,
         ignore_exceptions: Optional[bool] = False,
         search_strategy: str = "first_hit",
+        resolution_mode: str = "legacy",
     ) -> Optional[Molecule]:
         """Searches for a single molecule across multiple chemical databases and services.
 
@@ -8311,6 +8344,8 @@ class MoleculeResolver:
 
             search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
             "exhaustive" evaluates all identifier/service combinations.
+            resolution_mode (str): Resolution mode. Included for API consistency and
+            future expansion. Accepted values are "legacy", "consensus", "strict_isomer".
 
         Returns:
             Optional[Molecule]: A Molecule object if found, None otherwise.
@@ -8325,6 +8360,7 @@ class MoleculeResolver:
         """
         if services_to_use is None:
             services_to_use = self._available_services
+        self._validate_resolution_mode(resolution_mode)
 
         (
             flattened_identifiers,
@@ -8768,6 +8804,7 @@ class MoleculeResolver:
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
         search_strategy: str = "first_hit",
+        resolution_mode: str = "legacy",
     ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
         """Finds a single molecule with cross-checking across multiple services.
 
@@ -8787,6 +8824,8 @@ class MoleculeResolver:
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
             search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
             "exhaustive" evaluates all identifier/service combinations.
+            resolution_mode (str): Resolution mode. Accepted values are "legacy",
+            "consensus", "strict_isomer".
 
         Returns:
             Union[Optional[Molecule], list[Optional[Molecule]]]: A single Molecule object if a best structure is chosen,
@@ -8806,6 +8845,7 @@ class MoleculeResolver:
         """
         if services_to_use is None:
             services_to_use = self._available_services
+        self._validate_resolution_mode(resolution_mode)
 
         if minimum_number_of_crosschecks is None:
             minimum_number_of_crosschecks = 1
@@ -8827,6 +8867,7 @@ class MoleculeResolver:
                 search_iupac_name=search_iupac_name,
                 ignore_exceptions=ignore_exceptions,
                 search_strategy=search_strategy,
+                resolution_mode=resolution_mode,
             )
 
             molecules.append(molecule)
@@ -8852,6 +8893,19 @@ class MoleculeResolver:
             if len(group_molecules) >= minimum_number_of_crosschecks:
                 if len(group_molecules) == maximum_number_of_crosschecks_found:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
+
+        opsin_isomer_matches = {}
+        if resolution_mode == "strict_isomer":
+            opsin_isomer_matches = self._collect_opsin_isomer_matches(
+                grouped_molecules, SMILES_with_highest_number_of_crosschecks
+            )
+            SMILES_with_highest_number_of_crosschecks = [
+                smiles
+                for smiles in SMILES_with_highest_number_of_crosschecks
+                if opsin_isomer_matches.get(smiles, False)
+            ]
+            if not SMILES_with_highest_number_of_crosschecks:
+                return None
 
         if try_to_choose_best_structure:
             candidate_groups = {
@@ -8889,6 +8943,7 @@ class MoleculeResolver:
         max_workers: Optional[int] = 5,
         ignore_exceptions: bool = True,
         search_strategy: str = "first_hit",
+        resolution_mode: str = "legacy",
     ) -> list[Optional[Molecule]]:
         """Finds multiple molecules in parallel based on provided identifiers and criteria.
 
@@ -8936,6 +8991,8 @@ class MoleculeResolver:
 
             search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
             "exhaustive" evaluates all identifier/service combinations.
+            resolution_mode (str): Resolution mode. Accepted values are "legacy",
+            "consensus", "strict_isomer".
 
         Returns:
             list[Optional[Molecule]]: A list of found molecules, where each molecule is represented
@@ -8955,6 +9012,7 @@ class MoleculeResolver:
         # reinitialize session
         self._session = None
         self._init_session(pool_maxsize=max_workers * 2)
+        self._validate_resolution_mode(resolution_mode)
 
         if isinstance(modes, str):
             temp_modes = []
@@ -9058,6 +9116,7 @@ class MoleculeResolver:
                         False,
                         ignore_exceptions,
                         search_strategy,
+                        resolution_mode,
                     )
                 )
             else:
@@ -9074,6 +9133,7 @@ class MoleculeResolver:
                         try_to_choose_best_structure,
                         ignore_exceptions,
                         search_strategy,
+                        resolution_mode,
                     )
                 )
 
