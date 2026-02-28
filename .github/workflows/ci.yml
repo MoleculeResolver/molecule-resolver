@@ -44,6 +44,7 @@ jobs:
     strategy:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
+        test_target: ["full", "integration-upgrade"]
 
     steps:
     - name: Checkout repository
@@ -69,7 +70,12 @@ jobs:
 
     - name: Run tests
       shell: bash
-      run: pytest
+      run: |
+        if [[ "${{ matrix.test_target }}" == "integration-upgrade" ]]; then
+          pytest tests/test_integration_upgrade.py
+        else
+          pytest
+        fi
 
   # Tag and release the package
   release:
