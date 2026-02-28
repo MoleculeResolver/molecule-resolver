@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import time
 from types import SimpleNamespace
-from typing import Any, Generator, Optional, Union
+from typing import Any, Generator, Literal, Optional, Union
 import traceback
 import unicodedata
 import urllib
@@ -60,6 +60,9 @@ from moleculeresolver.services import (
     SRSServiceAdapter,
     ServiceAdapterRegistry,
 )
+
+SearchStrategy = Literal["first_hit", "exhaustive"]
+ResolutionMode = Literal["legacy", "consensus", "strict_isomer"]
 
 
 class EmptyResonanceMolSupplierCallback(ResonanceMolSupplierCallback):
@@ -1298,7 +1301,7 @@ class MoleculeResolver:
         self,
         flattened_identifiers: list[str],
         flattened_modes: list[str],
-        search_strategy: str,
+        search_strategy: SearchStrategy,
     ) -> list[tuple[str, str]]:
         """Expand identifier/mode pairs for single-molecule search strategies."""
         if search_strategy not in {"first_hit", "exhaustive"}:
@@ -8273,7 +8276,7 @@ class MoleculeResolver:
         return all_molecules, stoichometric_coefficients
 
     @staticmethod
-    def _validate_resolution_mode(resolution_mode: str) -> None:
+    def _validate_resolution_mode(resolution_mode: ResolutionMode) -> None:
         """Validate the chosen resolution mode."""
         valid_modes = {"legacy", "consensus", "strict_isomer"}
         if resolution_mode not in valid_modes:
@@ -8315,8 +8318,8 @@ class MoleculeResolver:
         search_iupac_name: Optional[bool] = False,
         interactive: Optional[bool] = False,
         ignore_exceptions: Optional[bool] = False,
-        search_strategy: str = "first_hit",
-        resolution_mode: str = "legacy",
+        search_strategy: SearchStrategy = "first_hit",
+        resolution_mode: ResolutionMode = "legacy",
     ) -> Optional[Molecule]:
         """Searches for a single molecule across multiple chemical databases and services.
 
@@ -8878,8 +8881,8 @@ class MoleculeResolver:
         minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
-        search_strategy: str = "first_hit",
-        resolution_mode: str = "legacy",
+        search_strategy: SearchStrategy = "first_hit",
+        resolution_mode: ResolutionMode = "legacy",
         include_evidence: bool = False,
     ) -> Union[Optional[Molecule], list[Optional[Molecule]], ResolutionResult]:
         """Finds a single molecule with cross-checking across multiple services.
@@ -9034,8 +9037,8 @@ class MoleculeResolver:
         progressbar: Optional[bool] = True,
         max_workers: Optional[int] = 5,
         ignore_exceptions: bool = True,
-        search_strategy: str = "first_hit",
-        resolution_mode: str = "legacy",
+        search_strategy: SearchStrategy = "first_hit",
+        resolution_mode: ResolutionMode = "legacy",
     ) -> list[Optional[Molecule]]:
         """Finds multiple molecules in parallel based on provided identifiers and criteria.
 
