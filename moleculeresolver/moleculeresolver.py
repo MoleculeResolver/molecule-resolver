@@ -1213,6 +1213,19 @@ class MoleculeResolver:
 
         return flattened_identifiers, flattened_modes, synonyms, CAS, given_SMILES
 
+    def _expand_identifier_mode_pairs(
+        self,
+        flattened_identifiers: list[str],
+        flattened_modes: list[str],
+        search_strategy: str,
+    ) -> list[tuple[str, str]]:
+        """Expand identifier/mode pairs for single-molecule search strategies."""
+        if search_strategy not in {"first_hit", "exhaustive"}:
+            raise ValueError(
+                "search_strategy can only be one of: 'first_hit', 'exhaustive'."
+            )
+        return list(zip(flattened_identifiers, flattened_modes, strict=True))
+
     def _is_list_of_list_of_str(self, value: list[list[str]]) -> bool:
         """
         Check if the input is a valid list of lists of strings.
@@ -7985,6 +7998,7 @@ class MoleculeResolver:
         search_iupac_name: Optional[bool] = False,
         interactive: Optional[bool] = False,
         ignore_exceptions: Optional[bool] = False,
+        search_strategy: str = "first_hit",
     ) -> Optional[Molecule]:
         """Searches for a single molecule across multiple chemical databases and services.
 
@@ -8012,6 +8026,9 @@ class MoleculeResolver:
 
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during the search. Defaults to False.
 
+            search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
+            "exhaustive" evaluates all identifier/service combinations.
+
         Returns:
             Optional[Molecule]: A Molecule object if found, None otherwise.
 
@@ -8033,6 +8050,9 @@ class MoleculeResolver:
             CAS,
             given_SMILES,
         ) = self._check_and_flatten_identifiers_and_modes(identifiers, modes)
+        flattened_identifier_mode_pairs = self._expand_identifier_mode_pairs(
+            flattened_identifiers, flattened_modes, search_strategy
+        )
         self._check_parameters(
             services=services_to_use,
             required_formulas=required_formula,
@@ -8286,9 +8306,7 @@ class MoleculeResolver:
                     # if searching for an ion
                     # search for salts in pubchem and extract the single ions, take the one found most often
                     if required_charge != "zero" and required_charge != 0:
-                        for identifier, mode in zip(
-                            flattened_identifiers, flattened_modes, strict=True
-                        ):
+                        for identifier, mode in flattened_identifier_mode_pairs:
                             molecules = (
                                 self.get_molecule_for_ion_from_partial_pubchem_search(
                                     identifier, required_formula, required_charge
@@ -8596,6 +8614,7 @@ class MoleculeResolver:
         minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
+        search_strategy: str = "first_hit",
     ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
         """Finds a single molecule with cross-checking across multiple services.
 
@@ -8613,6 +8632,8 @@ class MoleculeResolver:
             minimum_number_of_crosschecks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
             try_to_choose_best_structure (Optional[bool]): Whether to attempt to select the best structure. Defaults to True.
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
+            search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
+            "exhaustive" evaluates all identifier/service combinations.
 
         Returns:
             Union[Optional[Molecule], list[Optional[Molecule]]]: A single Molecule object if a best structure is chosen,
@@ -8652,6 +8673,7 @@ class MoleculeResolver:
                 services_to_use=[service],
                 search_iupac_name=search_iupac_name,
                 ignore_exceptions=ignore_exceptions,
+                search_strategy=search_strategy,
             )
 
             molecules.append(molecule)
@@ -8777,6 +8799,7 @@ class MoleculeResolver:
         progressbar: Optional[bool] = True,
         max_workers: Optional[int] = 5,
         ignore_exceptions: bool = True,
+        search_strategy: str = "first_hit",
     ) -> list[Optional[Molecule]]:
         """Finds multiple molecules in parallel based on provided identifiers and criteria.
 
@@ -8821,6 +8844,9 @@ class MoleculeResolver:
 
             ignore_exceptions (Optional[bool]): If True, ignores exceptions that may occur during
             the search process. Defaults to True.
+
+            search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
+            "exhaustive" evaluates all identifier/service combinations.
 
         Returns:
             list[Optional[Molecule]]: A list of found molecules, where each molecule is represented
@@ -8942,6 +8968,7 @@ class MoleculeResolver:
                         search_iupac_name,
                         False,
                         ignore_exceptions,
+                        search_strategy,
                     )
                 )
             else:
@@ -8957,6 +8984,7 @@ class MoleculeResolver:
                         minimum_number_of_crosschecks,
                         try_to_choose_best_structure,
                         ignore_exceptions,
+                        search_strategy,
                     )
                 )
 
