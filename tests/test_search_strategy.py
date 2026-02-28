@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from moleculeresolver import MoleculeResolver
 
 
@@ -51,13 +53,20 @@ def test_first_hit_stops_after_first_match(monkeypatch):
     mr = _make_strategy_test_resolver(monkeypatch)
     calls = []
 
-    def fake_resolve(service, identifier, mode, *_):
-        calls.append((service, identifier, mode))
-        if service == "svc1" and identifier == "alpha":
-            return _make_candidate("CCO", "alpha", service=service, identifier=identifier)
+    def fake_resolve_with_adapter(service, identifiers, modes, *_):
+        calls.append((service, tuple(identifiers), tuple(modes)))
+        if service == "svc1":
+            return SimpleNamespace(
+                molecule=SimpleNamespace(SMILES="CCO"),
+                synonyms=["alpha"],
+                additional_information="svc1:alpha",
+                mode_used="name",
+                identifier_used="alpha",
+                cas=set(),
+            )
         return None
 
-    monkeypatch.setattr(mr, "_resolve_single_service_candidate", fake_resolve)
+    monkeypatch.setattr(mr, "_resolve_service_with_adapter", fake_resolve_with_adapter)
 
     result = mr.find_single_molecule(
         identifiers=["alpha", "beta"],
@@ -68,7 +77,7 @@ def test_first_hit_stops_after_first_match(monkeypatch):
 
     assert result is not None
     assert result.SMILES == "CCO"
-    assert calls == [("svc1", "alpha", "name")]
+    assert calls == [("svc1", ("alpha", "beta"), ("name", "name"))]
 
 
 def test_exhaustive_search_checks_all_pairs_and_uses_consensus(monkeypatch):

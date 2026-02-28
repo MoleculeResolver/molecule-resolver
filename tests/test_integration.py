@@ -1,6 +1,6 @@
 from datetime import datetime
 import pytest
-from moleculeresolver import MoleculeResolver
+from moleculeresolver import Molecule, MoleculeResolver
 import json
 import os
 from pathlib import Path
