@@ -8725,6 +8725,13 @@ class MoleculeResolver:
             opsin_isomer_matches = self._collect_opsin_isomer_matches(
                 grouped_molecules, SMILES_with_highest_number_of_crosschecks
             )
+            SMILES_with_highest_number_of_crosschecks = [
+                smiles
+                for smiles in SMILES_with_highest_number_of_crosschecks
+                if opsin_isomer_matches.get(smiles, False)
+            ]
+            if not SMILES_with_highest_number_of_crosschecks:
+                return None
 
         if try_to_choose_best_structure:
 
