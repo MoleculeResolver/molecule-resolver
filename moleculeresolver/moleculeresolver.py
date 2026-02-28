@@ -7983,6 +7983,29 @@ class MoleculeResolver:
                 "resolution_mode can only be one of: 'legacy', 'consensus', 'strict_isomer'."
             )
 
+    def _collect_opsin_isomer_matches(
+        self,
+        grouped_molecules: dict[str, list[Molecule]],
+        candidate_smiles: list[str],
+    ) -> dict[str, bool]:
+        """Check whether candidate groups have at least one OPSIN-confirmed isomeric match."""
+        matches = {smiles: False for smiles in candidate_smiles}
+        for smiles in candidate_smiles:
+            target_smiles = self.standardize_SMILES(smiles)
+            names = set()
+            for molecule in grouped_molecules[smiles]:
+                names.update(molecule.synonyms)
+
+            for name in names:
+                opsin_candidate = self.get_molecule_from_OPSIN(name)
+                if opsin_candidate is None:
+                    continue
+                opsin_smiles = self.standardize_SMILES(opsin_candidate.SMILES)
+                if opsin_smiles == target_smiles:
+                    matches[smiles] = True
+                    break
+        return matches
+
     def find_single_molecule(
         self,
         identifiers: list[str],
@@ -8696,6 +8719,12 @@ class MoleculeResolver:
             if len(group_molecules) >= minimum_number_of_crosschecks:
                 if len(group_molecules) == maximum_number_of_crosschecks_found:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
+
+        opsin_isomer_matches = {}
+        if resolution_mode == "strict_isomer":
+            opsin_isomer_matches = self._collect_opsin_isomer_matches(
+                grouped_molecules, SMILES_with_highest_number_of_crosschecks
+            )
 
         if try_to_choose_best_structure:
 
