@@ -79,3 +79,53 @@ def test_multi_name_exhaustive_benchmark_case(monkeypatch):
 
     assert result is not None
     assert result.SMILES == "CC(C)O"
+
+
+def test_consensus_vs_legacy_mode_comparison(monkeypatch):
+    if "resolution_mode" not in inspect.signature(
+        MoleculeResolver.find_single_molecule_crosschecked
+    ).parameters:
+        pytest.skip("resolution_mode is not available in this branch state")
+
+    mr = MoleculeResolver()
+    mr._available_services = ["svc1", "svc2"]
+
+    from moleculeresolver.molecule import Molecule
+
+    legacy_winner = Molecule("CCO", ["ethanol"], [], "svc1", "name", "svc1", 1, "ethanol")
+    consensus_winner = Molecule("CCO", ["ethyl alcohol"], [], "svc2", "name", "svc2", 1, "ethyl alcohol")
+
+    def fake_find_single_molecule(*args, **kwargs):
+        service = kwargs["services_to_use"][0]
+        if service == "svc1":
+            return legacy_winner
+        return consensus_winner
+
+    monkeypatch.setattr(mr, "find_single_molecule", fake_find_single_molecule)
+    monkeypatch.setattr(
+        mr,
+        "filter_molecules",
+        lambda molecules, *_: [molecule for molecule in molecules if molecule is not None],
+    )
+    monkeypatch.setattr(
+        mr,
+        "group_molecules_by_structure",
+        lambda molecules, *_: {"CCO": molecules},
+    )
+
+    legacy_result = mr.find_single_molecule_crosschecked(
+        identifiers=["ethanol"],
+        modes=["name"],
+        services_to_use=["svc1", "svc2"],
+        resolution_mode="legacy",
+    )
+    consensus_result = mr.find_single_molecule_crosschecked(
+        identifiers=["ethanol"],
+        modes=["name"],
+        services_to_use=["svc1", "svc2"],
+        resolution_mode="consensus",
+    )
+
+    assert legacy_result is not None
+    assert consensus_result is not None
+    assert legacy_result.SMILES == consensus_result.SMILES
