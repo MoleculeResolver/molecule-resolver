@@ -418,6 +418,37 @@ class MoleculeResolver:
             )
         return self
 
+    def _enter_rdkit_log_context(self) -> None:
+        """Start suppressing RDKit logs for the resolver runtime."""
+        self._disabling_rdkit_logger = rdBase.BlockLogs()
+        self._disabling_rdkit_logger.__enter__()
+
+    def _enter_molecule_cache_context(self) -> None:
+        """Create and enter the molecule cache context when needed."""
+        if not self.molecule_cache:
+            self.molecule_cache = SqliteMoleculeCache(
+                self.molecule_cache_db_path, self.molecule_cache_expiration
+            )
+        self.molecule_cache.__enter__()
+
+    def _create_opsin_tempfolder(self) -> None:
+        """Create the OPSIN temp folder when OPSIN batch mode is enabled."""
+        if "opsin" in self._available_services_with_batch_capabilities:
+            self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
+                prefix="OPSIN_tempfolder_", ignore_cleanup_errors=True
+            )
+
+    def _cleanup_opsin_tempfolder(self, *, error_ocurred: bool) -> None:
+        """Cleanup OPSIN temp folder unless an exception is currently bubbling up."""
+        if self._OPSIN_tempfolder and not error_ocurred:
+            self._OPSIN_tempfolder.cleanup()
+
+    def _teardown_runtime_contexts(self, *, error_ocurred: bool) -> None:
+        """Teardown all runtime contexts in a single lifecycle helper."""
+        self.molecule_cache.__exit__(None, None, None)
+        self._disabling_rdkit_logger.__exit__(None, None, None)
+        self._cleanup_opsin_tempfolder(error_ocurred=error_ocurred)
+
     def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
         """
         Exit the runtime context for the MoleculeResolver.
