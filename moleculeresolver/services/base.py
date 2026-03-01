@@ -27,7 +27,6 @@ class ServiceAdapter(ABC):
 
     name: str
 
-    @abstractmethod
     def resolve(
         self,
         resolver: "MoleculeResolver",
@@ -37,5 +36,29 @@ class ServiceAdapter(ABC):
         required_charge: Optional[int],
         required_structure_type: Optional[str],
     ) -> Optional[ServiceSearchResult]:
-        """Resolve a molecule for this adapter or return None."""
+        """Resolve by trying each identifier/mode pair in order."""
+        for identifier, mode in zip(flattened_identifiers, flattened_modes, strict=True):
+            result = self.resolve_one(
+                resolver,
+                identifier,
+                mode,
+                required_formula,
+                required_charge,
+                required_structure_type,
+            )
+            if result is not None:
+                return result
+        return None
+
+    @abstractmethod
+    def resolve_one(
+        self,
+        resolver: "MoleculeResolver",
+        identifier: str,
+        mode: str,
+        required_formula: Optional[str],
+        required_charge: Optional[int],
+        required_structure_type: Optional[str],
+    ) -> Optional[ServiceSearchResult]:
+        """Resolve one identifier/mode pair for this adapter or return None."""
         raise NotImplementedError
