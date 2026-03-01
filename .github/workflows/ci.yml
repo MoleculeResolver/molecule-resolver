@@ -61,11 +61,11 @@ jobs:
       with:
         name: dist
     
-    - name: Install package and pytest
+    - name: Install package and test dependencies
       shell: bash
       run: |
         WHL_NAME=$(ls molecule_resolver-*.whl)
-        pip install ${WHL_NAME} pytest
+        pip install ${WHL_NAME} pytest pytest-mock
 
     - name: Run tests
       shell: bash
