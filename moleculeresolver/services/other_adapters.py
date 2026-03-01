@@ -11,28 +11,27 @@ class _ModeDrivenAdapter(ServiceAdapter):
     def _build_result(self, cmp, mode: str) -> ServiceSearchResult:
         raise NotImplementedError
 
-    def resolve(
+    def resolve_one(
         self,
         resolver,
-        flattened_identifiers: list[str],
-        flattened_modes: list[str],
+        identifier: str,
+        mode: str,
         required_formula: Optional[str],
         required_charge: Optional[int],
         required_structure_type: Optional[str],
     ) -> Optional[ServiceSearchResult]:
+        if mode not in resolver.supported_modes_by_services[self.name]:
+            return None
         fetch_method = getattr(resolver, self.fetch_method_name)
-        for identifier, mode in zip(flattened_identifiers, flattened_modes, strict=True):
-            if mode not in resolver.supported_modes_by_services[self.name]:
-                continue
-            cmp = fetch_method(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return self._build_result(cmp, mode)
+        cmp = fetch_method(
+            identifier,
+            mode,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+        if cmp is not None:
+            return self._build_result(cmp, mode)
         return None
 
 

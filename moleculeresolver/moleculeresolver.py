@@ -59,6 +59,7 @@ from moleculeresolver.services import (
     PubChemServiceAdapter,
     SRSServiceAdapter,
     ServiceAdapterRegistry,
+    ServiceSearchResult,
 )
 
 SearchStrategy = Literal["first_hit", "exhaustive"]
@@ -523,7 +524,7 @@ class MoleculeResolver:
         required_formula: Optional[str],
         required_charge: Optional[int],
         required_structure_type: Optional[str],
-    ):
+    ) -> Optional[ServiceSearchResult]:
         """Resolve one service by delegating to its configured adapter."""
         adapter = self._service_adapters.get(service)
         if adapter is None:
@@ -536,6 +537,44 @@ class MoleculeResolver:
             required_charge,
             required_structure_type,
         )
+
+    def _resolve_identifier_with_adapter(
+        self,
+        service: str,
+        identifier: str,
+        mode: str,
+        required_formula: Optional[str],
+        required_charge: Optional[int],
+        required_structure_type: Optional[str],
+    ) -> Optional[ServiceSearchResult]:
+        """Resolve one identifier/mode pair via the configured service adapter."""
+        adapter = self._service_adapters.get(service)
+        if adapter is None:
+            return None
+        return adapter.resolve_one(
+            self,
+            identifier,
+            mode,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+
+    @staticmethod
+    def _service_result_to_exhaustive_candidate(
+        service: str, result: ServiceSearchResult
+    ) -> dict[str, Any]:
+        """Normalize a service adapter result into the exhaustive candidate payload."""
+        return {
+            "SMILES": result.molecule.SMILES,
+            "synonyms": list(result.synonyms),
+            "CAS": set(result.cas),
+            "additional_information": result.additional_information,
+            "mode_used": result.mode_used,
+            "identifier_used": result.identifier_used,
+            "service": service,
+            "cas_is_authoritative": service == "cas_registry",
+        }
 
     @contextmanager
     def query_molecule_cache(
@@ -1319,200 +1358,18 @@ class MoleculeResolver:
         required_charge: Optional[int],
         required_structure_type: Optional[str],
     ) -> Optional[dict[str, Any]]:
-        """Resolve a single identifier/mode pair on one service."""
-        if mode not in self.supported_modes_by_services[service]:
+        """Backwards-compatible wrapper for single-pair adapter resolution."""
+        result = self._resolve_identifier_with_adapter(
+            service,
+            identifier,
+            mode,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+        if result is None:
             return None
-
-        if service == "cas_registry":
-            cmp = self.get_molecule_from_CAS_registry(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": cmp.service,
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": True,
-                }
-        elif service == "pubchem":
-            cmp = self.get_molecule_from_pubchem(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": f"{cmp.service} id: {cmp.additional_information}",
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "cir":
-            cmp = self.get_molecule_from_CIR(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(),
-                    "additional_information": cmp.service,
-                    "mode_used": mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "opsin":
-            cmp = self.get_molecule_from_OPSIN(
-                identifier,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(),
-                    "additional_information": cmp.additional_information,
-                    "mode_used": mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "chebi":
-            cmp = self.get_molecule_from_ChEBI(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": f"{cmp.service} id: {cmp.additional_information}",
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "srs":
-            cmp = self.get_molecule_from_SRS(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": f"{cmp.service} id: {cmp.additional_information}",
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "comptox":
-            cmp = self.get_molecule_from_CompTox(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": f"{cmp.service} id: {cmp.additional_information}",
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "chemeo":
-            cmp = self.get_molecule_from_Chemeo(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": f"{cmp.service} id: {cmp.additional_information}",
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "cts":
-            cmp = self.get_molecule_from_CTS(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": "cts",
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        elif service == "nist":
-            cmp = self.get_molecule_from_NIST(
-                identifier,
-                mode,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return {
-                    "SMILES": cmp.SMILES,
-                    "synonyms": list(cmp.synonyms),
-                    "CAS": set(cmp.CAS),
-                    "additional_information": f"{cmp.service} id: {cmp.additional_information}",
-                    "mode_used": cmp.mode,
-                    "identifier_used": cmp.identifier,
-                    "service": service,
-                    "cas_is_authoritative": False,
-                }
-        return None
+        return self._service_result_to_exhaustive_candidate(service, result)
 
     def _is_list_of_list_of_str(self, value: list[list[str]]) -> bool:
         """
@@ -8399,7 +8256,7 @@ class MoleculeResolver:
                 current_service = service
                 if search_strategy == "exhaustive":
                     for identifier, mode in flattened_identifier_mode_pairs:
-                        resolved_candidate = self._resolve_single_service_candidate(
+                        adapter_result = self._resolve_identifier_with_adapter(
                             service,
                             identifier,
                             mode,
@@ -8407,8 +8264,11 @@ class MoleculeResolver:
                             required_charge,
                             required_structure_type,
                         )
-                        if resolved_candidate is None:
+                        if adapter_result is None:
                             continue
+                        resolved_candidate = self._service_result_to_exhaustive_candidate(
+                            service, adapter_result
+                        )
                         exhaustive_candidates.append(resolved_candidate)
                 else:
                     adapter_result = self._resolve_service_with_adapter(

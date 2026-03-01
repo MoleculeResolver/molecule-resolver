@@ -148,3 +148,37 @@ def test_cas_registry_adapter_provides_authoritative_cas_set():
     assert result is not None
     assert result.current_service == "cas_registry"
     assert result.cas == {"64-17-5"}
+
+
+def test_resolve_one_contract_for_opsin_adapter():
+    resolver = _FakeResolver()
+    adapter = OPSINServiceAdapter()
+
+    result = adapter.resolve_one(
+        resolver,
+        identifier="ethanol",
+        mode="name",
+        required_formula=None,
+        required_charge=None,
+        required_structure_type=None,
+    )
+
+    assert result is not None
+    assert result.molecule.SMILES == "CCO"
+    assert result.identifier_used == "ethanol"
+
+
+def test_resolve_one_returns_none_for_unsupported_mode():
+    resolver = _FakeResolver()
+    adapter = PubChemServiceAdapter()
+
+    result = adapter.resolve_one(
+        resolver,
+        identifier="ethanol",
+        mode="inchikey",
+        required_formula=None,
+        required_charge=None,
+        required_structure_type=None,
+    )
+
+    assert result is None

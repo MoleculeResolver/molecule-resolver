@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Union
 from tqdm import tqdm
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 
 # IUPAC names
@@ -284,42 +285,25 @@ def test_multi_name_exhaustive_benchmark_case(monkeypatch):
     )
     monkeypatch.setattr(mr, "standardize_SMILES", lambda smiles: smiles)
 
+    def _adapter_result(smiles, synonym, identifier):
+        return SimpleNamespace(
+            molecule=SimpleNamespace(SMILES=smiles),
+            synonyms=[synonym],
+            cas={"67-63-0"},
+            additional_information="mock",
+            mode_used="name",
+            identifier_used=identifier,
+        )
+
     result_map = {
-        ("svc1", "isopropanol"): {
-            "SMILES": "CC(O)C",
-            "synonyms": ["isopropanol"],
-            "CAS": {"67-63-0"},
-            "additional_information": "svc1",
-            "mode_used": "name",
-            "identifier_used": "isopropanol",
-            "service": "svc1",
-            "cas_is_authoritative": False,
-        },
-        ("svc1", "2-propanol"): {
-            "SMILES": "CC(C)O",
-            "synonyms": ["2-propanol"],
-            "CAS": {"67-63-0"},
-            "additional_information": "svc1",
-            "mode_used": "name",
-            "identifier_used": "2-propanol",
-            "service": "svc1",
-            "cas_is_authoritative": False,
-        },
-        ("svc2", "isopropanol"): {
-            "SMILES": "CC(C)O",
-            "synonyms": ["isopropanol"],
-            "CAS": {"67-63-0"},
-            "additional_information": "svc2",
-            "mode_used": "name",
-            "identifier_used": "isopropanol",
-            "service": "svc2",
-            "cas_is_authoritative": False,
-        },
+        ("svc1", "isopropanol"): _adapter_result("CC(O)C", "isopropanol", "isopropanol"),
+        ("svc1", "2-propanol"): _adapter_result("CC(C)O", "2-propanol", "2-propanol"),
+        ("svc2", "isopropanol"): _adapter_result("CC(C)O", "isopropanol", "isopropanol"),
     }
 
     monkeypatch.setattr(
         mr,
-        "_resolve_single_service_candidate",
+        "_resolve_identifier_with_adapter",
         lambda service, identifier, mode, *_: result_map.get((service, identifier)),
     )
 

@@ -8,32 +8,31 @@ from moleculeresolver.services.base import ServiceAdapter, ServiceSearchResult
 class OPSINServiceAdapter(ServiceAdapter):
     name = "opsin"
 
-    def resolve(
+    def resolve_one(
         self,
         resolver,
-        flattened_identifiers: list[str],
-        flattened_modes: list[str],
+        identifier: str,
+        mode: str,
         required_formula: Optional[str],
         required_charge: Optional[int],
         required_structure_type: Optional[str],
     ) -> Optional[ServiceSearchResult]:
-        for identifier, mode in zip(flattened_identifiers, flattened_modes, strict=True):
-            if mode not in resolver.supported_modes_by_services[self.name]:
-                continue
-            cmp = resolver.get_molecule_from_OPSIN(
-                identifier,
-                required_formula,
-                required_charge,
-                required_structure_type,
-            )
-            if cmp is not None:
-                return ServiceSearchResult(
-                    molecule=cmp,
-                    mode_used=mode,
-                    identifier_used=cmp.identifier,
-                    additional_information=cmp.additional_information,
-                    current_service=self.name,
-                    synonyms=list(cmp.synonyms),
-                    cas=set(),
-                )
-        return None
+        if mode not in resolver.supported_modes_by_services[self.name]:
+            return None
+        cmp = resolver.get_molecule_from_OPSIN(
+            identifier,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+        if cmp is None:
+            return None
+        return ServiceSearchResult(
+            molecule=cmp,
+            mode_used=mode,
+            identifier_used=cmp.identifier,
+            additional_information=cmp.additional_information,
+            current_service=self.name,
+            synonyms=list(cmp.synonyms),
+            cas=set(),
+        )

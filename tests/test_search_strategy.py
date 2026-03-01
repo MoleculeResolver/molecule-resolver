@@ -5,24 +5,21 @@ from types import SimpleNamespace
 from moleculeresolver import MoleculeResolver
 
 
-def _make_candidate(
+def _make_exhaustive_adapter_result(
     smiles: str,
     synonym: str,
     *,
-    service: str,
     identifier: str,
     mode: str = "name",
-) -> dict:
-    return {
-        "SMILES": smiles,
-        "synonyms": [synonym],
-        "CAS": set(),
-        "additional_information": f"{service}:{identifier}",
-        "mode_used": mode,
-        "identifier_used": identifier,
-        "service": service,
-        "cas_is_authoritative": False,
-    }
+):
+    return SimpleNamespace(
+        molecule=SimpleNamespace(SMILES=smiles),
+        synonyms=[synonym],
+        cas=set(),
+        additional_information=f"{identifier}:{mode}",
+        mode_used=mode,
+        identifier_used=identifier,
+    )
 
 
 def _make_strategy_test_resolver(monkeypatch) -> MoleculeResolver:
@@ -84,17 +81,17 @@ def test_exhaustive_search_checks_all_pairs_and_uses_consensus(monkeypatch):
     mr = _make_strategy_test_resolver(monkeypatch)
     calls = []
     response_map = {
-        ("svc1", "alpha"): _make_candidate("CCO", "alpha", service="svc1", identifier="alpha"),
-        ("svc1", "beta"): _make_candidate("CCC", "beta", service="svc1", identifier="beta"),
-        ("svc2", "alpha"): _make_candidate("CCO", "alpha", service="svc2", identifier="alpha"),
-        ("svc2", "beta"): _make_candidate("CCO", "beta", service="svc2", identifier="beta"),
+        ("svc1", "alpha"): _make_exhaustive_adapter_result("CCO", "alpha", identifier="alpha"),
+        ("svc1", "beta"): _make_exhaustive_adapter_result("CCC", "beta", identifier="beta"),
+        ("svc2", "alpha"): _make_exhaustive_adapter_result("CCO", "alpha", identifier="alpha"),
+        ("svc2", "beta"): _make_exhaustive_adapter_result("CCO", "beta", identifier="beta"),
     }
 
     def fake_resolve(service, identifier, mode, *_):
         calls.append((service, identifier, mode))
         return response_map.get((service, identifier))
 
-    monkeypatch.setattr(mr, "_resolve_single_service_candidate", fake_resolve)
+    monkeypatch.setattr(mr, "_resolve_identifier_with_adapter", fake_resolve)
 
     result = mr.find_single_molecule(
         identifiers=["alpha", "beta"],
