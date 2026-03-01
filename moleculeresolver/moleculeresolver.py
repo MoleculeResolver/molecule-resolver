@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import time
 from types import SimpleNamespace
-from typing import Any, Generator, Optional, Union
+from typing import Any, Generator, Literal, Optional, Union
 import traceback
 import unicodedata
 import urllib
@@ -39,7 +39,31 @@ from tqdm import tqdm
 import urllib3
 import xmltodict
 from moleculeresolver.molecule import Molecule
+from moleculeresolver.resolution import (
+    CandidateEvidence,
+    ResolutionResult,
+    build_structure_group_candidates,
+    score_structure_groups,
+    select_best_scored_structure,
+)
 from moleculeresolver.SqliteMoleculeCache import SqliteMoleculeCache
+from moleculeresolver.services import (
+    CASRegistryServiceAdapter,
+    CIRServiceAdapter,
+    CTSServiceAdapter,
+    ChEBIServiceAdapter,
+    ChemeoServiceAdapter,
+    CompToxServiceAdapter,
+    NISTServiceAdapter,
+    OPSINServiceAdapter,
+    PubChemServiceAdapter,
+    SRSServiceAdapter,
+    ServiceAdapterRegistry,
+    ServiceSearchResult,
+)
+
+SearchStrategy = Literal["first_hit", "exhaustive"]
+ResolutionMode = Literal["legacy", "consensus", "strict_isomer"]
 
 
 class EmptyResonanceMolSupplierCallback(ResonanceMolSupplierCallback):
@@ -341,6 +365,8 @@ class MoleculeResolver:
             for k in sorted(self.supported_services_by_mode)
         }
         self.supported_modes = sorted(list(set(self.supported_modes)))
+        self._service_adapters = ServiceAdapterRegistry()
+        self._register_default_service_adapters()
 
         self.CAS_regex_with_groups = regex.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
         self.CAS_regex = r"(\d{2,7}-\d{2}-\d)"
@@ -405,18 +431,41 @@ class MoleculeResolver:
                 2. Initializes the molecule cache.
                 3. Sets up a temporary folder for OPSIN if it's available.
         """
+        self._enter_rdkit_log_context()
+        self._enter_molecule_cache_context()
+        self._create_opsin_tempfolder()
+        return self
+
+    def _enter_rdkit_log_context(self) -> None:
+        """Start suppressing RDKit logs for the resolver runtime."""
         self._disabling_rdkit_logger = rdBase.BlockLogs()
         self._disabling_rdkit_logger.__enter__()
+
+    def _enter_molecule_cache_context(self) -> None:
+        """Create and enter the molecule cache context when needed."""
         if not self.molecule_cache:
             self.molecule_cache = SqliteMoleculeCache(
                 self.molecule_cache_db_path, self.molecule_cache_expiration
             )
         self.molecule_cache.__enter__()
+
+    def _create_opsin_tempfolder(self) -> None:
+        """Create the OPSIN temp folder when OPSIN batch mode is enabled."""
         if "opsin" in self._available_services_with_batch_capabilities:
             self._OPSIN_tempfolder = tempfile.TemporaryDirectory(
                 prefix="OPSIN_tempfolder_", ignore_cleanup_errors=True
             )
-        return self
+
+    def _cleanup_opsin_tempfolder(self, *, error_ocurred: bool) -> None:
+        """Cleanup OPSIN temp folder unless an exception is currently bubbling up."""
+        if self._OPSIN_tempfolder and not error_ocurred:
+            self._OPSIN_tempfolder.cleanup()
+
+    def _teardown_runtime_contexts(self, *, error_ocurred: bool) -> None:
+        """Teardown all runtime contexts in a single lifecycle helper."""
+        self.molecule_cache.__exit__(None, None, None)
+        self._disabling_rdkit_logger.__exit__(None, None, None)
+        self._cleanup_opsin_tempfolder(error_ocurred=error_ocurred)
 
     def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
         """
@@ -448,10 +497,84 @@ class MoleculeResolver:
             or exception_traceback is not None
         )
 
-        self.molecule_cache.__exit__(None, None, None)
-        self._disabling_rdkit_logger.__exit__(None, None, None)
-        if self._OPSIN_tempfolder and not error_ocurred:
-            self._OPSIN_tempfolder.cleanup()
+        self._teardown_runtime_contexts(error_ocurred=error_ocurred)
+
+    def _register_default_service_adapters(self) -> None:
+        """Register built-in adapters used by find_single_molecule."""
+        adapters = [
+            CASRegistryServiceAdapter(),
+            ChEBIServiceAdapter(),
+            ChemeoServiceAdapter(),
+            CIRServiceAdapter(),
+            CompToxServiceAdapter(),
+            CTSServiceAdapter(),
+            NISTServiceAdapter(),
+            OPSINServiceAdapter(),
+            PubChemServiceAdapter(),
+            SRSServiceAdapter(),
+        ]
+        for adapter in adapters:
+            self._service_adapters.register(adapter)
+
+    def _resolve_service_with_adapter(
+        self,
+        service: str,
+        flattened_identifiers: list[str],
+        flattened_modes: list[str],
+        required_formula: Optional[str],
+        required_charge: Optional[int],
+        required_structure_type: Optional[str],
+    ) -> Optional[ServiceSearchResult]:
+        """Resolve one service by delegating to its configured adapter."""
+        adapter = self._service_adapters.get(service)
+        if adapter is None:
+            return None
+        return adapter.resolve(
+            self,
+            flattened_identifiers,
+            flattened_modes,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+
+    def _resolve_identifier_with_adapter(
+        self,
+        service: str,
+        identifier: str,
+        mode: str,
+        required_formula: Optional[str],
+        required_charge: Optional[int],
+        required_structure_type: Optional[str],
+    ) -> Optional[ServiceSearchResult]:
+        """Resolve one identifier/mode pair via the configured service adapter."""
+        adapter = self._service_adapters.get(service)
+        if adapter is None:
+            return None
+        return adapter.resolve_one(
+            self,
+            identifier,
+            mode,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+
+    @staticmethod
+    def _service_result_to_exhaustive_candidate(
+        service: str, result: ServiceSearchResult
+    ) -> dict[str, Any]:
+        """Normalize a service adapter result into the exhaustive candidate payload."""
+        return {
+            "SMILES": result.molecule.SMILES,
+            "synonyms": list(result.synonyms),
+            "CAS": set(result.cas),
+            "additional_information": result.additional_information,
+            "mode_used": result.mode_used,
+            "identifier_used": result.identifier_used,
+            "service": service,
+            "cas_is_authoritative": service == "cas_registry",
+        }
 
     @contextmanager
     def query_molecule_cache(
@@ -1212,6 +1335,41 @@ class MoleculeResolver:
         )
 
         return flattened_identifiers, flattened_modes, synonyms, CAS, given_SMILES
+
+    def _expand_identifier_mode_pairs(
+        self,
+        flattened_identifiers: list[str],
+        flattened_modes: list[str],
+        search_strategy: SearchStrategy,
+    ) -> list[tuple[str, str]]:
+        """Expand identifier/mode pairs for single-molecule search strategies."""
+        if search_strategy not in {"first_hit", "exhaustive"}:
+            raise ValueError(
+                "search_strategy can only be one of: 'first_hit', 'exhaustive'."
+            )
+        return list(zip(flattened_identifiers, flattened_modes, strict=True))
+
+    def _resolve_single_service_candidate(
+        self,
+        service: str,
+        identifier: str,
+        mode: str,
+        required_formula: Optional[str],
+        required_charge: Optional[int],
+        required_structure_type: Optional[str],
+    ) -> Optional[dict[str, Any]]:
+        """Backwards-compatible wrapper for single-pair adapter resolution."""
+        result = self._resolve_identifier_with_adapter(
+            service,
+            identifier,
+            mode,
+            required_formula,
+            required_charge,
+            required_structure_type,
+        )
+        if result is None:
+            return None
+        return self._service_result_to_exhaustive_candidate(service, result)
 
     def _is_list_of_list_of_str(self, value: list[list[str]]) -> bool:
         """
@@ -7974,6 +8132,38 @@ class MoleculeResolver:
 
         return all_molecules, stoichometric_coefficients
 
+    @staticmethod
+    def _validate_resolution_mode(resolution_mode: ResolutionMode) -> None:
+        """Validate the chosen resolution mode."""
+        valid_modes = {"legacy", "consensus", "strict_isomer"}
+        if resolution_mode not in valid_modes:
+            raise ValueError(
+                "resolution_mode can only be one of: 'legacy', 'consensus', 'strict_isomer'."
+            )
+
+    def _collect_opsin_isomer_matches(
+        self,
+        grouped_molecules: dict[str, list[Molecule]],
+        candidate_smiles: list[str],
+    ) -> dict[str, bool]:
+        """Check whether candidate groups have at least one OPSIN-confirmed isomeric match."""
+        matches = {smiles: False for smiles in candidate_smiles}
+        for smiles in candidate_smiles:
+            target_smiles = self.standardize_SMILES(smiles)
+            names = set()
+            for molecule in grouped_molecules[smiles]:
+                names.update(molecule.synonyms)
+
+            for name in names:
+                opsin_candidate = self.get_molecule_from_OPSIN(name)
+                if opsin_candidate is None:
+                    continue
+                opsin_smiles = self.standardize_SMILES(opsin_candidate.SMILES)
+                if opsin_smiles == target_smiles:
+                    matches[smiles] = True
+                    break
+        return matches
+
     def find_single_molecule(
         self,
         identifiers: list[str],
@@ -7985,6 +8175,8 @@ class MoleculeResolver:
         search_iupac_name: Optional[bool] = False,
         interactive: Optional[bool] = False,
         ignore_exceptions: Optional[bool] = False,
+        search_strategy: SearchStrategy = "first_hit",
+        resolution_mode: ResolutionMode = "legacy",
     ) -> Optional[Molecule]:
         """Searches for a single molecule across multiple chemical databases and services.
 
@@ -8012,6 +8204,11 @@ class MoleculeResolver:
 
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during the search. Defaults to False.
 
+            search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
+            "exhaustive" evaluates all identifier/service combinations.
+            resolution_mode (str): Resolution mode. Included for API consistency and
+            future expansion. Accepted values are "legacy", "consensus", "strict_isomer".
+
         Returns:
             Optional[Molecule]: A Molecule object if found, None otherwise.
 
@@ -8025,6 +8222,7 @@ class MoleculeResolver:
         """
         if services_to_use is None:
             services_to_use = self._available_services
+        self._validate_resolution_mode(resolution_mode)
 
         (
             flattened_identifiers,
@@ -8033,6 +8231,9 @@ class MoleculeResolver:
             CAS,
             given_SMILES,
         ) = self._check_and_flatten_identifiers_and_modes(identifiers, modes)
+        flattened_identifier_mode_pairs = self._expand_identifier_mode_pairs(
+            flattened_identifiers, flattened_modes, search_strategy
+        )
         self._check_parameters(
             services=services_to_use,
             required_formulas=required_formula,
@@ -8049,223 +8250,96 @@ class MoleculeResolver:
         mode_used = None
         identifier_used = None
         current_service = None
+        exhaustive_candidates = []
         try:
             for service in services_to_use:
                 current_service = service
-                if service == "cas_registry":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CAS_registry(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS = set(
-                                    cmp.CAS
-                                )  # overwrite CAS with data from the CAS registry
-                                additional_information = cmp.service
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "pubchem":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_pubchem(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "cir":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CIR(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                additional_information = cmp.service
-                                mode_used = mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "opsin":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_OPSIN(
-                                identifier,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                additional_information = cmp.additional_information
-                                mode_used = mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "chebi":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_ChEBI(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "srs":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_SRS(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "comptox":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CompTox(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "chemeo":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_Chemeo(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "cts":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_CTS(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = "cts"
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
-                elif service == "nist":
-                    for identifier, mode in zip(
-                        flattened_identifiers, flattened_modes, strict=True
-                    ):
-                        if mode in self.supported_modes_by_services[service]:
-                            cmp = self.get_molecule_from_NIST(
-                                identifier,
-                                mode,
-                                required_formula,
-                                required_charge,
-                                required_structure_type,
-                            )
-                            if cmp is not None:
-                                SMILES = cmp.SMILES
-                                synonyms.extend(cmp.synonyms)
-                                CAS.update(cmp.CAS)
-                                additional_information = (
-                                    f"{cmp.service} id: {cmp.additional_information}"
-                                )
-                                mode_used = cmp.mode
-                                identifier_used = cmp.identifier
-                                break
+                if search_strategy == "exhaustive":
+                    for identifier, mode in flattened_identifier_mode_pairs:
+                        adapter_result = self._resolve_identifier_with_adapter(
+                            service,
+                            identifier,
+                            mode,
+                            required_formula,
+                            required_charge,
+                            required_structure_type,
+                        )
+                        if adapter_result is None:
+                            continue
+                        resolved_candidate = self._service_result_to_exhaustive_candidate(
+                            service, adapter_result
+                        )
+                        exhaustive_candidates.append(resolved_candidate)
+                else:
+                    adapter_result = self._resolve_service_with_adapter(
+                        service,
+                        flattened_identifiers,
+                        flattened_modes,
+                        required_formula,
+                        required_charge,
+                        required_structure_type,
+                    )
+                    if adapter_result is not None:
+                        SMILES = adapter_result.molecule.SMILES
+                        synonyms.extend(adapter_result.synonyms)
+                        additional_information = adapter_result.additional_information
+                        mode_used = adapter_result.mode_used
+                        identifier_used = adapter_result.identifier_used
+                        if service == "cas_registry":
+                            CAS = adapter_result.cas
+                        else:
+                            CAS.update(adapter_result.cas)
 
-                if SMILES is not None:
+                if search_strategy == "first_hit" and SMILES is not None:
                     break
+
+            if search_strategy == "exhaustive" and exhaustive_candidates:
+                grouped_candidates = collections.defaultdict(list)
+                first_index_by_group = {}
+                for i, candidate in enumerate(exhaustive_candidates):
+                    standardized = self.standardize_SMILES(candidate["SMILES"])
+                    dedupe_key = (
+                        standardized,
+                        candidate["service"],
+                        candidate["identifier_used"],
+                    )
+                    if any(dedupe_key == c["dedupe_key"] for c in grouped_candidates[standardized]):
+                        continue
+                    candidate["dedupe_key"] = dedupe_key
+                    grouped_candidates[standardized].append(candidate)
+                    if standardized not in first_index_by_group:
+                        first_index_by_group[standardized] = i
+
+                best_group_smiles = sorted(
+                    grouped_candidates,
+                    key=lambda smi: (
+                        len(grouped_candidates[smi]),
+                        -first_index_by_group[smi],
+                        len(smi),
+                        smi,
+                    ),
+                    reverse=True,
+                )[0]
+                best_group = grouped_candidates[best_group_smiles]
+                chosen_candidate = best_group[0]
+
+                SMILES = chosen_candidate["SMILES"]
+                additional_information = chosen_candidate["additional_information"]
+                mode_used = chosen_candidate["mode_used"]
+                identifier_used = chosen_candidate["identifier_used"]
+                current_service = chosen_candidate["service"]
+
+                synonyms = []
+                CAS = set()
+                authoritative_cas = None
+                for candidate in best_group:
+                    synonyms.extend(candidate["synonyms"])
+                    if candidate["cas_is_authoritative"]:
+                        authoritative_cas = set(candidate["CAS"])
+                    else:
+                        CAS.update(candidate["CAS"])
+                if authoritative_cas is not None:
+                    CAS = authoritative_cas
 
             if SMILES is None:
                 if given_SMILES is not None:
@@ -8286,9 +8360,7 @@ class MoleculeResolver:
                     # if searching for an ion
                     # search for salts in pubchem and extract the single ions, take the one found most often
                     if required_charge != "zero" and required_charge != 0:
-                        for identifier, mode in zip(
-                            flattened_identifiers, flattened_modes, strict=True
-                        ):
+                        for identifier, mode in flattened_identifier_mode_pairs:
                             molecules = (
                                 self.get_molecule_for_ion_from_partial_pubchem_search(
                                     identifier, required_formula, required_charge
@@ -8584,6 +8656,79 @@ class MoleculeResolver:
             1,
         )
 
+    @staticmethod
+    def _rank_candidate_evidence(
+        candidate_evidence: list[CandidateEvidence],
+    ) -> list[CandidateEvidence]:
+        """Rank candidate evidence by agreement and concordance."""
+        return sorted(
+            candidate_evidence,
+            key=lambda evidence: (
+                -evidence.total_score,
+                -evidence.service_agreement_count,
+                -evidence.identifier_concordance_count,
+                -evidence.synonym_overlap_count,
+                evidence.smiles,
+            ),
+        )
+
+    def _build_candidate_evidence(
+        self,
+        grouped_molecules: dict[str, list[Molecule]],
+    ) -> list[CandidateEvidence]:
+        """Create base evidence objects with service and identifier concordance."""
+        evidence = []
+        for smiles, molecules in grouped_molecules.items():
+            service_names = sorted(
+                {molecule.service for molecule in molecules if molecule.service}
+            )
+            identifiers = sorted(
+                {molecule.identifier for molecule in molecules if molecule.identifier}
+            )
+            normalized_synonyms = [
+                synonym.strip().casefold()
+                for molecule in molecules
+                for synonym in molecule.synonyms
+                if synonym
+            ]
+            synonym_overlap_count = len(normalized_synonyms) - len(
+                set(normalized_synonyms)
+            )
+            score_breakdown = {
+                "service_agreement": len(service_names) * 100,
+                "identifier_concordance": len(identifiers) * 20,
+                "synonym_overlap": synonym_overlap_count * 5,
+            }
+            evidence.append(
+                CandidateEvidence(
+                    smiles=smiles,
+                    service_agreement_count=len(service_names),
+                    service_names=service_names,
+                    identifiers=identifiers,
+                    identifier_concordance_count=len(identifiers),
+                    synonym_overlap_count=synonym_overlap_count,
+                    score_breakdown=score_breakdown,
+                    total_score=sum(score_breakdown.values()),
+                )
+            )
+        return self._rank_candidate_evidence(evidence)
+
+    def _build_resolution_result(
+        self,
+        best_molecule: Optional[Molecule],
+        grouped_molecules: dict[str, list[Molecule]],
+        selected_smiles: Optional[str],
+        selection_reason: str,
+    ) -> ResolutionResult:
+        """Build full include_evidence payload from grouped candidate molecules."""
+        return ResolutionResult(
+            best_molecule=best_molecule,
+            ranked_candidates=self._build_candidate_evidence(grouped_molecules),
+            grouped_by_structure=grouped_molecules,
+            selected_smiles=selected_smiles,
+            selection_reason=selection_reason,
+        )
+
     def find_single_molecule_crosschecked(
         self,
         identifiers: list[str],
@@ -8596,7 +8741,10 @@ class MoleculeResolver:
         minimum_number_of_crosschecks: Optional[int] = 1,
         try_to_choose_best_structure: Optional[bool] = True,
         ignore_exceptions: Optional[bool] = False,
-    ) -> Union[Optional[Molecule], list[Optional[Molecule]]]:
+        search_strategy: SearchStrategy = "first_hit",
+        resolution_mode: ResolutionMode = "legacy",
+        include_evidence: bool = False,
+    ) -> Union[Optional[Molecule], list[Optional[Molecule]], ResolutionResult]:
         """Finds a single molecule with cross-checking across multiple services.
 
         This method searches for a molecule using the provided identifiers and modes,
@@ -8613,6 +8761,11 @@ class MoleculeResolver:
             minimum_number_of_crosschecks (Optional[int]): Minimum number of services that must agree. Defaults to 1.
             try_to_choose_best_structure (Optional[bool]): Whether to attempt to select the best structure. Defaults to True.
             ignore_exceptions (Optional[bool]): Whether to ignore exceptions during search. Defaults to False.
+            search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
+            "exhaustive" evaluates all identifier/service combinations.
+            resolution_mode (str): Resolution mode. Accepted values are "legacy",
+            "consensus", "strict_isomer".
+            include_evidence (bool): If True, return ResolutionResult with evidence payload.
 
         Returns:
             Union[Optional[Molecule], list[Optional[Molecule]]]: A single Molecule object if a best structure is chosen,
@@ -8632,6 +8785,7 @@ class MoleculeResolver:
         """
         if services_to_use is None:
             services_to_use = self._available_services
+        self._validate_resolution_mode(resolution_mode)
 
         if minimum_number_of_crosschecks is None:
             minimum_number_of_crosschecks = 1
@@ -8652,6 +8806,8 @@ class MoleculeResolver:
                 services_to_use=[service],
                 search_iupac_name=search_iupac_name,
                 ignore_exceptions=ignore_exceptions,
+                search_strategy=search_strategy,
+                resolution_mode=resolution_mode,
             )
 
             molecules.append(molecule)
@@ -8678,90 +8834,54 @@ class MoleculeResolver:
                 if len(group_molecules) == maximum_number_of_crosschecks_found:
                     SMILES_with_highest_number_of_crosschecks.append(group_SMILES)
 
+        opsin_isomer_matches = {}
+        if resolution_mode == "strict_isomer":
+            opsin_isomer_matches = self._collect_opsin_isomer_matches(
+                grouped_molecules, SMILES_with_highest_number_of_crosschecks
+            )
+            SMILES_with_highest_number_of_crosschecks = [
+                smiles
+                for smiles in SMILES_with_highest_number_of_crosschecks
+                if opsin_isomer_matches.get(smiles, False)
+            ]
+            if not SMILES_with_highest_number_of_crosschecks:
+                return None
+
         if try_to_choose_best_structure:
-
-            SMILES_preferred = sorted(SMILES_with_highest_number_of_crosschecks)[0]
-            if len(SMILES_with_highest_number_of_crosschecks) > 1:
-                # if SMILES are the same ignoring isomeric info, use the more specific one:
-                unique_non_isomeric_SMILES = set(
-                    [
-                        self.to_SMILES(self.get_from_SMILES(smi), isomeric=False)
-                        for smi in SMILES_with_highest_number_of_crosschecks
-                    ]
-                )
-                if len(unique_non_isomeric_SMILES) == 1:
-                    SMILES_preferred = sorted(
-                        SMILES_with_highest_number_of_crosschecks, key=len
-                    )[-1]
-                else:
-                    # trust opsin algorithm: if not sure and opsin available
-                    SMILES_preferred_by_opsin = None
-                    for SMILES in SMILES_with_highest_number_of_crosschecks:
-                        for molecule in grouped_molecules[SMILES]:
-                            if molecule.mode == "name" and molecule.service == "opsin":
-                                SMILES_preferred_by_opsin = SMILES
-
-                    # if opsin result not available, or searched by another mode
-                    # try getting all structures from the names and see if they agree
-                    # with the SMILES found
-                    if not SMILES_preferred_by_opsin:
-                        SMILES_map = []
-                        names_map = []
-                        for SMILES in SMILES_with_highest_number_of_crosschecks:
-                            for molecule in grouped_molecules[SMILES]:
-                                for name in molecule.synonyms:
-                                    SMILES_map.append(SMILES)
-                                    names_map.append(name)
-
-                        SMILES_found_by_opsin_from_synonyms = [
-                            self.get_molecule_from_OPSIN(name) for name in names_map
-                        ]
-
-                        SMILES_preferred_by_opsin = []
-                        for (
-                            original_SMILES_found,
-                            SMILES_found_by_opsin_from_synonym,
-                        ) in zip(
-                            SMILES_map, SMILES_found_by_opsin_from_synonyms, strict=True
-                        ):
-                            if SMILES_found_by_opsin_from_synonym:
-                                if (
-                                    original_SMILES_found
-                                    == SMILES_found_by_opsin_from_synonym
-                                ):
-                                    SMILES_preferred_by_opsin.append(
-                                        original_SMILES_found
-                                    )
-
-                        SMILES_preferred_by_opsin = set(SMILES_preferred_by_opsin)
-                        if len(SMILES_preferred_by_opsin) == 1:
-                            SMILES_preferred_by_opsin = SMILES_preferred_by_opsin.pop()
-                        else:
-                            SMILES_preferred_by_opsin = None
-
-                    if SMILES_preferred_by_opsin:
-                        SMILES_preferred = SMILES_preferred_by_opsin
-                    else:
-                        c = []
-                        if len(c) == 1 or (len(c) > 1 and c[0][1] > c[1][1]):
-                            SMILES_preferred = c[0][0]
-                        else:
-                            if self._show_warning_if_non_unique_structure_was_found:
-                                temp = len(SMILES_with_highest_number_of_crosschecks)
-                                warnings.warn(
-                                    f"\n\n{temp} molecules were found equally as often. First one sorted by SMILES was taken: \n{grouped_molecules}\n"
-                                )
+            candidate_groups = {
+                smiles: grouped_molecules[smiles]
+                for smiles in SMILES_with_highest_number_of_crosschecks
+            }
+            candidates = build_structure_group_candidates(self, candidate_groups)
+            scored_candidates = score_structure_groups(candidates)
+            best_scored_candidate = select_best_scored_structure(scored_candidates)
+            SMILES_preferred = best_scored_candidate.smiles
 
             molec = self.combine_molecules(
                 SMILES_preferred, grouped_molecules[SMILES_preferred]
             )
             molec.found_molecules.append(grouped_molecules)
+            if include_evidence:
+                return self._build_resolution_result(
+                    best_molecule=molec,
+                    grouped_molecules=grouped_molecules,
+                    selected_smiles=SMILES_preferred,
+                    selection_reason="best_structure_selected",
+                )
             return molec
         else:
-            return [
+            unresolved_molecules = [
                 self.combine_molecules(SMILES, grouped_molecules[SMILES])
                 for SMILES in SMILES_with_highest_number_of_crosschecks
             ]
+            if include_evidence:
+                return self._build_resolution_result(
+                    best_molecule=None,
+                    grouped_molecules=grouped_molecules,
+                    selected_smiles=None,
+                    selection_reason="multiple_structures_tied",
+                )
+            return unresolved_molecules
 
     def find_multiple_molecules_parallelized(
         self,
@@ -8777,6 +8897,8 @@ class MoleculeResolver:
         progressbar: Optional[bool] = True,
         max_workers: Optional[int] = 5,
         ignore_exceptions: bool = True,
+        search_strategy: SearchStrategy = "first_hit",
+        resolution_mode: ResolutionMode = "legacy",
     ) -> list[Optional[Molecule]]:
         """Finds multiple molecules in parallel based on provided identifiers and criteria.
 
@@ -8822,6 +8944,11 @@ class MoleculeResolver:
             ignore_exceptions (Optional[bool]): If True, ignores exceptions that may occur during
             the search process. Defaults to True.
 
+            search_strategy (str): Search strategy. "first_hit" keeps legacy behavior;
+            "exhaustive" evaluates all identifier/service combinations.
+            resolution_mode (str): Resolution mode. Accepted values are "legacy",
+            "consensus", "strict_isomer".
+
         Returns:
             list[Optional[Molecule]]: A list of found molecules, where each molecule is represented
             as an instance of the Molecule class, or None if not found.
@@ -8840,6 +8967,7 @@ class MoleculeResolver:
         # reinitialize session
         self._session = None
         self._init_session(pool_maxsize=max_workers * 2)
+        self._validate_resolution_mode(resolution_mode)
 
         if isinstance(modes, str):
             temp_modes = []
@@ -8942,6 +9070,8 @@ class MoleculeResolver:
                         search_iupac_name,
                         False,
                         ignore_exceptions,
+                        search_strategy,
+                        resolution_mode,
                     )
                 )
             else:
@@ -8957,6 +9087,8 @@ class MoleculeResolver:
                         minimum_number_of_crosschecks,
                         try_to_choose_best_structure,
                         ignore_exceptions,
+                        search_strategy,
+                        resolution_mode,
                     )
                 )
 

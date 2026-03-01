@@ -1,12 +1,13 @@
 from datetime import datetime
 import pytest
-from moleculeresolver import MoleculeResolver
+from moleculeresolver import Molecule, MoleculeResolver
 import json
 import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Union
 from tqdm import tqdm
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 
 # IUPAC names
@@ -264,6 +265,146 @@ def generate_data(json_path, overwrite_json: bool = False):
         bar.set_description(f"Running {m}")
         for data in benchmark.values():
             method(data)
+
+def test_multi_name_exhaustive_benchmark_case(monkeypatch):
+    mr = MoleculeResolver()
+    mr.supported_modes_by_services = {"svc1": ["name"], "svc2": ["name"]}
+    mr._available_services = ["svc1", "svc2"]
+
+    monkeypatch.setattr(mr, "_check_parameters", lambda **_: None)
+    monkeypatch.setattr(
+        mr,
+        "_check_and_flatten_identifiers_and_modes",
+        lambda identifiers, modes: (
+            ["isopropanol", "2-propanol"],
+            ["name", "name"],
+            ["isopropanol", "2-propanol"],
+            set(),
+            None,
+        ),
+    )
+    monkeypatch.setattr(mr, "standardize_SMILES", lambda smiles: smiles)
+
+    def _adapter_result(smiles, synonym, identifier):
+        return SimpleNamespace(
+            molecule=SimpleNamespace(SMILES=smiles),
+            synonyms=[synonym],
+            cas={"67-63-0"},
+            additional_information="mock",
+            mode_used="name",
+            identifier_used=identifier,
+        )
+
+    result_map = {
+        ("svc1", "isopropanol"): _adapter_result("CC(O)C", "isopropanol", "isopropanol"),
+        ("svc1", "2-propanol"): _adapter_result("CC(C)O", "2-propanol", "2-propanol"),
+        ("svc2", "isopropanol"): _adapter_result("CC(C)O", "isopropanol", "isopropanol"),
+    }
+
+    monkeypatch.setattr(
+        mr,
+        "_resolve_identifier_with_adapter",
+        lambda service, identifier, mode, *_: result_map.get((service, identifier)),
+    )
+
+    result = mr.find_single_molecule(
+        identifiers=["isopropanol", "2-propanol"],
+        modes=["name", "name"],
+        services_to_use=["svc1", "svc2"],
+        search_strategy="exhaustive",
+    )
+
+    assert result is not None
+    assert result.SMILES == "CC(C)O"
+
+
+def test_consensus_vs_legacy_mode_comparison(monkeypatch):
+    mr = MoleculeResolver()
+    mr._available_services = ["svc1", "svc2"]
+
+    legacy_winner = Molecule(
+        "CCO", ["ethanol"], [], "svc1", "name", "svc1", 1, "ethanol"
+    )
+    consensus_winner = Molecule(
+        "CCO", ["ethyl alcohol"], [], "svc2", "name", "svc2", 1, "ethyl alcohol"
+    )
+
+    def fake_find_single_molecule(*args, **kwargs):
+        service = kwargs["services_to_use"][0]
+        if service == "svc1":
+            return legacy_winner
+        return consensus_winner
+
+    monkeypatch.setattr(mr, "find_single_molecule", fake_find_single_molecule)
+    monkeypatch.setattr(
+        mr,
+        "filter_molecules",
+        lambda molecules, *_: [molecule for molecule in molecules if molecule is not None],
+    )
+    monkeypatch.setattr(
+        mr,
+        "group_molecules_by_structure",
+        lambda molecules, *_: {"CCO": molecules},
+    )
+
+    legacy_result = mr.find_single_molecule_crosschecked(
+        identifiers=["ethanol"],
+        modes=["name"],
+        services_to_use=["svc1", "svc2"],
+        resolution_mode="legacy",
+    )
+    consensus_result = mr.find_single_molecule_crosschecked(
+        identifiers=["ethanol"],
+        modes=["name"],
+        services_to_use=["svc1", "svc2"],
+        resolution_mode="consensus",
+    )
+
+    assert legacy_result is not None
+    assert consensus_result is not None
+    assert legacy_result.SMILES == consensus_result.SMILES
+
+
+def test_strict_isomer_acceptance_case(monkeypatch):
+    mr = MoleculeResolver()
+    mr._available_services = ["svc1", "svc2"]
+
+    mol_a = Molecule("CCO", ["ethanol"], [], "svc1", "name", "svc1", 1, "ethanol")
+    mol_b = Molecule(
+        "C[C@H](O)C", ["(S)-2-butanol"], [], "svc2", "name", "svc2", 1, "(S)-2-butanol"
+    )
+
+    def fake_find_single_molecule(*args, **kwargs):
+        service = kwargs["services_to_use"][0]
+        return mol_a if service == "svc1" else mol_b
+
+    monkeypatch.setattr(mr, "find_single_molecule", fake_find_single_molecule)
+    monkeypatch.setattr(
+        mr,
+        "filter_molecules",
+        lambda molecules, *_: [molecule for molecule in molecules if molecule is not None],
+    )
+    monkeypatch.setattr(
+        mr,
+        "group_molecules_by_structure",
+        lambda molecules, *_: {"CCO": [mol_a], "C[C@H](O)C": [mol_b]},
+    )
+    monkeypatch.setattr(
+        mr,
+        "_collect_opsin_isomer_matches",
+        lambda grouped, smiles: {smiles[0]: False, smiles[1]: True},
+    )
+
+    result = mr.find_single_molecule_crosschecked(
+        identifiers=["ethanol", "(S)-2-butanol"],
+        modes=["name", "name"],
+        services_to_use=["svc1", "svc2"],
+        resolution_mode="strict_isomer",
+    )
+
+    assert result is not None
+    assert result.SMILES == "C[C@H](O)C"
+
 
 if __name__ == "__main__":
     generate_data(RESPONSES_PATH, overwrite_json=True)
