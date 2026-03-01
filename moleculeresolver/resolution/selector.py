@@ -16,8 +16,9 @@ def select_best_scored_structure(
             -score.total_score,
             -score.crosscheck_count,
             -score.opsin_bonus,
-            -score.isomer_specificity_bonus,
-            -score.smiles_length_bonus,
+            -score.stereo_specificity_bonus,
+            -score.defined_chirality_bonus,
+            -score.bond_stereo_bonus,
             score.smiles,
         ),
     )[0]
