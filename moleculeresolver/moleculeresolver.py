@@ -2770,6 +2770,7 @@ class MoleculeResolver:
         self,
         mol_or_formula: Union[Chem.rdchem.Mol, str],
         required_formula: Optional[str],
+        differentiate_deuterium: bool = True,
     ) -> bool:
         """
         Check if a molecule or formula matches a required chemical formula.
@@ -2783,6 +2784,9 @@ class MoleculeResolver:
 
             required_formula (Optional[str]): The required chemical formula to match against.
             If None, the check always returns True.
+
+            differentiate_deuterium (bool): Whether or not to consider deuterium the 
+            same as hydrogen or not. e.g. CDCl3 == CHCl3
 
         Returns:
             bool: True if the molecule or formula matches the required formula, False otherwise.
@@ -2804,6 +2808,13 @@ class MoleculeResolver:
 
         formula1 = self.formula_to_dictionary(mol_formula)
         formula2 = self.formula_to_dictionary(required_formula)
+
+        if not differentiate_deuterium:
+            if 'D' in formula2:
+                if 'H' not in formula2:
+                    formula2['H'] = 0
+                formula2['H'] += formula2['D']
+                del formula2['D']
 
         return formula1 == formula2
 
@@ -4211,6 +4222,7 @@ class MoleculeResolver:
 
         return SMILES
 
+
     def show_mol_and_pause(
         self,
         mol: Chem.rdchem.Mol,
@@ -4241,22 +4253,24 @@ class MoleculeResolver:
             - The title is added to the image using the PIL (Python Imaging Library) module.
             - The font size for atom labels and other drawing options are scaled based on the image size.
         """
-        scaling_size = min(size)
-        Draw.DrawingOptions.atomLabelFontSize = int(50 * scaling_size / 1000)
-        Draw.DrawingOptions.dotsPerAngstrom = int(300 * scaling_size / 1000)
-        Draw.DrawingOptions.bondLineWidth = max(float(4.0 * scaling_size / 1000), 1.0)
+        size = size or (1000, 1000)
         img = Draw.MolToImage(mol, size=size)
 
-        title = "charge: " + str(Chem.rdmolops.GetFormalCharge(mol))
+        title = "formula: " + self.to_hill_formula(mol)
+        title += "\ncharge: " + str(Chem.rdmolops.GetFormalCharge(mol))
         if name is not None:
             title = "name: " + name + "\n" + title
 
         draw = ImageDraw.Draw(img)
-        s = int(size[1] / 30)
-        fnt = ImageFont.truetype(font="arial.ttf", size=s)
-        draw.multiline_text((10, 10), title, font=fnt, fill=(0, 0, 0, 255))
+        s = max(int(size[1] / 30), 10)
+        try:
+            fnt = ImageFont.truetype("arial.ttf", size=s)
+        except Exception:
+            fnt = ImageFont.load_default()
 
+        draw.multiline_text((10, 10), title, font=fnt, fill=(0, 0, 0, 255))
         img.show()
+
 
     def save_mol_to_PNG(
         self,
@@ -4294,11 +4308,18 @@ class MoleculeResolver:
             - Uses RDKit's `Draw` module for molecule rendering.
             - If `atom_infos` is provided but doesn't match the number of atoms, it may lead to unexpected results.
         """
+        size = size or (1000, 1000)
+
         new_mol = copy.deepcopy(mol)
 
-        for i, atom in enumerate(new_mol.GetAtoms()):
-            label = atom_infos_format_string % atom_infos[i]
-            atom.SetProp("atomNote", label)
+        if atom_infos is not None:
+            if len(atom_infos) != new_mol.GetNumAtoms():
+                raise ValueError(
+                    f"atom_infos length ({len(atom_infos)}) != num atoms ({new_mol.GetNumAtoms()})"
+                )
+            fmt = atom_infos_format_string or "%.3f"
+            for i, atom in enumerate(new_mol.GetAtoms()):
+                atom.SetProp("atomNote", fmt % atom_infos[i])
 
         Draw.MolToFile(new_mol, filename, size=size)
 
