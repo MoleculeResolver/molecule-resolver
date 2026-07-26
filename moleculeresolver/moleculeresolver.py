@@ -3945,7 +3945,10 @@ class MoleculeResolver:
         """
         temporary = {}
         for key, molecule in molecules.items():
-            mol_molecule = self.get_from_SMILES(molecule.SMILES)
+            if isinstance(molecule, Molecule):
+                mol_molecule = self.get_from_SMILES(molecule.SMILES)
+            else:
+                mol_molecule = molecule
             mol_formula = rdMolDescriptors.CalcMolFormula(mol_molecule)
             if mol_formula not in temporary:
                 temporary[mol_formula] = {}
