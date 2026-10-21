@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
 
     steps:
     - name: Checkout repository
@@ -98,20 +98,23 @@ jobs:
       run: |
         BUILD_VER="$(ls dist/molecule_resolver-*.tar.gz)"
         echo "Path: $BUILD_VER"
-        if [[ $BUILD_VER =~ (molecule_resolver-)([^,][0-9.]{4}) ]]; then
-            echo "version=${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
-            echo "Version of build: ${BASH_REMATCH[2]}"
+        if [[ $BUILD_VER =~ molecule_resolver-(.+)\.tar\.gz$ ]]; then
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "Version of build: ${BASH_REMATCH[1]}"
         else
-            echo "No version found found"
+            echo "No version found"
+            exit 1
         fi
 
-    - name: Install coveo-pypi-cli
-      run: pip install coveo-pypi-cli
-
+    # the PyPI JSON API returns the version exactly as published (e.g. 0.6.0, not 0.6)
     - name: Get latest published version
       id: published
       run: |
-        PUB_VER="$(pypi current-version molecule-resolver)"
+        PUB_VER="$(curl --fail --silent --show-error https://pypi.org/pypi/molecule-resolver/json | jq --raw-output .info.version)"
+        if [[ -z $PUB_VER || $PUB_VER == "null" ]]; then
+            echo "Could not get the latest published version from PyPI"
+            exit 1
+        fi
         echo "version=$PUB_VER" >> $GITHUB_OUTPUT
         echo "Latest published version: $PUB_VER"
 
