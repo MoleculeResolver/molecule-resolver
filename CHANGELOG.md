@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cas_registry` rejected every API key (HTTP 401): requests now go to the
   `direct-api` endpoint with the `x-origin` header that CAS Common Chemistry requires.
   A rejected key now raises a `ValueError` right away instead of retrying.
+- Error messages of failed requests printed the request headers including API keys;
+  `X-API-KEY` and `Authorization` headers are now shown as `***`.
 - `cas_registry` found no structure for molecules whose detail record has an empty
   `smile` field (e.g. urea); it now falls back to `canonicalSmile`.
 

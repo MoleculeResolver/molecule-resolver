@@ -767,6 +767,28 @@ class MoleculeResolver:
             ),
         )
 
+    @staticmethod
+    def _redact_request_kwargs(kwargs: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        """
+        Return a copy of request kwargs with API keys and tokens in the headers masked.
+
+        Args:
+            kwargs (Optional[dict[str, Any]]): Keyword arguments passed to the request.
+
+        Returns:
+            Optional[dict[str, Any]]: The kwargs, safe to print or log.
+        """
+        if not kwargs or "headers" not in kwargs:
+            return kwargs
+
+        secret_headers = {"x-api-key", "authorization"}
+        redacted_kwargs = dict(kwargs)
+        redacted_kwargs["headers"] = {
+            name: "***" if name.lower() in secret_headers else value
+            for name, value in kwargs["headers"].items()
+        }
+        return redacted_kwargs
+
     def _resilient_request(
         self,
         url: str,
@@ -890,13 +912,14 @@ class MoleculeResolver:
                             "The service is probably offline."
                         )
 
+                    printable_kwargs = self._redact_request_kwargs(kwargs)
                     if response is not None:
                         print(
-                            f"ERROR ocurred during request to:\n{url}\n{kwargs}\n HTTP request status code: {response.status_code}\n"
+                            f"ERROR ocurred during request to:\n{url}\n{printable_kwargs}\n HTTP request status code: {response.status_code}\n"
                         )
                     else:
                         print(
-                            f"ERROR ocurred during request to:\n{url}\n{kwargs}\n",
+                            f"ERROR ocurred during request to:\n{url}\n{printable_kwargs}\n",
                             traceback.format_exc(),
                         )
 
