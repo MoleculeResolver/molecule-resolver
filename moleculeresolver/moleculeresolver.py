@@ -1578,12 +1578,13 @@ class MoleculeResolver:
                     "mixture_ions",
                     "neutral",
                     "salt",
+                    "ionic_liquid",
                     "ion",
                     "mixture_neutrals_salts",
                     "mixture_neutrals_ions",
                 ]:
                     raise ValueError(
-                        "required_structure_type must be one of the following: 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ion','mixture_neutrals_salts', 'mixture_neutrals_ions'"
+                        "required_structure_type must be one of the following: 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ionic_liquid', 'ion','mixture_neutrals_salts', 'mixture_neutrals_ions'"
                     )
 
     def replace_non_printable_characters(self, string_input: str) -> str:
@@ -2987,6 +2988,7 @@ class MoleculeResolver:
             - "mixture_neutrals": A mixture of neutral molecules.
             - "neutral": A single neutral molecule.
             - "salt": A salt (mixture of oppositely charged ions with total charge of 0).
+            - "ionic_liquid": A salt whose cations are all organic (contain carbon and no metal).
             - "mixture_ions": A mixture of ions with non-zero total charge.
             - "ion": A single charged molecule.
             - "mixture_neutrals_salts": A mixture of neutral molecules and salts.
@@ -2998,14 +3000,17 @@ class MoleculeResolver:
             - Uses RDKit to calculate formal charges for each part of the SMILES.
             - Classification is based on the number of parts and their charges.
             - Returns None if any part of the SMILES fails to parse.
+            - "ionic_liquid" is a stricter type of "salt"; anions are not checked.
+              Use `check_structure_type` with "salt" to match both.
         """
         SMILES_parts = SMILES.split(".")
-        SMILES_parts_charges = []
+        mols = []
         for SMILES_part in SMILES_parts:
             mol = self.get_from_SMILES(SMILES_part)
             if not mol:
-                return "None"
-            SMILES_parts_charges.append(Chem.rdmolops.GetFormalCharge(mol))
+                return None
+            mols.append(mol)
+        SMILES_parts_charges = [Chem.rdmolops.GetFormalCharge(mol) for mol in mols]
 
         total_charge = sum(SMILES_parts_charges)
 
@@ -3028,6 +3033,16 @@ class MoleculeResolver:
             else:
                 structure_type = "mixture_neutrals_ions"
 
+        if structure_type == "salt":
+            nonmetals = {"H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "As", "Se", "Br", "Te", "I"}
+            cation_symbols = [
+                {atom.GetSymbol() for atom in mol.GetAtoms()}
+                for mol, charge in zip(mols, SMILES_parts_charges)
+                if charge > 0
+            ]
+            if all("C" in symbols and symbols <= nonmetals for symbols in cation_symbols):
+                structure_type = "ionic_liquid"
+
         return structure_type
 
     def check_structure_type(self, SMILES: str, required_structure_type: str) -> bool:
@@ -3042,7 +3057,7 @@ class MoleculeResolver:
 
             required_structure_type (str): The required structure type to match against.
             Must be one of the following:
-            "mixture_neutrals", "mixture_ions", "neutral", "salt", "ion",
+            "mixture_neutrals", "mixture_ions", "neutral", "salt", "ionic_liquid", "ion",
             "mixture_neutrals_salts", "mixture_neutrals_ions".
 
         Returns:
@@ -3055,6 +3070,8 @@ class MoleculeResolver:
             - If `required_structure_type` is None, the method always returns True.
             - Uses `get_structure_type_from_SMILES` to determine the actual structure type.
             - The comparison is case-sensitive and must match exactly.
+            - "ionic_liquid" is a stricter type of "salt": a required "salt" also
+              matches ionic liquids.
         """
         if required_structure_type is None:
             return True
@@ -3064,16 +3081,20 @@ class MoleculeResolver:
             "mixture_ions",
             "neutral",
             "salt",
+            "ionic_liquid",
             "ion",
             "mixture_neutrals_salts",
             "mixture_neutrals_ions",
         ]
         if required_structure_type not in available_structure_types:
             raise ValueError(
-                "required_structure_type must be one of 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ion','mixture_neutrals_salts' or 'mixture_neutrals_ions'."
+                "required_structure_type must be one of 'mixture_neutrals','mixture_ions', 'neutral', 'salt', 'ionic_liquid', 'ion','mixture_neutrals_salts' or 'mixture_neutrals_ions'."
             )
 
-        return self.get_structure_type_from_SMILES(SMILES) == required_structure_type
+        structure_type = self.get_structure_type_from_SMILES(SMILES)
+        if required_structure_type == "salt":
+            return structure_type in ("salt", "ionic_liquid")
+        return structure_type == required_structure_type
 
     @cache
     def InChI_to_SMILES(self, inchi: str) -> Optional[str]:
@@ -3797,7 +3818,8 @@ class MoleculeResolver:
             check_for_resonance_structures = SMILES1_structure_type in [
                 "ion",
                 "salt",
-            ] or SMILES2_structure_type in ["ion", "salt"]
+                "ionic_liquid",
+            ] or SMILES2_structure_type in ["ion", "salt", "ionic_liquid"]
 
         def do_resonance_structures_overlap(SMILES1, SMILES2):
             unique_partial_SMILES1 = set(SMILES1.split("."))
@@ -7901,7 +7923,7 @@ class MoleculeResolver:
         CAS = list(CAS)
 
         if given_SMILES:
-            if self.get_structure_type_from_SMILES(given_SMILES) != "salt":
+            if not self.check_structure_type(given_SMILES, "salt"):
                 raise ValueError("The given SMILES is not a salt.")
 
         if required_charge is None:
