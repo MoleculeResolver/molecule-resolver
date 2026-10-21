@@ -183,22 +183,19 @@ class TestServices:
     def test_pubchem(self, data):
         self._test_service_by_name("pubchem", "get_molecule_from_pubchem", data, mode="name")
 
-    @pytest.mark.skip(
-        reason="The CTS REST API answers with HTTP 410 since CTS moved to cts-lite.metabolomics.us"
-    )
     def test_cts(self, data):
-        # CTS does not support searching by name
-        if not data.get("CAS"):
-            pytest.skip("No CAS number in benchmark entry")
+        # CTS-Lite does not support searching by name or CAS
+        if not data.get("inchikey"):
+            pytest.skip("No InChIKey in benchmark entry")
         if "cts" in data.get("expected_failures", []):
             pytest.xfail(f"cts is expected to fail for {data['iupac_name']}")
         with MoleculeResolverPatched(json_path=self.json_path) as mr:
             self._test_service(
                 mr.get_molecule_from_CTS,
-                data["CAS"][0],
+                data["inchikey"],
                 SMILES,
                 data["SMILES"],
-                {"mode": "cas"},
+                {"mode": "inchikey"},
             )
 
     def test_chemeo(self, data):
@@ -255,12 +252,9 @@ def test_service_online(service, method_name, kwargs):
 
 
 @pytest.mark.online
-@pytest.mark.xfail(
-    reason="The CTS REST API answers with HTTP 410 since CTS moved to cts-lite.metabolomics.us"
-)
 def test_cts_online():
     with MoleculeResolver(molecule_cache_db_path=":memory:") as mr:
-        res = mr.get_molecule_from_CTS("64-17-5", mode="cas")
+        res = mr.get_molecule_from_CTS("LFQSCWFLJHTTHZ-UHFFFAOYSA-N", mode="inchikey")
     assert res is not None, "cts did not find ethanol"
     assert res.SMILES == "CCO"
 

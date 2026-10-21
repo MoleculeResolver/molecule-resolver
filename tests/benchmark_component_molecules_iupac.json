@@ -1182,6 +1182,7 @@
         "expected_failures": [
             "chebi",
             "cir",
+            "cts",
             "nist",
             "pubchem",
             "srs"
