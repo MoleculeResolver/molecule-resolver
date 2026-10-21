@@ -6904,7 +6904,14 @@ class MoleculeResolver:
 
                     return None
 
-                CAS_URL = "https://commonchemistry.cas.org/api/"
+                # API keys are only accepted on the direct-api endpoint and only
+                # together with the x-origin header.
+                CAS_URL = "https://commonchemistry.cas.org/direct-api/"
+                CAS_headers = {
+                    "X-API-KEY": self.available_service_API_keys["cas_registry"],
+                    "x-origin": "https://commonchemistry.cas.org/api-overview",
+                    "accept": "application/json",
+                }
                 SMILES = None
                 synonyms = []
                 CAS = []
@@ -6912,25 +6919,17 @@ class MoleculeResolver:
 
                 search_response_text = self._resilient_request(
                     f'{CAS_URL}search?q={urllib.parse.quote(identifier, safe="")}',
-                    {
-                        "headers": {
-                            "X-API-KEY": self.available_service_API_keys[
-                                "cas_registry"
-                            ],
-                            "accept": "application/json",
-                        }
-                    },
-                    accepted_status_codes=[200, 403],
+                    {"headers": CAS_headers},
+                    accepted_status_codes=[200, 401, 403],
                     rejected_status_codes=[],
                 )
 
                 if search_response_text is not None:
                     results = json.loads(search_response_text)
                     if "message" in results:
-                        if "API key required" in results["message"]:
-                            raise ValueError(
-                                "The API token given for cas_registry is not valid."
-                            )
+                        raise ValueError(
+                            f'The API token given for cas_registry is not valid: {results["message"]}'
+                        )
 
                     results = results["results"]
 
@@ -6938,14 +6937,7 @@ class MoleculeResolver:
                         CAS = result["rn"]
                         detail_response_text = self._resilient_request(
                             f"{CAS_URL}detail?cas_rn={urllib.parse.quote(CAS)}",
-                            {
-                                "headers": {
-                                    "X-API-KEY": self.available_service_API_keys[
-                                        "cas_registry"
-                                    ],
-                                    "accept": "application/json",
-                                }
-                            },
+                            {"headers": CAS_headers},
                             rejected_status_codes=[],
                         )
                         if detail_response_text is not None:
@@ -6956,7 +6948,9 @@ class MoleculeResolver:
                                 synonyms.append(details["name"])
                             synonyms.extend(details["synonyms"])
 
-                            SMILES = details["smile"]
+                            # "smile" is empty for many molecules without stereo
+                            # information, "canonicalSmile" is then still given
+                            SMILES = details["smile"] or details.get("canonicalSmile", "")
 
                             # sometimes the cas registry gives back wrong aromaticity results
                             # when searching by SMILES, this is to filter out most of them
