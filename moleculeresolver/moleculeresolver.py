@@ -4122,13 +4122,13 @@ class MoleculeResolver:
             raise ValueError("molblock and url cannot both be None.")
         if molblock:
             if url is not None:
-                raise
+                raise ValueError("molblock and url cannot both be given.")
             if not isinstance(molblock, str):
                 raise TypeError("molblock must be a string.")
 
         if url:
             if molblock is not None:
-                raise
+                raise ValueError("molblock and url cannot both be given.")
             if not isinstance(url, str):
                 raise TypeError("url must be a string.")
             molblock = self._resilient_request(url)
@@ -6374,7 +6374,7 @@ class MoleculeResolver:
 
                     if matches:
                         if len(matches) != 1:
-                            raise
+                            raise ValueError(f"Expected exactly 1 PubChem download URL, found {len(matches)}.")
                         download_url = matches[0]
                         if download_url.startswith("ftp://"):
                             download_url = "https" + download_url[3:]
@@ -6505,7 +6505,7 @@ class MoleculeResolver:
                     download_url = poll_request(request_id)
                     iupac_results = get_results(download_url)
                     if not len(cids_to_request) <= len(iupac_results):
-                        raise
+                        raise ValueError(f"PubChem returned {len(iupac_results)} IUPAC names for {len(cids_to_request)} requested CIDs.")
 
                     for result in iupac_results:
                         cid, iupac_name = result.split("\t")
@@ -6525,7 +6525,7 @@ class MoleculeResolver:
                     download_url = poll_request(request_id)
                     SMILES_results = get_results(download_url)
                     if not len(cids_to_request) <= len(SMILES_results):
-                        raise
+                        raise ValueError(f"PubChem returned {len(SMILES_results)} SMILES for {len(cids_to_request)} requested CIDs.")
 
                     for result in SMILES_results:
                         cid, this_SMILES = result.split("\t")
