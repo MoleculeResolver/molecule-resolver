@@ -22,9 +22,17 @@ SMILES = "SMILES"
 # to responses.json. Otherwise tests that would need a live request are skipped.
 RECORD_RESPONSES = os.environ.get("MOLECULERESOLVER_RECORD_RESPONSES") == "1"
 
+# Empty values count as missing, e.g. GitHub secrets that are not available in forks.
 API_KEYS = {
-    "cas_registry": os.environ.get("CAS_REGISTRY_API_KEY"),
-    "chemeo": os.environ.get("CHEMEO_API_KEY"),
+    "cas_registry": os.environ.get("CAS_REGISTRY_API_KEY") or None,
+    "chemeo": os.environ.get("CHEMEO_API_KEY") or None,
+}
+
+# Recorded responses are replayed without querying the service, but MoleculeResolver
+# only gets that far with a well-formed key, so a placeholder stands in for missing keys.
+REPLAY_API_KEYS = {
+    service: key if key is not None else "replaywithoutkey"
+    for service, key in API_KEYS.items()
 }
 
 
@@ -168,7 +176,8 @@ class TestServices:
     def _test_service_by_name(self, service: str, method_name: str, data: dict, **kwargs):
         if service in data.get("expected_failures", []):
             pytest.xfail(f"{service} is expected to fail for {data['iupac_name']}")
-        with MoleculeResolverPatched(json_path=self.json_path, available_service_API_keys=API_KEYS) as mr:
+        api_keys = API_KEYS if self.json_path is None or RECORD_RESPONSES else REPLAY_API_KEYS
+        with MoleculeResolverPatched(json_path=self.json_path, available_service_API_keys=api_keys) as mr:
             self._test_service(
                 getattr(mr, method_name),
                 data["iupac_name"],
@@ -199,13 +208,9 @@ class TestServices:
             )
 
     def test_chemeo(self, data):
-        if API_KEYS["chemeo"] is None:
-            pytest.skip("CHEMEO_API_KEY not set")
         self._test_service_by_name("chemeo", "get_molecule_from_Chemeo", data, mode="name")
 
     def test_cas(self, data):
-        if API_KEYS["cas_registry"] is None:
-            pytest.skip("CAS_REGISTRY_API_KEY not set")
         self._test_service_by_name("cas_registry", "get_molecule_from_CAS_registry", data, mode="name")
 
     def test_chebi(self, data):

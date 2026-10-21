@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded responses in `tests/responses.json`; set `MOLECULERESOLVER_RECORD_RESPONSES=1`
   to record missing ones. Services known to fail for a benchmark entry are listed in
   its `expected_failures`. Tests marked `online` look up ethanol in every live service;
-  Chemeo and CAS Registry are only tested if `CHEMEO_API_KEY` / `CAS_REGISTRY_API_KEY`
-  are set.
+  for Chemeo and CAS Registry they need `CHEMEO_API_KEY` / `CAS_REGISTRY_API_KEY`,
+  which CI takes from the repository secrets of the same name.
 
 ### Fixed
 
@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   download) raised `RuntimeError: No active exception to reraise` instead of a
   `ValueError` with a message.
 - The CAS Registry API key was validated with the Chemeo token regex.
+- `cas_registry` rejected every API key (HTTP 401): requests now go to the
+  `direct-api` endpoint with the `x-origin` header that CAS Common Chemistry requires.
+  A rejected key now raises a `ValueError` right away instead of retrying.
+- `cas_registry` found no structure for molecules whose detail record has an empty
+  `smile` field (e.g. urea); it now falls back to `canonicalSmile`.
 
 ## [0.6.0] - 2026-10-21
 

@@ -69,6 +69,9 @@ jobs:
 
     - name: Run tests
       shell: bash
+      env:
+        CHEMEO_API_KEY: ${{ secrets.CHEMEO_API_KEY }}
+        CAS_REGISTRY_API_KEY: ${{ secrets.CAS_REGISTRY_API_KEY }}
       run: pytest
 
   # Tag and release the package

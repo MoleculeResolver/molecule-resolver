@@ -52,6 +52,7 @@
         "inchikey": "CSCPPACGZOOCGX-UHFFFAOYSA-N",
         "iupac_name": "propan-2-one",
         "expected_failures": [
+            "cas_registry",
             "chebi"
         ]
     },
@@ -80,7 +81,9 @@
         "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
         "iupac_name": "2-acetyloxybenzoic acid",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "srs"
         ]
     },
@@ -110,6 +113,7 @@
         "iupac_name": "7H-purin-6-amine",
         "expected_failures": [
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -139,7 +143,9 @@
         "inchikey": "ZKHQWZAMYRWXGA-KQYNXXCUSA-N",
         "iupac_name": "[[(2R,3S,4R,5R)-5-(6-aminopurin-9-yl)-3,4-dihydroxyoxolan-2-yl]methoxy-hydroxyphosphoryl] phosphono hydrogen phosphate",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -192,7 +198,9 @@
         "inchikey": "PNEYBMLMFCGWSK-UHFFFAOYSA-N",
         "iupac_name": "Aluminum(III) Oxide",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -223,7 +231,9 @@
         "inchikey": "QGZKDVFQNNGYKY-UHFFFAOYSA-N",
         "iupac_name": "azane",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -254,7 +264,9 @@
         "inchikey": "CIWBSHSKHKDKBQ-JLAZNSOCSA-N",
         "iupac_name": "(2R)-2-[(1S)-1,2-dihydroxyethyl]-3,4-dihydroxy-2H-furan-5-one",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -285,7 +297,9 @@
         "inchikey": "IAOZJIPTCAWIRG-UHFFFAOYSA-N",
         "iupac_name": "3-amino-4-[(1-methoxy-1-oxo-3-phenylpropan-2-yl)amino]-4-oxobutanoic acid",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -365,6 +379,7 @@
         "inchikey": "ZUOUZKKEUPVFJK-UHFFFAOYSA-N",
         "iupac_name": "1,1'-biphenyl",
         "expected_failures": [
+            "cas_registry",
             "chebi"
         ]
     },
@@ -418,6 +433,7 @@
         "inchikey": "VXNZUUAINFGPBY-UHFFFAOYSA-N",
         "iupac_name": "but-1-ene",
         "expected_failures": [
+            "cas_registry",
             "srs"
         ]
     },
@@ -474,7 +490,9 @@
         "inchikey": "RYYVLZVUVIJVGH-UHFFFAOYSA-N",
         "iupac_name": "1,3,7-Trimethyl-3,7-dihydro-1H-purine-2,6-dione",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "srs"
         ]
     },
@@ -528,7 +546,9 @@
         "inchikey": "HVYWMOMLDIMFJA-DPAQBDIFSA-N",
         "iupac_name": "(3S,8S,9S,10R,13R,14S,17R)-10,13-dimethyl-17-[(2R)-6-methylheptan-2-yl]-2,3,4,7,8,9,11,12,14,15,16,17-dodecahydro-1H-cyclopenta[a]phenanthren-3-ol",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -558,7 +578,9 @@
         "inchikey": "KRKNYBCHXYNGOX-UHFFFAOYSA-N",
         "iupac_name": "2-hydroxypropane-1,2,3-tricarboxylic acid",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist"
         ]
     },
@@ -587,7 +609,9 @@
         "inchikey": "ZPUCINDJVBIVPJ-LJISPDSOSA-N",
         "iupac_name": "methyl (1R,2R,3S,5S)-3-benzoyloxy-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -618,6 +642,7 @@
         "inchikey": "YVGGHNCTFXOJCH-UHFFFAOYSA-N",
         "iupac_name": "1-chloro-4-[2,2,2-trichloro-1-(4-chlorophenyl)ethyl]benzene",
         "expected_failures": [
+            "cas_registry",
             "chebi",
             "nist",
             "srs"
@@ -676,6 +701,8 @@
         "inchikey": "PXBRQCKWGAHEHS-UHFFFAOYSA-N",
         "iupac_name": "dichloro(difluoro)methane",
         "expected_failures": [
+            "cas_registry",
+            "chemeo",
             "srs"
         ]
     },
@@ -704,7 +731,9 @@
         "inchikey": "VYFYYTLLBUKUHU-UHFFFAOYSA-N",
         "iupac_name": "4-(2-aminoethyl)benzene-1,2-diol",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -734,7 +763,9 @@
         "inchikey": "UCTWMZQNUQWSLP-VIFPVBQESA-N",
         "iupac_name": "4-[(1R)-1-hydroxy-2-(methylamino)ethyl]benzene-1,2-diol",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -868,7 +899,9 @@
         "inchikey": "KCXVZYZYPLLWCC-UHFFFAOYSA-N",
         "iupac_name": "2-[2-[bis(carboxymethyl)amino]ethyl-(carboxymethyl)amino]acetic acid",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -899,6 +932,7 @@
         "inchikey": "RTHCYVBBDHJXIQ-UHFFFAOYSA-N",
         "iupac_name": "N-methyl-3-phenyl-3-[4-(trifluoromethyl)phenoxy]propan-1-amine",
         "expected_failures": [
+            "cas_registry",
             "srs"
         ]
     },
@@ -977,7 +1011,9 @@
         "inchikey": "GZCGUPFRVQAUEE-SLPGGIOYSA-N",
         "iupac_name": "(2R,3S,4R,5R)-2,3,4,5,6-pentahydroxyhexanal",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1007,6 +1043,7 @@
         "inchikey": "PEDCQBHIVMGVHV-UHFFFAOYSA-N",
         "iupac_name": "propane-1,2,3-triol",
         "expected_failures": [
+            "cas_registry",
             "chebi",
             "srs"
         ]
@@ -1036,7 +1073,9 @@
         "inchikey": "UYTPUPDQBNUYGX-UHFFFAOYSA-N",
         "iupac_name": "2-amino-1,7-dihydropurin-6-one",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -1120,7 +1159,9 @@
         "inchikey": "RWSOTUBLDIXVET-UHFFFAOYSA-N",
         "iupac_name": "sulfane",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1151,6 +1192,7 @@
         "iupac_name": "2-[4-(2-methylpropyl)phenyl]propanoic acid",
         "expected_failures": [
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1180,7 +1222,9 @@
         "inchikey": "COHYTHOBJLSHDF-UHFFFAOYSA-N",
         "iupac_name": "[2,2'-biindolinylidene]-3,3'-dione",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "cts",
             "nist",
@@ -1241,6 +1285,7 @@
         "inchikey": "RRHGJUQNOFWUDK-UHFFFAOYSA-N",
         "iupac_name": "2-methylbuta-1,3-diene",
         "expected_failures": [
+            "cas_registry",
             "chebi",
             "srs"
         ]
@@ -1271,6 +1316,7 @@
         "iupac_name": "(2S)-2-amino-3-(3,4-dihydroxyphenyl)propanoic acid",
         "expected_failures": [
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1350,7 +1396,9 @@
         "inchikey": "DUGOZIWVEXMGBE-UHFFFAOYSA-N",
         "iupac_name": "methyl 2-phenyl-2-piperidin-2-ylacetate",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1406,6 +1454,7 @@
         "iupac_name": "3-[(2S)-1-methylpyrrolidin-2-yl]pyridine",
         "expected_failures": [
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1433,7 +1482,10 @@
         "hill_formula": "HNO3",
         "inchi": "InChI=1S/HNO3/c2-1(3)4/h(H,2,3,4)",
         "inchikey": "GRYLNZFGIOXLOG-UHFFFAOYSA-N",
-        "iupac_name": "nitric acid"
+        "iupac_name": "nitric acid",
+        "expected_failures": [
+            "chemeo"
+        ]
     },
     "Nitric Oxide": {
         "SMILES": "[N]=O",
@@ -1460,7 +1512,9 @@
         "inchikey": "MWUXSHHQAYIFBG-UHFFFAOYSA-N",
         "iupac_name": "nitrogen(II) oxide",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -1491,7 +1545,9 @@
         "inchikey": "SNIOPGDIGTZGOP-UHFFFAOYSA-N",
         "iupac_name": "1,3-dinitrooxypropan-2-yl nitrate",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1521,6 +1577,7 @@
         "inchikey": "JGSARLDLIJGVTE-UHFFFAOYSA-N",
         "iupac_name": "3,3-dimethyl-7-oxo-6-[(2-phenylacetyl)amino]-4-thia-1-azabicyclo[3.2.0]heptane-2-carboxylic acid",
         "expected_failures": [
+            "cas_registry",
             "chebi",
             "nist",
             "srs"
@@ -1626,7 +1683,9 @@
         "inchikey": "QQONPFPTGQHPMA-UHFFFAOYSA-N",
         "iupac_name": "prop-1-ene",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1656,7 +1715,9 @@
         "inchikey": "LOUPRKONTZGTKE-UHFFFAOYSA-N",
         "iupac_name": "(5-ethenyl-1-azabicyclo[2.2.2]octan-2-yl)-(6-methoxyquinolin-4-yl)methanol",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -1688,6 +1749,7 @@
         "iupac_name": "1,1-dioxo-1,2-benzothiazol-3-one",
         "expected_failures": [
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1717,6 +1779,7 @@
         "inchikey": "VYPSYNLAJGMNEJ-UHFFFAOYSA-N",
         "iupac_name": "dioxosilane",
         "expected_failures": [
+            "cas_registry",
             "chebi",
             "cir",
             "srs"
@@ -1772,7 +1835,9 @@
         "inchikey": "CZMRCDWAGMRECN-UGDNZRGBSA-N",
         "iupac_name": "(2R,3R,4S,5S,6R)-2-[(2S,3S,4S,5R)-3,4-dihydroxy-2,5-bis(hydroxymethyl)oxolan-2-yl]oxy-6-(hydroxymethyl)oxane-3,4,5-triol",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "cir",
             "nist",
             "srs"
@@ -1829,6 +1894,7 @@
         "iupac_name": "1,1,2,2-tetrafluoroethene",
         "expected_failures": [
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1858,7 +1924,9 @@
         "inchikey": "CYQFCXCEBYINGO-IAGOWNOFSA-N",
         "iupac_name": "(6aR,10aR)-6,6,9-trimethyl-3-pentyl-6a,7,8,10a-tetrahydrobenzo[c]chromen-1-ol",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1888,7 +1956,9 @@
         "inchikey": "RWQNBRDOKXIBIV-UHFFFAOYSA-N",
         "iupac_name": "5-methyl-1H-pyrimidine-2,4-dione",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
@@ -1946,7 +2016,9 @@
         "inchikey": "YXFVVABEGXRONW-UHFFFAOYSA-N",
         "iupac_name": "methyl-benzene",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "srs"
         ]
     },
@@ -1975,6 +2047,7 @@
         "inchikey": "ISAKRJDGNUQOIC-UHFFFAOYSA-N",
         "iupac_name": "1H-pyrimidine-2,4-dione",
         "expected_failures": [
+            "cas_registry",
             "chebi",
             "nist",
             "srs"
@@ -2089,7 +2162,9 @@
         "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
         "iupac_name": "oxidane",
         "expected_failures": [
+            "cas_registry",
             "chebi",
+            "chemeo",
             "nist",
             "srs"
         ]
