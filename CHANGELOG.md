@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Batch mode for `cts` (`get_molecules_from_CTS_batchmode`), 1000 identifiers per
   request by default.
+- Integration tests for all services (#4, #34). Benchmark lookups are replayed from
+  recorded responses in `tests/responses.json`; set `MOLECULERESOLVER_RECORD_RESPONSES=1`
+  to record missing ones. Services known to fail for a benchmark entry are listed in
+  its `expected_failures`. Tests marked `online` look up ethanol in every live service;
+  Chemeo and CAS Registry are only tested if `CHEMEO_API_KEY` / `CAS_REGISTRY_API_KEY`
+  are set.
+
+### Fixed
+
+- Bare `raise` statements outside `except` blocks (molblock/url check, PubChem
+  download) raised `RuntimeError: No active exception to reraise` instead of a
+  `ValueError` with a message.
+- The CAS Registry API key was validated with the Chemeo token regex.
 
 ## [0.6.0] - 2026-10-21
 
