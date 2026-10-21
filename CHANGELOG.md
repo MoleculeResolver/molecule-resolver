@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-21
+
 ### Changed
 
 - The `cts` service now uses [CTS-Lite](https://cts-lite.metabolomics.us/), because the
@@ -25,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its `expected_failures`. Tests marked `online` look up ethanol in every live service;
   for Chemeo and CAS Registry they need `CHEMEO_API_KEY` / `CAS_REGISTRY_API_KEY`,
   which CI takes from the repository secrets of the same name.
+- Tested on Python 3.15.
 
 ### Fixed
 
@@ -265,7 +268,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2024-10-25
 
-[Unreleased]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.6.0...HEAD
+[Unreleased]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.5.4...0.6.0
 [0.5.4]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.5.3...0.5.4
 [0.5.3]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.5.2...0.5.3
