@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `cts` service now uses [CTS-Lite](https://cts-lite.metabolomics.us/), because the
+  old CTS REST API is gone (HTTP 410). Supported modes are now `smiles`, `inchi`,
+  `inchikey`, `formula` and `cid`; `cas` and `name` are no longer supported.
+  CTS-Lite guesses the identifier type itself, so results whose guessed type differs
+  from the requested mode are discarded. See `docs/cts.md` for the limitations.
+
+### Added
+
+- Batch mode for `cts` (`get_molecules_from_CTS_batchmode`), 1000 identifiers per
+  request by default.
+
 ## [0.6.0] - 2026-10-21
 
 ### Added

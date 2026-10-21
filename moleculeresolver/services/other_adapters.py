@@ -124,7 +124,7 @@ class CTSServiceAdapter(_ModeDrivenAdapter):
             molecule=cmp,
             mode_used=cmp.mode,
             identifier_used=cmp.identifier,
-            additional_information="cts",
+            additional_information=f"{cmp.service} {cmp.additional_information}",
             current_service=self.name,
             synonyms=list(cmp.synonyms),
             cas=set(cmp.CAS),

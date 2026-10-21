@@ -326,7 +326,12 @@ class MoleculeResolver:
             show_warning_if_non_unique_structure_was_found
         )
 
-        self._available_services_with_batch_capabilities = ["srs", "comptox", "pubchem"]
+        self._available_services_with_batch_capabilities = [
+            "srs",
+            "comptox",
+            "pubchem",
+            "cts",
+        ]
         self._message_slugs_shown = []
         self._session = None
         self._session_CompTox = None
@@ -340,11 +345,8 @@ class MoleculeResolver:
             "chemeo": ["name", "cas", "smiles", "inchi", "inchikey"],
             "cir": ["formula", "name", "cas", "smiles", "inchi", "inchikey"],
             "comptox": ["name", "cas", "inchikey"],
-            "cts": [
-                "cas",
-                "smiles",
-                # "name", # I have taken out name because cts works less than 5% of the time
-            ],
+            # CTS-Lite guesses the identifier type itself, see docs/cts.md
+            "cts": ["smiles", "inchi", "inchikey", "formula", "cid"],
             "nist": ["formula", "name", "cas", "smiles"],
             "opsin": ["name"],
             "pubchem": ["name", "cas", "smiles", "formula", "inchi", "inchikey", "cid"],
@@ -5064,7 +5066,7 @@ class MoleculeResolver:
             - Checks if the service supports batch capabilities.
             - Groups identifiers by mode for efficient batch processing.
             - Uses different batch retrieval functions based on the service.
-            - Supports services like PubChem, SRS, CompTox, and OPSIN.
+            - Supports services like PubChem, SRS, CompTox, CTS and OPSIN.
             - Organizes results by mode.
         """
         if service not in self._available_services_with_batch_capabilities:
@@ -5153,6 +5155,10 @@ class MoleculeResolver:
                             self.get_molecules_from_CompTox_batchmode(
                                 identifier_chunk, mode
                             )
+                        )
+                    elif service == "cts":
+                        results_for_this_chunk = self.get_molecules_from_CTS_batchmode(
+                            identifier_chunk, mode
                         )
                     elif service == "opsin":
                         results_for_this_chunk = self.get_molecule_from_OPSIN_batchmode(
@@ -5339,6 +5345,116 @@ class MoleculeResolver:
             required_structure_type,
         )
 
+    def _get_molecules_from_CTS_lite(
+        self, identifiers: list[str], mode: str
+    ) -> list[Optional[list[Molecule]]]:
+        """
+        Send one request to CTS-Lite and parse the results.
+
+        CTS-Lite (https://cts-lite.metabolomics.us/) has no parameter for the identifier
+        type. The server guesses the type of every query from its characters, so each
+        result is only accepted if the guessed ``query_type`` matches ``mode``.
+        See docs/cts.md for the limitations this causes.
+
+        Args:
+            identifiers (list[str]): The identifiers to search for, all of the same mode.
+
+            mode (str): The type of the identifiers.
+
+        Returns:
+            list[Optional[list[Molecule]]]: One entry per identifier, None if not found.
+
+        Raises:
+            requests.exceptions.ConnectionError: If CTS-Lite cannot be reached.
+        """
+        results = [None] * len(identifiers)
+
+        # queries are separated by whitespace on the server side
+        indices_to_search = [
+            i
+            for i, identifier in enumerate(identifiers)
+            if identifier and not any(c.isspace() for c in identifier)
+        ]
+        if not indices_to_search:
+            return results
+
+        accepted_query_types = {
+            "smiles": ["smiles", "converted_smiles"],
+            "inchi": ["inchi"],
+            "inchikey": ["inchikey"],
+            "formula": ["formula"],
+            "cid": ["pubchem_id"],
+        }
+
+        # first block InChIKey matches ignore stereochemistry and isotopes
+        response_text = self._resilient_request(
+            "https://cts-lite.metabolomics.us/match?first_block_matches=false",
+            json={"queries": "\n".join(identifiers[i] for i in indices_to_search)},
+            request_type="post",
+            kwargs={"timeout": 120},
+            rejected_status_codes=[400, 404, 500],
+            max_retries=3,
+        )
+        if response_text is None:
+            return results
+
+        response = json.loads(response_text)
+        if len(response) != len(indices_to_search):
+            raise RuntimeError(
+                "CTS-Lite returned a different number of results than queries sent."
+            )
+
+        for identifier_index, result in zip(indices_to_search, response, strict=True):
+            if result["query"] != identifiers[identifier_index]:
+                raise RuntimeError("CTS-Lite returned results in a different order.")
+
+            if not result["found_match"] or not result["matches"]:
+                continue
+
+            if result["query_type"] not in accepted_query_types[mode]:
+                continue
+
+            # the cache requires the molecule mode to equal the queried mode
+            match_info = ""
+            if result["query_type"] == "converted_smiles":
+                match_info = " (matched by inchikey calculated from smiles)"
+
+            molecules = []
+            for match in result["matches"]:
+                SMILES = match["smiles"]
+                if not SMILES or not self.is_valid_SMILES(SMILES):
+                    continue
+
+                synonyms = []
+                # the cache does not allow pipe symbols in synonyms
+                if match["compound_name"] and "|" not in match["compound_name"]:
+                    synonyms = self.filter_and_sort_synonyms([match["compound_name"]])
+
+                molecules.append(
+                    Molecule(
+                        SMILES,
+                        synonyms,
+                        [],
+                        f"pubchem cid: {match['identifier']}{match_info}",
+                        mode,
+                        "cts",
+                        identifier=identifiers[identifier_index],
+                    )
+                )
+
+            if molecules:
+                results[identifier_index] = molecules
+
+        return results
+
+    def _set_CTS_is_down(self) -> None:
+        """Warn once that CTS is unreachable and skip it for the rest of this instance."""
+        if "CTS_is_down" not in self._message_slugs_shown:
+            self._message_slugs_shown.append("CTS_is_down")
+            warnings.warn(
+                "CTS seems to be down, to continue working this instance of MoleculeResolver will skip CTS."
+            )
+
     def get_molecule_from_CTS(
         self,
         identifier: str,
@@ -5348,13 +5464,13 @@ class MoleculeResolver:
         required_structure_type: Optional[str] = None,
     ) -> Optional[Molecule]:
         """
-        Retrieve a molecule from CTS (Chemical Translation Service) based on the provided identifier and mode.
+        Retrieve a molecule from CTS-Lite (Chemical Translation Service) based on the provided identifier and mode.
 
-        Queries CTS to convert various chemical identifiers into molecular structures and associated information.
+        CTS-Lite matches identifiers against a curated subset of PubChem with about 13 million compounds.
 
         Args:
             identifier (str): The chemical identifier to search for.
-            mode (str): The type of identifier (e.g., 'name', 'cas', 'inchi', 'smiles').
+            mode (str): The type of identifier ('smiles', 'inchi', 'inchikey', 'formula' or 'cid').
             required_formula (Optional[str]): The expected molecular formula.
             required_charge (Optional[int]): The expected molecular charge.
             required_structure_type (Optional[str]): The expected structure type.
@@ -5367,12 +5483,10 @@ class MoleculeResolver:
 
         Notes:
             - Checks a cache for previously retrieved molecules.
-            - Uses the CTS REST API to query the service.
-            - Retrieves SMILES, CAS numbers, and synonyms.
-            - Filters out radicals and mixtures based on the required_structure_type.
-            - Filters results based on required formula, charge, and structure type.
+            - CTS-Lite guesses the identifier type itself. Results are discarded if the
+              guessed type differs from ``mode``, e.g. the formula "CO" is read as the
+              SMILES of methanol. See docs/cts.md.
             - Issues a warning and returns None if CTS is down.
-            - Uses resilient network requests to handle potential connection issues.
         """
         self._check_parameters(
             identifiers=identifier,
@@ -5391,107 +5505,16 @@ class MoleculeResolver:
                 if "CTS_is_down" in self._message_slugs_shown:
                     return None
 
-                cts_modes = {
-                    "name": "Chemical Name",
-                    "cas": "CAS",
-                    "inchi": "smiles",
-                    "smiles": "smiles",
-                }
-
-                SMILES = None
-                CAS = []
-                synonyms = []
-
-                mode_used = mode
-                if mode == "smiles":
-                    SMILES = identifier
-
-                elif mode == "inchi":
-                    SMILES = self.InChI_to_SMILES(identifier)
-                    identifier = SMILES
-                    mode_used = "smiles calculated from inchi"
-
-                elif mode == "cas":
-                    CAS.append(identifier)
-
-                # unfortunatedly sometimes the server returns a status code 500 for valid names
                 try:
-                    CTS_URL = "https://cts.fiehnlab.ucdavis.edu/rest/convert/"
-                    response_text = self._resilient_request(
-                        f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/Chemical%20Name/{urllib.parse.quote(identifier, safe="")}',
-                        kwargs={"timeout": 5},
-                        rejected_status_codes=[400, 404, 500],
-                        max_retries=3,
-                    )
+                    found_molecules = self._get_molecules_from_CTS_lite(
+                        [identifier], mode
+                    )[0]
                 except requests.exceptions.ConnectionError:
-                    # I don't know why, but somtimes CTS is offline. This would make the module much slower as
-                    # it tries to connect multiple times anyway. Instead we give a warning and skip CTS.
-                    if "CTS_is_down" not in self._message_slugs_shown:
-                        self._message_slugs_shown.append("CTS_is_down")
-                        warnings.warn(
-                            "CTS seems to be down, to continue working this instance of MoleculeResolver will skip CTS."
-                        )
+                    self._set_CTS_is_down()
+                    return None
 
-                if "CTS_is_down" not in self._message_slugs_shown:
-                    # the search for synonyms returns a lot of unusable data
-                    # only use the three most sensible ones
-                    if response_text is not None:
-                        temp = json.loads(response_text)[0]
-                        synonyms.extend(
-                            self.filter_and_sort_synonyms(temp["results"], 3)
-                        )
-
-                    if mode != "cas":
-                        response_text = self._resilient_request(
-                            f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/CAS/{urllib.parse.quote(identifier, safe="")}',
-                            kwargs={"timeout": 10},
-                            rejected_status_codes=[404, 500],
-                        )
-                        if response_text is not None:
-                            CAS_rns = json.loads(response_text)[0]["results"]
-                            CAS = self.filter_and_sort_CAS(CAS_rns)
-
-                    if mode not in ["inchi", "smiles"]:
-                        response_text = self._resilient_request(
-                            f'{CTS_URL}{urllib.parse.quote(cts_modes[mode])}/InChI%20Code/{urllib.parse.quote(identifier, safe="")}',
-                            kwargs={"timeout": 10},
-                            rejected_status_codes=[404, 500],
-                        )
-                        if response_text is not None:
-                            temp = json.loads(response_text)[0]
-                            found_InChIs = temp["results"]
-                            accepted_SMILES = []
-                            for InChI in found_InChIs:
-                                this_SMILES = self.InChI_to_SMILES(InChI)
-                                if not this_SMILES:
-                                    continue
-                                if (
-                                    not required_structure_type
-                                    or "mixture" not in required_structure_type
-                                ):
-                                    if "." in this_SMILES:
-                                        continue
-                                # try filtering radicals as CTS has them in some cases
-                                try:
-                                    if (
-                                        Descriptors.NumRadicalElectrons(
-                                            self.get_from_SMILES(this_SMILES)
-                                        )
-                                        == 0
-                                    ):
-                                        accepted_SMILES.append(this_SMILES)
-                                except Exception:
-                                    continue
-
-                            if len(accepted_SMILES) == 1:
-                                if mode == "name":
-                                    synonyms.insert(0, identifier)
-                                    synonyms = self.filter_and_sort_synonyms(synonyms)
-                                SMILES = accepted_SMILES[0]
-                    if SMILES is not None:
-                        molecules.append(
-                            Molecule(SMILES, synonyms, CAS, None, mode_used, "cts")
-                        )
+                if found_molecules:
+                    molecules.extend(found_molecules)
 
         return self.filter_and_combine_molecules(
             molecules,
@@ -5499,6 +5522,66 @@ class MoleculeResolver:
             required_charge,
             required_structure_type,
         )
+
+    def get_molecules_from_CTS_batchmode(
+        self, identifiers: list[str], mode: str
+    ) -> list[Optional[list[Molecule]]]:
+        """
+        Retrieve molecules from CTS-Lite in batch mode.
+
+        All identifiers are sent in one request. ``get_molecules_using_batchmode_from``
+        splits larger lists into batches of 1000 identifiers by default
+        (CTS-Lite accepts up to 100,000 per request).
+
+        Args:
+            identifiers (list[str]): A list of chemical identifiers to search for.
+            mode (str): The type of identifier ('smiles', 'inchi', 'inchikey', 'formula' or 'cid').
+
+        Returns:
+            list[Optional[list[Molecule]]]: One entry per identifier. Each element is either
+            a list of Molecule objects if found, or None if not found or invalid.
+
+        Raises:
+            TypeError: If any of the identifiers is not a string.
+            ValueError: If the input parameters fail validation in the _check_parameters method.
+
+        Example:
+            >>> resolver = MoleculeResolver()
+            >>> identifiers = ["CCO", "c1ccccc1", "CC(=O)O"]
+            >>> molecules = resolver.get_molecules_from_CTS_batchmode(identifiers, mode="smiles")
+        """
+        self._check_parameters(
+            identifiers=identifiers,
+            modes=mode,
+            services="cts",
+            context="get_molecules_batch",
+        )
+        if not all([isinstance(identifier, str) for identifier in identifiers]):
+            raise TypeError("All identifiers must be strings.")
+
+        with self.query_molecule_cache_batchmode(
+            "cts", mode, identifiers, save_not_found=False
+        ) as (identifiers_to_search, indices_of_identifiers_to_search, results):
+            if len(identifiers_to_search) == 0:
+                return results
+
+            if "CTS_is_down" in self._message_slugs_shown:
+                return results
+
+            try:
+                found_molecules = self._get_molecules_from_CTS_lite(
+                    identifiers_to_search, mode
+                )
+            except requests.exceptions.ConnectionError:
+                self._set_CTS_is_down()
+                return results
+
+            for molecule_index, molecules in zip(
+                indices_of_identifiers_to_search, found_molecules, strict=True
+            ):
+                results[molecule_index] = molecules
+
+            return results
 
     def get_CompTox_request_unique_id(self) -> str:
         """
