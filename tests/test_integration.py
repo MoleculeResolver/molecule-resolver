@@ -183,6 +183,9 @@ class TestServices:
     def test_pubchem(self, data):
         self._test_service_by_name("pubchem", "get_molecule_from_pubchem", data, mode="name")
 
+    @pytest.mark.skip(
+        reason="The CTS REST API answers with HTTP 410 since CTS moved to cts-lite.metabolomics.us"
+    )
     def test_cts(self, data):
         # CTS does not support searching by name
         if not data.get("CAS"):
@@ -221,7 +224,7 @@ class TestServices:
         self._test_service_by_name("srs", "get_molecule_from_SRS", data, mode="name")
 
     # CompTox puts a unique request id into every URL, so its responses cannot be
-    # replayed; it is only covered by TestServicesOnline.
+    # replayed; it is only covered by test_service_online.
 
 
 @pytest.mark.online
@@ -252,6 +255,9 @@ def test_service_online(service, method_name, kwargs):
 
 
 @pytest.mark.online
+@pytest.mark.xfail(
+    reason="The CTS REST API answers with HTTP 410 since CTS moved to cts-lite.metabolomics.us"
+)
 def test_cts_online():
     with MoleculeResolver(molecule_cache_db_path=":memory:") as mr:
         res = mr.get_molecule_from_CTS("64-17-5", mode="cas")
@@ -266,13 +272,15 @@ def test_opsin_batchmode():
         if not mr._java_path:
             pytest.skip("Java is needed for OPSIN batch mode")
         res = mr.get_molecule_from_OPSIN_batchmode(names)
-    for i, r in enumerate(res):
-        if r is None:
-            raise ValueError(f"No molecule found for {names[i]}")
-        if r[0].SMILES == smiles[i]:
-            continue
-        else:
-            raise ValueError("Expected " + smiles[i] + " but got " + r[0].SMILES)
+        for i, r in enumerate(res):
+            if r is None:
+                raise ValueError(f"No molecule found for {names[i]}")
+            # Batch mode returns OPSIN's SMILES without standardization.
+            res_SMILES = mr.standardize_SMILES(r[0].SMILES)
+            if res_SMILES == smiles[i]:
+                continue
+            else:
+                raise ValueError("Expected " + smiles[i] + " but got " + res_SMILES)
 
 
 def generate_data(json_path, overwrite_json: bool = False):
