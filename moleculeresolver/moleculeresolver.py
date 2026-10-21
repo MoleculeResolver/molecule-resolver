@@ -6886,7 +6886,7 @@ class MoleculeResolver:
             if not entry_available:
                 valid_token_found = isinstance(
                     self.available_service_API_keys["cas_registry"], str
-                ) and self.chemeo_API_token_regex_compiled.match(
+                ) and self.cas_registry_API_token_regex_compiled.match(
                     self.available_service_API_keys["cas_registry"]
                 )
 
