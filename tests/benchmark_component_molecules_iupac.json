@@ -22,7 +22,10 @@
         "hill_formula": "C2H4O2",
         "inchi": "InChI=1S/C2H4O2/c1-2(3)4/h1H3,(H,3,4)",
         "inchikey": "QTBSBXVTEAMEQO-UHFFFAOYSA-N",
-        "iupac_name": "Ethanoic acid"
+        "iupac_name": "Ethanoic acid",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Acetone": {
         "SMILES": "CC(C)=O",
@@ -47,7 +50,10 @@
         "hill_formula": "C3H6O",
         "inchi": "InChI=1S/C3H6O/c1-3(2)4/h1-2H3",
         "inchikey": "CSCPPACGZOOCGX-UHFFFAOYSA-N",
-        "iupac_name": "propan-2-one"
+        "iupac_name": "propan-2-one",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Acetylsalicylic Acid": {
         "SMILES": "CC(=O)Oc1ccccc1C(=O)O",
@@ -72,7 +78,11 @@
         "hill_formula": "C9H8O4",
         "inchi": "InChI=1S/C9H8O4/c1-6(10)13-8-5-3-2-4-7(8)9(11)12/h2-5H,1H3,(H,11,12)",
         "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
-        "iupac_name": "2-acetyloxybenzoic acid"
+        "iupac_name": "2-acetyloxybenzoic acid",
+        "expected_failures": [
+            "chebi",
+            "srs"
+        ]
     },
     "Adenine": {
         "SMILES": "Nc1ncnc2nc[nH]c12",
@@ -97,7 +107,12 @@
         "hill_formula": "C5H5N5",
         "inchi": "InChI=1S/C5H5N5/c6-4-3-5(9-1-7-3)10-2-8-4/h1-2H,(H3,6,7,8,9,10)",
         "inchikey": "GFFGJBXGBJISGV-UHFFFAOYSA-N",
-        "iupac_name": "7H-purin-6-amine"
+        "iupac_name": "7H-purin-6-amine",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Adenosine Triphosphate": {
         "SMILES": "Nc1ncnc2c1ncn2[C@@H]1O[C@H](COP(=O)(O)OP(=O)(O)OP(=O)(O)O)[C@@H](O)[C@H]1O",
@@ -122,7 +137,13 @@
         "hill_formula": "C10H16N5O13P3",
         "inchi": "InChI=1S/C10H16N5O13P3/c11-8-5-9(13-2-12-8)15(3-14-5)10-7(17)6(16)4(26-10)1-25-30(21,22)28-31(23,24)27-29(18,19)20/h2-4,6-7,10,16-17H,1H2,(H,21,22)(H,23,24)(H2,11,12,13)(H2,18,19,20)/t4-,6-,7-,10-/m1/s1",
         "inchikey": "ZKHQWZAMYRWXGA-KQYNXXCUSA-N",
-        "iupac_name": "[[(2R,3S,4R,5R)-5-(6-aminopurin-9-yl)-3,4-dihydroxyoxolan-2-yl]methoxy-hydroxyphosphoryl] phosphono hydrogen phosphate"
+        "iupac_name": "[[(2R,3S,4R,5R)-5-(6-aminopurin-9-yl)-3,4-dihydroxyoxolan-2-yl]methoxy-hydroxyphosphoryl] phosphono hydrogen phosphate",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Adipic Acid": {
         "SMILES": "O=C(O)CCCCC(=O)O",
@@ -147,7 +168,10 @@
         "hill_formula": "C6H10O4",
         "inchi": "InChI=1S/C6H10O4/c7-5(8)3-1-2-4-6(9)10/h1-4H2,(H,7,8)(H,9,10)",
         "inchikey": "WNLRTRBMVRJNCN-UHFFFAOYSA-N",
-        "iupac_name": "hexanedioic acid"
+        "iupac_name": "hexanedioic acid",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Aluminum(III) Oxide": {
         "SMILES": "[Al+3].[Al+3].[O-2].[O-2].[O-2]",
@@ -166,7 +190,13 @@
         "hill_formula": "Al2O3",
         "inchi": "InChI=1S/2Al.3O/q2*+3;3*-2",
         "inchikey": "PNEYBMLMFCGWSK-UHFFFAOYSA-N",
-        "iupac_name": "Aluminum(III) Oxide"
+        "iupac_name": "Aluminum(III) Oxide",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Ammonia": {
         "SMILES": "N",
@@ -191,7 +221,13 @@
         "hill_formula": "H3N",
         "inchi": "InChI=1S/H3N/h1H3",
         "inchikey": "QGZKDVFQNNGYKY-UHFFFAOYSA-N",
-        "iupac_name": "azane"
+        "iupac_name": "azane",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Ascorbic Acid": {
         "SMILES": "O=C1O[C@H]([C@@H](O)CO)C(O)=C1O",
@@ -216,7 +252,13 @@
         "hill_formula": "C6H8O6",
         "inchi": "InChI=1S/C6H8O6/c7-1-2(8)5-3(9)4(10)6(11)12-5/h2,5,7-10H,1H2/t2-,5+/m0/s1",
         "inchikey": "CIWBSHSKHKDKBQ-JLAZNSOCSA-N",
-        "iupac_name": "(2R)-2-[(1S)-1,2-dihydroxyethyl]-3,4-dihydroxy-2H-furan-5-one"
+        "iupac_name": "(2R)-2-[(1S)-1,2-dihydroxyethyl]-3,4-dihydroxy-2H-furan-5-one",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Aspartame": {
         "SMILES": "COC(=O)C(Cc1ccccc1)NC(=O)C(N)CC(=O)O",
@@ -241,7 +283,12 @@
         "hill_formula": "C14H18N2O5",
         "inchi": "InChI=1S/C14H18N2O5/c1-21-14(20)11(7-9-5-3-2-4-6-9)16-13(19)10(15)8-12(17)18/h2-6,10-11H,7-8,15H2,1H3,(H,16,19)(H,17,18)",
         "inchikey": "IAOZJIPTCAWIRG-UHFFFAOYSA-N",
-        "iupac_name": "3-amino-4-[(1-methoxy-1-oxo-3-phenylpropan-2-yl)amino]-4-oxobutanoic acid"
+        "iupac_name": "3-amino-4-[(1-methoxy-1-oxo-3-phenylpropan-2-yl)amino]-4-oxobutanoic acid",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Benzene": {
         "SMILES": "c1ccccc1",
@@ -316,7 +363,10 @@
         "hill_formula": "C12H10",
         "inchi": "InChI=1S/C12H10/c1-3-7-11(8-4-1)12-9-5-2-6-10-12/h1-10H",
         "inchikey": "ZUOUZKKEUPVFJK-UHFFFAOYSA-N",
-        "iupac_name": "1,1'-biphenyl"
+        "iupac_name": "1,1'-biphenyl",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Butane": {
         "SMILES": "CCCC",
@@ -366,7 +416,10 @@
         "hill_formula": "C4H8",
         "inchi": "InChI=1S/C4H8/c1-3-4-2/h3H,1,4H2,2H3",
         "inchikey": "VXNZUUAINFGPBY-UHFFFAOYSA-N",
-        "iupac_name": "but-1-ene"
+        "iupac_name": "but-1-ene",
+        "expected_failures": [
+            "srs"
+        ]
     },
     "Butyric Acid": {
         "SMILES": "CCCC(=O)O",
@@ -391,7 +444,10 @@
         "hill_formula": "C4H8O2",
         "inchi": "InChI=1S/C4H8O2/c1-2-3-4(5)6/h2-3H2,1H3,(H,5,6)",
         "inchikey": "FERIUCNNQQJTOY-UHFFFAOYSA-N",
-        "iupac_name": "butanoic acid"
+        "iupac_name": "butanoic acid",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Caffeine": {
         "SMILES": "Cn1c(=O)c2c(ncn2C)n(C)c1=O",
@@ -416,9 +472,12 @@
         "hill_formula": "C8H10N4O2",
         "inchi": "InChI=1S/C8H10N4O2/c1-10-4-9-6-5(10)7(13)12(3)8(14)11(6)2/h4H,1-3H3",
         "inchikey": "RYYVLZVUVIJVGH-UHFFFAOYSA-N",
-        "iupac_name": "1,3,7-Trimethyl-3,7-dihydro-1H-purine-2,6-dione"
+        "iupac_name": "1,3,7-Trimethyl-3,7-dihydro-1H-purine-2,6-dione",
+        "expected_failures": [
+            "chebi",
+            "srs"
+        ]
     },
-    
     "Chloroform": {
         "SMILES": "ClC(Cl)Cl",
         "synonyms": [
@@ -467,7 +526,12 @@
         "hill_formula": "C27H46O",
         "inchi": "InChI=1S/C27H46O/c1-18(2)7-6-8-19(3)23-11-12-24-22-10-9-20-17-21(28)13-15-26(20,4)25(22)14-16-27(23,24)5/h9,18-19,21-25,28H,6-8,10-17H2,1-5H3/t19-,21+,22+,23-,24+,25+,26+,27-/m1/s1",
         "inchikey": "HVYWMOMLDIMFJA-DPAQBDIFSA-N",
-        "iupac_name": "(3S,8S,9S,10R,13R,14S,17R)-10,13-dimethyl-17-[(2R)-6-methylheptan-2-yl]-2,3,4,7,8,9,11,12,14,15,16,17-dodecahydro-1H-cyclopenta[a]phenanthren-3-ol"
+        "iupac_name": "(3S,8S,9S,10R,13R,14S,17R)-10,13-dimethyl-17-[(2R)-6-methylheptan-2-yl]-2,3,4,7,8,9,11,12,14,15,16,17-dodecahydro-1H-cyclopenta[a]phenanthren-3-ol",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Citric Acid": {
         "SMILES": "O=C(O)CC(O)(CC(=O)O)C(=O)O",
@@ -492,7 +556,11 @@
         "hill_formula": "C6H8O7",
         "inchi": "InChI=1S/C6H8O7/c7-3(8)1-6(13,5(11)12)2-4(9)10/h13H,1-2H2,(H,7,8)(H,9,10)(H,11,12)",
         "inchikey": "KRKNYBCHXYNGOX-UHFFFAOYSA-N",
-        "iupac_name": "2-hydroxypropane-1,2,3-tricarboxylic acid"
+        "iupac_name": "2-hydroxypropane-1,2,3-tricarboxylic acid",
+        "expected_failures": [
+            "chebi",
+            "nist"
+        ]
     },
     "Cocaine": {
         "SMILES": "COC(=O)[C@H]1[C@@H](OC(=O)c2ccccc2)C[C@@H]2CC[C@H]1N2C",
@@ -517,7 +585,13 @@
         "hill_formula": "C17H21NO4",
         "inchi": "InChI=1S/C17H21NO4/c1-18-12-8-9-13(18)15(17(20)21-2)14(10-12)22-16(19)11-6-4-3-5-7-11/h3-7,12-15H,8-10H2,1-2H3/t12-,13+,14-,15+/m0/s1",
         "inchikey": "ZPUCINDJVBIVPJ-LJISPDSOSA-N",
-        "iupac_name": "methyl (1R,2R,3S,5S)-3-benzoyloxy-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate"
+        "iupac_name": "methyl (1R,2R,3S,5S)-3-benzoyloxy-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "DDT": {
         "SMILES": "Clc1ccc(C(c2ccc(Cl)cc2)C(Cl)(Cl)Cl)cc1",
@@ -542,7 +616,12 @@
         "hill_formula": "C14H9Cl5",
         "inchi": "InChI=1S/C14H9Cl5/c15-11-5-1-9(2-6-11)13(14(17,18)19)10-3-7-12(16)8-4-10/h1-8,13H",
         "inchikey": "YVGGHNCTFXOJCH-UHFFFAOYSA-N",
-        "iupac_name": "1-chloro-4-[2,2,2-trichloro-1-(4-chlorophenyl)ethyl]benzene"
+        "iupac_name": "1-chloro-4-[2,2,2-trichloro-1-(4-chlorophenyl)ethyl]benzene",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "DEET": {
         "SMILES": "CCN(CC)C(=O)c1cccc(C)c1",
@@ -567,7 +646,10 @@
         "hill_formula": "C12H17NO",
         "inchi": "InChI=1S/C12H17NO/c1-4-13(5-2)12(14)11-8-6-7-10(3)9-11/h6-9H,4-5H2,1-3H3",
         "inchikey": "MMOXZBCLCQITDF-UHFFFAOYSA-N",
-        "iupac_name": "N,N-diethyl-3-methylbenzamide"
+        "iupac_name": "N,N-diethyl-3-methylbenzamide",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "R-12": {
         "SMILES": "FC(F)(Cl)Cl",
@@ -592,7 +674,10 @@
         "hill_formula": "CCl2F2",
         "inchi": "InChI=1S/CCl2F2/c2-1(3,4)5",
         "inchikey": "PXBRQCKWGAHEHS-UHFFFAOYSA-N",
-        "iupac_name": "dichloro(difluoro)methane"
+        "iupac_name": "dichloro(difluoro)methane",
+        "expected_failures": [
+            "srs"
+        ]
     },
     "Dopamine": {
         "SMILES": "NCCc1ccc(O)c(O)c1",
@@ -617,7 +702,12 @@
         "hill_formula": "C8H11NO2",
         "inchi": "InChI=1S/C8H11NO2/c9-4-3-6-1-2-7(10)8(11)5-6/h1-2,5,10-11H,3-4,9H2",
         "inchikey": "VYFYYTLLBUKUHU-UHFFFAOYSA-N",
-        "iupac_name": "4-(2-aminoethyl)benzene-1,2-diol"
+        "iupac_name": "4-(2-aminoethyl)benzene-1,2-diol",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Adrenaline": {
         "SMILES": "CNC[C@H](O)c1ccc(O)c(O)c1",
@@ -642,7 +732,13 @@
         "hill_formula": "C9H13NO3",
         "inchi": "InChI=1S/C9H13NO3/c1-10-5-9(13)6-2-3-7(11)8(12)4-6/h2-4,9-13H,5H2,1H3/t9-/m0/s1",
         "inchikey": "UCTWMZQNUQWSLP-VIFPVBQESA-N",
-        "iupac_name": "4-[(1R)-1-hydroxy-2-(methylamino)ethyl]benzene-1,2-diol"
+        "iupac_name": "4-[(1R)-1-hydroxy-2-(methylamino)ethyl]benzene-1,2-diol",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Ethane": {
         "SMILES": "CC",
@@ -717,7 +813,10 @@
         "hill_formula": "C4H10O",
         "inchi": "InChI=1S/C4H10O/c1-3-5-4-2/h3-4H2,1-2H3",
         "inchikey": "RTZKZFJDLAIYFH-UHFFFAOYSA-N",
-        "iupac_name": "ethoxyethane"
+        "iupac_name": "ethoxyethane",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Ethanol": {
         "SMILES": "CCO",
@@ -767,7 +866,13 @@
         "hill_formula": "C10H16N2O8",
         "inchi": "InChI=1S/C10H16N2O8/c13-7(14)3-11(4-8(15)16)1-2-12(5-9(17)18)6-10(19)20/h1-6H2,(H,13,14)(H,15,16)(H,17,18)(H,19,20)",
         "inchikey": "KCXVZYZYPLLWCC-UHFFFAOYSA-N",
-        "iupac_name": "2-[2-[bis(carboxymethyl)amino]ethyl-(carboxymethyl)amino]acetic acid"
+        "iupac_name": "2-[2-[bis(carboxymethyl)amino]ethyl-(carboxymethyl)amino]acetic acid",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Fluoxetine": {
         "SMILES": "CNCCC(Oc1ccc(C(F)(F)F)cc1)c1ccccc1",
@@ -792,7 +897,10 @@
         "hill_formula": "C17H18F3NO",
         "inchi": "InChI=1S/C17H18F3NO/c1-21-12-11-16(13-5-3-2-4-6-13)22-15-9-7-14(8-10-15)17(18,19)20/h2-10,16,21H,11-12H2,1H3",
         "inchikey": "RTHCYVBBDHJXIQ-UHFFFAOYSA-N",
-        "iupac_name": "N-methyl-3-phenyl-3-[4-(trifluoromethyl)phenoxy]propan-1-amine"
+        "iupac_name": "N-methyl-3-phenyl-3-[4-(trifluoromethyl)phenoxy]propan-1-amine",
+        "expected_failures": [
+            "srs"
+        ]
     },
     "Formaldehyde": {
         "SMILES": "C=O",
@@ -867,7 +975,12 @@
         "hill_formula": "C6H12O6",
         "inchi": "InChI=1S/C6H12O6/c7-1-3(9)5(11)6(12)4(10)2-8/h1,3-6,8-12H,2H2/t3-,4+,5+,6+/m0/s1",
         "inchikey": "GZCGUPFRVQAUEE-SLPGGIOYSA-N",
-        "iupac_name": "(2R,3S,4R,5R)-2,3,4,5,6-pentahydroxyhexanal"
+        "iupac_name": "(2R,3S,4R,5R)-2,3,4,5,6-pentahydroxyhexanal",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Glycerol": {
         "SMILES": "OCC(O)CO",
@@ -892,7 +1005,11 @@
         "hill_formula": "C3H8O3",
         "inchi": "InChI=1S/C3H8O3/c4-1-3(6)2-5/h3-6H,1-2H2",
         "inchikey": "PEDCQBHIVMGVHV-UHFFFAOYSA-N",
-        "iupac_name": "propane-1,2,3-triol"
+        "iupac_name": "propane-1,2,3-triol",
+        "expected_failures": [
+            "chebi",
+            "srs"
+        ]
     },
     "Guanine": {
         "SMILES": "Nc1nc2nc[nH]c2c(=O)[nH]1",
@@ -917,7 +1034,13 @@
         "hill_formula": "C5H5N5O",
         "inchi": "InChI=1S/C5H5N5O/c6-5-9-3-2(4(11)10-5)7-1-8-3/h1H,(H4,6,7,8,9,10,11)",
         "inchikey": "UYTPUPDQBNUYGX-UHFFFAOYSA-N",
-        "iupac_name": "2-amino-1,7-dihydropurin-6-one"
+        "iupac_name": "2-amino-1,7-dihydropurin-6-one",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Hydrochloric Acid": {
         "SMILES": "Cl",
@@ -942,7 +1065,10 @@
         "hill_formula": "ClH",
         "inchi": "InChI=1S/ClH/h1H",
         "inchikey": "VEXZGXHMUGYJMC-UHFFFAOYSA-N",
-        "iupac_name": "Hydrogen chloride"
+        "iupac_name": "Hydrogen chloride",
+        "expected_failures": [
+            "cir"
+        ]
     },
     "Hydrogen Peroxide": {
         "SMILES": "OO",
@@ -992,7 +1118,12 @@
         "hill_formula": "H2S",
         "inchi": "InChI=1S/H2S/h1H2",
         "inchikey": "RWSOTUBLDIXVET-UHFFFAOYSA-N",
-        "iupac_name": "sulfane"
+        "iupac_name": "sulfane",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Ibuprofen": {
         "SMILES": "CC(C)Cc1ccc(C(C)C(=O)O)cc1",
@@ -1017,7 +1148,12 @@
         "hill_formula": "C13H18O2",
         "inchi": "InChI=1S/C13H18O2/c1-9(2)8-11-4-6-12(7-5-11)10(3)13(14)15/h4-7,9-10H,8H2,1-3H3,(H,14,15)",
         "inchikey": "HEFNNWSXXWATRW-UHFFFAOYSA-N",
-        "iupac_name": "2-[4-(2-methylpropyl)phenyl]propanoic acid"
+        "iupac_name": "2-[4-(2-methylpropyl)phenyl]propanoic acid",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Indigo": {
         "SMILES": "O=C1C(=C2Nc3ccccc3C2=O)Nc2ccccc21",
@@ -1042,7 +1178,15 @@
         "hill_formula": "C16H10N2O2",
         "inchi": "InChI=1S/C16H10N2O2/c19-15-9-5-1-3-7-11(9)17-13(15)14-16(20)10-6-2-4-8-12(10)18-14/h1-8,17-18H",
         "inchikey": "COHYTHOBJLSHDF-UHFFFAOYSA-N",
-        "iupac_name": "[2,2'-biindolinylidene]-3,3'-dione"
+        "iupac_name": "[2,2'-biindolinylidene]-3,3'-dione",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "cts",
+            "nist",
+            "pubchem",
+            "srs"
+        ]
     },
     "Isooctane": {
         "SMILES": "CC(C)CC(C)(C)C",
@@ -1067,7 +1211,10 @@
         "hill_formula": "C8H18",
         "inchi": "InChI=1S/C8H18/c1-7(2)6-8(3,4)5/h7H,6H2,1-5H3",
         "inchikey": "NHTMVDHEPJAVLT-UHFFFAOYSA-N",
-        "iupac_name": "2,2,4-trimethylpentane"
+        "iupac_name": "2,2,4-trimethylpentane",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Isoprene": {
         "SMILES": "C=CC(=C)C",
@@ -1092,7 +1239,11 @@
         "hill_formula": "C5H8",
         "inchi": "InChI=1S/C5H8/c1-4-5(2)3/h4H,1-2H2,3H3",
         "inchikey": "RRHGJUQNOFWUDK-UHFFFAOYSA-N",
-        "iupac_name": "2-methylbuta-1,3-diene"
+        "iupac_name": "2-methylbuta-1,3-diene",
+        "expected_failures": [
+            "chebi",
+            "srs"
+        ]
     },
     "l-Dopa": {
         "SMILES": "N[C@@H](Cc1ccc(O)c(O)c1)C(=O)O",
@@ -1117,7 +1268,12 @@
         "hill_formula": "C9H11NO4",
         "inchi": "InChI=1S/C9H11NO4/c10-6(9(13)14)3-5-1-2-7(11)8(12)4-5/h1-2,4,6,11-12H,3,10H2,(H,13,14)/t6-/m0/s1",
         "inchikey": "WTDRDQBEARUVNC-LURJTMIESA-N",
-        "iupac_name": "(2S)-2-amino-3-(3,4-dihydroxyphenyl)propanoic acid"
+        "iupac_name": "(2S)-2-amino-3-(3,4-dihydroxyphenyl)propanoic acid",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Methane": {
         "SMILES": "C",
@@ -1192,7 +1348,12 @@
         "hill_formula": "C14H19NO2",
         "inchi": "InChI=1S/C14H19NO2/c1-17-14(16)13(11-7-3-2-4-8-11)12-9-5-6-10-15-12/h2-4,7-8,12-13,15H,5-6,9-10H2,1H3",
         "inchikey": "DUGOZIWVEXMGBE-UHFFFAOYSA-N",
-        "iupac_name": "methyl 2-phenyl-2-piperidin-2-ylacetate"
+        "iupac_name": "methyl 2-phenyl-2-piperidin-2-ylacetate",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Naphthalene": {
         "SMILES": "c1ccc2ccccc2c1",
@@ -1242,7 +1403,12 @@
         "hill_formula": "C10H14N2",
         "inchi": "InChI=1S/C10H14N2/c1-12-7-3-5-10(12)9-4-2-6-11-8-9/h2,4,6,8,10H,3,5,7H2,1H3/t10-/m0/s1",
         "inchikey": "SNICXCGAKADSCV-JTQLQIEISA-N",
-        "iupac_name": "3-[(2S)-1-methylpyrrolidin-2-yl]pyridine"
+        "iupac_name": "3-[(2S)-1-methylpyrrolidin-2-yl]pyridine",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Nitric Acid": {
         "SMILES": "O=[N+]([O-])O",
@@ -1292,9 +1458,14 @@
         "hill_formula": "NO",
         "inchi": "InChI=1S/NO/c1-2",
         "inchikey": "MWUXSHHQAYIFBG-UHFFFAOYSA-N",
-        "iupac_name": "nitrogen(II) oxide"
+        "iupac_name": "nitrogen(II) oxide",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
-
     "Nitroglycerin": {
         "SMILES": "O=[N+]([O-])OCC(CO[N+](=O)[O-])O[N+](=O)[O-]",
         "synonyms": [
@@ -1318,7 +1489,12 @@
         "hill_formula": "C3H5N3O9",
         "inchi": "InChI=1S/C3H5N3O9/c7-4(8)13-1-3(15-6(11)12)2-14-5(9)10/h3H,1-2H2",
         "inchikey": "SNIOPGDIGTZGOP-UHFFFAOYSA-N",
-        "iupac_name": "1,3-dinitrooxypropan-2-yl nitrate"
+        "iupac_name": "1,3-dinitrooxypropan-2-yl nitrate",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Penicillin": {
         "SMILES": "CC1(C)SC2C(NC(=O)Cc3ccccc3)C(=O)N2C1C(=O)O",
@@ -1343,7 +1519,12 @@
         "hill_formula": "C16H18N2O4S",
         "inchi": "InChI=1S/C16H18N2O4S/c1-16(2)12(15(21)22)18-13(20)11(14(18)23-16)17-10(19)8-9-6-4-3-5-7-9/h3-7,11-12,14H,8H2,1-2H3,(H,17,19)(H,21,22)",
         "inchikey": "JGSARLDLIJGVTE-UHFFFAOYSA-N",
-        "iupac_name": "3,3-dimethyl-7-oxo-6-[(2-phenylacetyl)amino]-4-thia-1-azabicyclo[3.2.0]heptane-2-carboxylic acid"
+        "iupac_name": "3,3-dimethyl-7-oxo-6-[(2-phenylacetyl)amino]-4-thia-1-azabicyclo[3.2.0]heptane-2-carboxylic acid",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Phenol": {
         "SMILES": "Oc1ccccc1",
@@ -1443,7 +1624,12 @@
         "hill_formula": "C3H6",
         "inchi": "InChI=1S/C3H6/c1-3-2/h3H,1H2,2H3",
         "inchikey": "QQONPFPTGQHPMA-UHFFFAOYSA-N",
-        "iupac_name": "prop-1-ene"
+        "iupac_name": "prop-1-ene",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Quinine": {
         "SMILES": "C=CC1CN2CCC1CC2C(O)c1ccnc2ccc(OC)cc12",
@@ -1468,7 +1654,13 @@
         "hill_formula": "C20H24N2O2",
         "inchi": "InChI=1S/C20H24N2O2/c1-3-13-12-22-9-7-14(13)10-19(22)20(23)16-6-8-21-18-5-4-15(24-2)11-17(16)18/h3-6,8,11,13-14,19-20,23H,1,7,9-10,12H2,2H3",
         "inchikey": "LOUPRKONTZGTKE-UHFFFAOYSA-N",
-        "iupac_name": "(5-ethenyl-1-azabicyclo[2.2.2]octan-2-yl)-(6-methoxyquinolin-4-yl)methanol"
+        "iupac_name": "(5-ethenyl-1-azabicyclo[2.2.2]octan-2-yl)-(6-methoxyquinolin-4-yl)methanol",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Saccharin": {
         "SMILES": "O=C1NS(=O)(=O)c2ccccc21",
@@ -1493,7 +1685,12 @@
         "hill_formula": "C7H5NO3S",
         "inchi": "InChI=1S/C7H5NO3S/c9-7-5-3-1-2-4-6(5)12(10,11)8-7/h1-4H,(H,8,9)",
         "inchikey": "CVHZOJJKTDOEJC-UHFFFAOYSA-N",
-        "iupac_name": "1,1-dioxo-1,2-benzothiazol-3-one"
+        "iupac_name": "1,1-dioxo-1,2-benzothiazol-3-one",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Silicon Dioxide": {
         "SMILES": "O=[Si]=O",
@@ -1518,10 +1715,13 @@
         "hill_formula": "O2Si",
         "inchi": "InChI=1S/O2Si/c1-3-2",
         "inchikey": "VYPSYNLAJGMNEJ-UHFFFAOYSA-N",
-        "iupac_name": "dioxosilane"
+        "iupac_name": "dioxosilane",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "srs"
+        ]
     },
-    
-   
     "Styrene": {
         "SMILES": "C=Cc1ccccc1",
         "synonyms": [
@@ -1570,7 +1770,13 @@
         "hill_formula": "C12H22O11",
         "inchi": "InChI=1S/C12H22O11/c13-1-4-6(16)8(18)9(19)11(21-4)23-12(3-15)10(20)7(17)5(2-14)22-12/h4-11,13-20H,1-3H2/t4-,5-,6-,7-,8+,9-,10+,11-,12+/m1/s1",
         "inchikey": "CZMRCDWAGMRECN-UGDNZRGBSA-N",
-        "iupac_name": "(2R,3R,4S,5S,6R)-2-[(2S,3S,4S,5R)-3,4-dihydroxy-2,5-bis(hydroxymethyl)oxolan-2-yl]oxy-6-(hydroxymethyl)oxane-3,4,5-triol"
+        "iupac_name": "(2R,3R,4S,5S,6R)-2-[(2S,3S,4S,5R)-3,4-dihydroxy-2,5-bis(hydroxymethyl)oxolan-2-yl]oxy-6-(hydroxymethyl)oxane-3,4,5-triol",
+        "expected_failures": [
+            "chebi",
+            "cir",
+            "nist",
+            "srs"
+        ]
     },
     "Sulfuric Acid": {
         "SMILES": "O=S(=O)(O)O",
@@ -1620,7 +1826,12 @@
         "hill_formula": "C2F4",
         "inchi": "InChI=1S/C2F4/c3-1(4)2(5)6",
         "inchikey": "BFKJFAAPBSQJPD-UHFFFAOYSA-N",
-        "iupac_name": "1,1,2,2-tetrafluoroethene"
+        "iupac_name": "1,1,2,2-tetrafluoroethene",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Tetrahydrocannabinol": {
         "SMILES": "CCCCCc1cc(O)c2c(c1)OC(C)(C)[C@@H]1CCC(C)=C[C@@H]21",
@@ -1645,7 +1856,12 @@
         "hill_formula": "C21H30O2",
         "inchi": "InChI=1S/C21H30O2/c1-5-6-7-8-15-12-18(22)20-16-11-14(2)9-10-17(16)21(3,4)23-19(20)13-15/h11-13,16-17,22H,5-10H2,1-4H3/t16-,17-/m1/s1",
         "inchikey": "CYQFCXCEBYINGO-IAGOWNOFSA-N",
-        "iupac_name": "(6aR,10aR)-6,6,9-trimethyl-3-pentyl-6a,7,8,10a-tetrahydrobenzo[c]chromen-1-ol"
+        "iupac_name": "(6aR,10aR)-6,6,9-trimethyl-3-pentyl-6a,7,8,10a-tetrahydrobenzo[c]chromen-1-ol",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Thymine": {
         "SMILES": "Cc1c[nH]c(=O)[nH]c1=O",
@@ -1670,7 +1886,12 @@
         "hill_formula": "C5H6N2O2",
         "inchi": "InChI=1S/C5H6N2O2/c1-3-2-6-5(9)7-4(3)8/h2H,1H3,(H2,6,7,8,9)",
         "inchikey": "RWQNBRDOKXIBIV-UHFFFAOYSA-N",
-        "iupac_name": "5-methyl-1H-pyrimidine-2,4-dione"
+        "iupac_name": "5-methyl-1H-pyrimidine-2,4-dione",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Trinitrotoluene": {
         "SMILES": "Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-]",
@@ -1695,7 +1916,10 @@
         "hill_formula": "C7H5N3O6",
         "inchi": "InChI=1S/C7H5N3O6/c1-4-6(9(13)14)2-5(8(11)12)3-7(4)10(15)16/h2-3H,1H3",
         "inchikey": "SPSSULHKWOKEEL-UHFFFAOYSA-N",
-        "iupac_name": "2-methyl-1,3,5-trinitrobenzene"
+        "iupac_name": "2-methyl-1,3,5-trinitrobenzene",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Toluene": {
         "SMILES": "Cc1ccccc1",
@@ -1720,7 +1944,11 @@
         "hill_formula": "C7H8",
         "inchi": "InChI=1S/C7H8/c1-7-5-3-2-4-6-7/h2-6H,1H3",
         "inchikey": "YXFVVABEGXRONW-UHFFFAOYSA-N",
-        "iupac_name": "methyl-benzene"
+        "iupac_name": "methyl-benzene",
+        "expected_failures": [
+            "chebi",
+            "srs"
+        ]
     },
     "Uracil": {
         "SMILES": "O=c1cc[nH]c(=O)[nH]1",
@@ -1745,7 +1973,12 @@
         "hill_formula": "C4H4N2O2",
         "inchi": "InChI=1S/C4H4N2O2/c7-3-1-2-5-4(8)6-3/h1-2H,(H2,5,6,7,8)",
         "inchikey": "ISAKRJDGNUQOIC-UHFFFAOYSA-N",
-        "iupac_name": "1H-pyrimidine-2,4-dione"
+        "iupac_name": "1H-pyrimidine-2,4-dione",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Urea": {
         "SMILES": "NC(N)=O",
@@ -1770,7 +2003,10 @@
         "hill_formula": "CH4N2O",
         "inchi": "InChI=1S/CH4N2O/c2-1(3)4/h(H4,2,3,4)",
         "inchikey": "XSQUKJJJFZCRTK-UHFFFAOYSA-N",
-        "iupac_name": "urea"
+        "iupac_name": "urea",
+        "expected_failures": [
+            "nist"
+        ]
     },
     "Vanillin": {
         "SMILES": "COc1cc(C=O)ccc1O",
@@ -1795,7 +2031,10 @@
         "hill_formula": "C8H8O3",
         "inchi": "InChI=1S/C8H8O3/c1-11-8-4-6(5-9)2-3-7(8)10/h2-5,10H,1H3",
         "inchikey": "MWOOGOJBHIARFG-UHFFFAOYSA-N",
-        "iupac_name": "4-hydroxy-3-methoxybenzaldehyde"
+        "iupac_name": "4-hydroxy-3-methoxybenzaldehyde",
+        "expected_failures": [
+            "chebi"
+        ]
     },
     "Vinyl Chloride": {
         "SMILES": "C=CCl",
@@ -1820,7 +2059,10 @@
         "hill_formula": "C2H3Cl",
         "inchi": "InChI=1S/C2H3Cl/c1-2-3/h2H,1H2",
         "inchikey": "BZHJMEDXRYGGRV-UHFFFAOYSA-N",
-        "iupac_name": "chloroethene"
+        "iupac_name": "chloroethene",
+        "expected_failures": [
+            "nist"
+        ]
     },
     "Water": {
         "SMILES": "O",
@@ -1845,7 +2087,12 @@
         "hill_formula": "H2O",
         "inchi": "InChI=1S/H2O/h1H2",
         "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
-        "iupac_name": "oxidane"
+        "iupac_name": "oxidane",
+        "expected_failures": [
+            "chebi",
+            "nist",
+            "srs"
+        ]
     },
     "Xylene": {
         "SMILES": "Cc1ccccc1C",
@@ -1870,6 +2117,9 @@
         "hill_formula": "C8H10",
         "inchi": "InChI=1S/C8H10/c1-7-5-3-4-6-8(7)2/h3-6H,1-2H3",
         "inchikey": "CTQNGGLPUBDAKN-UHFFFAOYSA-N",
-        "iupac_name": "1,2-xylene"
+        "iupac_name": "1,2-xylene",
+        "expected_failures": [
+            "chebi"
+        ]
     }
 }

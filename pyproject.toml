@@ -32,3 +32,8 @@ sphinx-autoapi = "^3.4.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+markers = [
+    "online: queries the live web services (deselect with '-m \"not online\"')",
+]
