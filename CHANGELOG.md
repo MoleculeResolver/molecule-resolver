@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-28
+
+### Removed
+
+- Support for Python 3.10; molecule-resolver now requires Python 3.11 or newer.
+  Python 3.10 reached end of life in October 2026, and Pillow (pulled in through
+  RDKit) fixes its open security advisories only in 13.0.0, which no longer supports
+  Python 3.10. Keeping 3.10 would have meant locking a Pillow version with known
+  critical vulnerabilities. Users on Python 3.10 can keep using 0.7.0.
+
+### Security
+
+- Updated `certifi` to 2026.10.23 (GHSA-6q48-6c7w-9gw2: bundled emSign root CAs with
+  compromised intermediate CA keys).
+- Updated `pillow` to 13.0.0, fixing about 50 advisories (heap buffer overflows,
+  use-after-free and denial-of-service issues in image decoders).
+- Updated `rdkit` to 2026.9.1.
+
 ## [0.7.0] - 2026-10-21
 
 ### Changed
@@ -268,7 +286,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2024-10-25
 
-[Unreleased]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.7.0...HEAD
+[Unreleased]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.8.0...HEAD
+[0.8.0]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.5.4...0.6.0
 [0.5.4]: https://github.com/MoleculeResolver/molecule-resolver/compare/0.5.3...0.5.4
