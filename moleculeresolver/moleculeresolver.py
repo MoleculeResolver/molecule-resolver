@@ -345,8 +345,8 @@ class MoleculeResolver:
             "chemeo": ["name", "cas", "smiles", "inchi", "inchikey"],
             "cir": ["formula", "name", "cas", "smiles", "inchi", "inchikey"],
             "comptox": ["name", "cas", "inchikey"],
-            # CTS-Lite guesses the identifier type itself, see docs/cts.md
-            "cts": ["smiles", "inchi", "inchikey", "formula", "cid"],
+            # CTS-Lite receives the identifier type explicitly; see docs/cts.md.
+            "cts": ["smiles", "inchi", "inchikey", "formula", "cid", "name", "cas"],
             "nist": ["formula", "name", "cas", "smiles"],
             "opsin": ["name"],
             "pubchem": ["name", "cas", "smiles", "formula", "inchi", "inchikey", "cid"],
@@ -5374,10 +5374,8 @@ class MoleculeResolver:
         """
         Send one request to CTS-Lite and parse the results.
 
-        CTS-Lite (https://cts-lite.metabolomics.us/) has no parameter for the identifier
-        type. The server guesses the type of every query from its characters, so each
-        result is only accepted if the guessed ``query_type`` matches ``mode``.
-        See docs/cts.md for the limitations this causes.
+        Specify the identifier type and send queries as a JSON array so that
+        names with spaces and ambiguous formulas are interpreted correctly.
 
         Args:
             identifiers (list[str]): The identifiers to search for, all of the same mode.
@@ -5392,27 +5390,28 @@ class MoleculeResolver:
         """
         results = [None] * len(identifiers)
 
-        # queries are separated by whitespace on the server side
         indices_to_search = [
-            i
-            for i, identifier in enumerate(identifiers)
-            if identifier and not any(c.isspace() for c in identifier)
+            i for i, identifier in enumerate(identifiers) if identifier.strip()
         ]
         if not indices_to_search:
             return results
 
         accepted_query_types = {
             "smiles": ["smiles", "converted_smiles"],
-            "inchi": ["inchi"],
+            "inchi": ["inchi", "converted_inchi"],
             "inchikey": ["inchikey"],
             "formula": ["formula"],
             "cid": ["pubchem_id"],
+            "name": ["name"],
+            "cas": ["cas"],
         }
+        query_type = "pubchem_id" if mode == "cid" else mode
 
         # first block InChIKey matches ignore stereochemistry and isotopes
         response_text = self._resilient_request(
-            "https://cts-lite.metabolomics.us/match?first_block_matches=false",
-            json={"queries": "\n".join(identifiers[i] for i in indices_to_search)},
+            "https://cts-lite.metabolomics.us/match"
+            f"?first_block_matches=false&top_hit_only=true&query_type={query_type}",
+            json={"queries": [identifiers[i] for i in indices_to_search]},
             request_type="post",
             kwargs={"timeout": 120},
             rejected_status_codes=[400, 404, 500],
@@ -5443,7 +5442,7 @@ class MoleculeResolver:
                 match_info = " (matched by inchikey calculated from smiles)"
 
             molecules = []
-            for match in result["matches"]:
+            for match in result["matches"][:1]:
                 SMILES = match["smiles"]
                 if not SMILES or not self.is_valid_SMILES(SMILES):
                     continue
@@ -5493,7 +5492,7 @@ class MoleculeResolver:
 
         Args:
             identifier (str): The chemical identifier to search for.
-            mode (str): The type of identifier ('smiles', 'inchi', 'inchikey', 'formula' or 'cid').
+            mode (str): The identifier type: smiles, inchi, inchikey, formula, cid, name or cas.
             required_formula (Optional[str]): The expected molecular formula.
             required_charge (Optional[int]): The expected molecular charge.
             required_structure_type (Optional[str]): The expected structure type.
@@ -5506,9 +5505,7 @@ class MoleculeResolver:
 
         Notes:
             - Checks a cache for previously retrieved molecules.
-            - CTS-Lite guesses the identifier type itself. Results are discarded if the
-              guessed type differs from ``mode``, e.g. the formula "CO" is read as the
-              SMILES of methanol. See docs/cts.md.
+            - CTS-Lite receives the identifier type explicitly and returns only the top hit.
             - Issues a warning and returns None if CTS is down.
         """
         self._check_parameters(
@@ -5558,7 +5555,7 @@ class MoleculeResolver:
 
         Args:
             identifiers (list[str]): A list of chemical identifiers to search for.
-            mode (str): The type of identifier ('smiles', 'inchi', 'inchikey', 'formula' or 'cid').
+            mode (str): The identifier type: smiles, inchi, inchikey, formula, cid, name or cas.
 
         Returns:
             list[Optional[list[Molecule]]]: One entry per identifier. Each element is either
